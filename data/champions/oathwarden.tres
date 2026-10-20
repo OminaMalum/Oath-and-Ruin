@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_0iy75"]
 [ext_resource type="Resource" path="res://data/abilities/warding_stand.tres" id="2_r0s6u"]
 [ext_resource type="Resource" path="res://data/abilities/cleave.tres" id="3_8um6y"]
+[ext_resource type="Resource" path="res://data/abilities/shield_slam.tres" id="3_r0s6u"]
 [ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_gn757"]
 
 [resource]
@@ -17,6 +18,6 @@ radius = 0.5
 height = 1.95
 fountain_heal = 80.0
 basic_attack = ExtResource("3_8um6y")
-abilities = Array[ExtResource("1_0iy75")]([ExtResource("2_r0s6u")])
+abilities = Array[ExtResource("1_0iy75")]([ExtResource("2_r0s6u"), ExtResource("3_r0s6u")])
 primary_color = Color(0.34, 0.36, 0.38, 1)
 accent_color = Color(0.95, 0.8, 0.45, 1)

@@ -5,6 +5,7 @@ extends RefCounted
 
 const BTN_ATTACK := 1
 const BTN_ABILITY_1 := 2
+const BTN_ABILITY_2 := 4
 
 ## x = strafe right, y = forward, relative to aim_yaw. Length <= 1.
 var move: Vector2 = Vector2.ZERO
@@ -23,11 +24,16 @@ func pressed(button: int) -> bool:
 	return buttons & button != 0
 
 
+## The button for an ability slot (1 or 2).
+static func ability_button(slot: int) -> int:
+	return BTN_ABILITY_1 if slot == 1 else BTN_ABILITY_2
+
+
 func to_dict() -> Dictionary:
 	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons, "t": target_id, "u": upgrade_choice}
 
 
-const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1
+const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1 | BTN_ABILITY_2
 
 
 ## Rebuilds a command from untrusted data. Wrong types, NaN or infinite

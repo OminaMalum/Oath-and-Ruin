@@ -246,7 +246,7 @@ func _server_tick(dt: float) -> void:
 		var data := {}
 		for u in authority.units:
 			data[u.net_id] = [u.global_position, u.aim_yaw, u.health, u.alive, u.cast_phase, u.cast_slot,
-				u.cast_timer, u.cast_target, u.cooldowns, u.slow_amount, u.slow_timer, u.respawn_timer]
+				u.cast_timer, u.cast_target, u.cooldowns, u.slow_amount, u.slow_timer, u.respawn_timer, u.stun_timer]
 		bytes_last_snapshot = var_to_bytes(data).size()
 		_broadcast(snapshot.bind(authority.tick, data), true)
 
@@ -360,6 +360,7 @@ func snapshot(server_tick: int, data: Dictionary) -> void:
 		u.slow_amount = s[9]
 		u.slow_timer = s[10]
 		u.respawn_timer = s[11]
+		u.stun_timer = s[12] if s.size() > 12 else 0.0
 		u.collision_layer = Unit.LAYER_UNITS if u.alive else 0
 		if was_alive != u.alive:
 			if u.alive:

@@ -42,6 +42,7 @@ class SimProjectile:
 	var target: Unit  # homing only
 	var travelled: float = 0.0
 	var alive: bool = true
+	var hit: Array[Unit] = []  # piercing shots: already struck
 
 
 class SimArea:
@@ -213,6 +214,8 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 	unit_damaged.emit(target, amount, source)
 	if a != null and a.slow_amount > 0.0:
 		target.apply_slow(a.slow_amount, a.slow_duration)
+	if a != null and a.stun_duration > 0.0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
+		target.apply_stun(a.stun_duration)
 	if target.health <= 0.0:
 		target.set_dead(source)
 		unit_died.emit(target, source)
@@ -257,8 +260,15 @@ func _step_projectiles(dt: float) -> void:
 				continue
 			if from.y < u.global_position.y - 0.2 or from.y > u.global_position.y + u.def.height + 0.2:
 				continue
+			if a.pierce and u in p.hit:
+				continue
 			var t := _segment_circle_t(from, to, u.global_position, u.def.radius + a.projectile_radius)
-			if t >= 0.0 and t < best_t:
+			if t < 0.0 or t >= wall_t:
+				continue
+			if a.pierce:
+				p.hit.append(u)  # passes through: everyone on the line this tick is struck
+				apply_damage(p.source, u, a.damage, a)
+			elif t < best_t:
 				best_t = t
 				best = u
 		if best:

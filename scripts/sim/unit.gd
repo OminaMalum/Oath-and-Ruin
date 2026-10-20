@@ -33,6 +33,8 @@ var aim_yaw: float = 0.0
 var aim_point: Vector3 = Vector3.ZERO
 ## Match rule multiplier on this unit's damage to structures (rising tide).
 var structure_bonus: float = 1.0
+## Stunned: no movement, no casts, until the timer runs out.
+var stun_timer: float = 0.0
 ## Dash in progress (DASH delivery): the sim moves the unit, not its input.
 var dash_timer: float = 0.0
 var dash_velocity: Vector3 = Vector3.ZERO
@@ -182,10 +184,18 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 		if slow_timer <= 0.0:
 			slow_amount = 0.0
 
-	aim_yaw = cmd.aim_yaw
-	aim_point = cmd.aim_point
 	if cmd.upgrade_choice > 0:
 		choose_upgrade(cmd.upgrade_choice)
+	if stun_timer > 0.0:
+		# Stunned: the aim stays where it was, nothing is buffered, no movement.
+		stun_timer -= dt
+		velocity.x = 0.0
+		velocity.z = 0.0
+		velocity.y = 0.0 if is_on_floor() else velocity.y - GRAVITY * dt
+		move_and_slide()
+		return
+	aim_yaw = cmd.aim_yaw
+	aim_point = cmd.aim_point
 	rotation.y = aim_yaw
 
 	_update_buffer(cmd, dt)
@@ -224,9 +234,14 @@ func _update_buffer(cmd: UnitCommand, dt: float) -> void:
 		buffer_timer -= dt
 		if buffer_timer <= 0.0:
 			buffered_slot = -1
-	# Abilities win over the held basic attack.
-	if cmd.pressed(UnitCommand.BTN_ABILITY_1) and def.slot_count() > 1:
-		buffered_slot = 1
+	# Abilities win over the held basic attack. When several are pressed at
+	# once, a ready one wins over one still on cooldown.
+	var want := -1
+	for slot in range(1, def.slot_count()):
+		if cmd.pressed(UnitCommand.ability_button(slot)) and (want < 0 or (cooldowns[want] > 0.0 and cooldowns[slot] <= 0.0)):
+			want = slot
+	if want > 0:
+		buffered_slot = want
 		buffer_timer = INPUT_BUFFER
 	elif cmd.pressed(UnitCommand.BTN_ATTACK) and buffered_slot < 0:
 		buffered_slot = 0
@@ -336,6 +351,18 @@ func is_protected() -> bool:
 	return false
 
 
+## Stun: interrupts any cast (and dash), longest stun wins.
+func apply_stun(duration: float) -> void:
+	if duration <= 0.0:
+		return
+	interrupt_cast()
+	stun_timer = maxf(stun_timer, duration)
+
+
+func is_stunned() -> bool:
+	return stun_timer > 0.0
+
+
 func apply_slow(amount: float, duration: float) -> void:
 	# Strongest slow wins; durations do not stack.
 	if amount >= slow_amount or slow_timer <= 0.0:
@@ -350,6 +377,7 @@ func set_dead(killer: Unit) -> void:
 	interrupt_cast()
 	slow_amount = 0.0
 	slow_timer = 0.0
+	stun_timer = 0.0
 	respawn_timer = def.respawn_time
 	corpse_timer = 1.0
 	velocity = Vector3.ZERO

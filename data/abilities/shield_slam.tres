@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_vwwmh"]
+
+[resource]
+script = ExtResource("1_vwwmh")
+id = &"shield_slam"
+display_name = "Shield Slam"
+description = "Drive the shield forward: 30 damage and a 0.8 s stun in a narrow 2.6 m arc. Interrupts casts. Counterplay: the 0.4 s windup is slow; step out of the arc or stay beyond 2.6 m."
+delivery = 2
+damage = 30.0
+cast_time = 0.4
+recovery = 0.3
+cooldown = 10.0
+move_mult_while_casting = 0.2
+range = 2.6
+stun_duration = 0.8
+arc_degrees = 70.0

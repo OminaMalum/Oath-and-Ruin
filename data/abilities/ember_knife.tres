@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_0uaoo"]
+
+[resource]
+script = ExtResource("1_0uaoo")
+id = &"ember_knife"
+display_name = "Ember Knife"
+description = "Throw a knife 10 m: 35 damage and a 40% slow for 1.2 s on the first enemy hit. Sets up the Vault, or finishes a runner. Counterplay: sidestep; it is a single narrow throw."
+damage = 35.0
+cast_time = 0.18
+recovery = 0.15
+cooldown = 5.0
+move_mult_while_casting = 0.8
+range = 10.0
+projectile_speed = 34.0
+projectile_radius = 0.22
+slow_amount = 0.4
+slow_duration = 1.2

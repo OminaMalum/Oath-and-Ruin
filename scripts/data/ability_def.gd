@@ -42,6 +42,8 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 @export var projectile_radius: float = 0.3
 ## Homing shots follow their target and can only hit it (towers).
 @export var homing: bool = false
+## Piercing shots pass through every enemy on their line (each hit once).
+@export var pierce: bool = false
 
 @export_group("Ground area")
 @export var area_radius: float = 2.5
@@ -52,6 +54,8 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 ## Fraction of move speed removed (0.3 = 30% slow).
 @export var slow_amount: float = 0.0
 @export var slow_duration: float = 0.0
+## Stun: the target cannot move or act, and its cast is interrupted.
+@export var stun_duration: float = 0.0
 
 @export_group("Melee arc")
 ## Full width of the cone in degrees (120 = 60 each side of the aim).

@@ -36,6 +36,7 @@ func _run() -> void:
 		"test_match_victory", "test_objective_capture",
 		"test_melee_arc", "test_dash", "test_dash_stopped_by_wall", "test_ward", "test_levels",
 		"test_upgrade_choice", "test_roster",
+		"test_second_slot_and_pierce", "test_stun", "test_knife_slow",
 	]
 	for t: String in tests:
 		_make_world()
@@ -626,3 +627,72 @@ func test_roster() -> void:
 		ids[d.id] = true
 	check(ids.size() == 3, "one of each role per team")
 	await ticks(1)
+
+
+# --- Gate 3, second abilities --------------------------------------------------
+
+func test_second_slot_and_pierce() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	var first := spawn(DUMMY, 1, Vector3(0, 0, -5))
+	var second := spawn(DUMMY, 1, Vector3(0.3, 0, -9))
+	var off := spawn(DUMMY, 1, Vector3(3, 0, -7))
+	await ticks(2)
+	aim(me, Vector3(0, 0, -20))
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_2
+	await ticks(1)
+	cmd(me).buttons = 0
+	await secs(1.2)
+	var lance := SCRIBE.get_slot(2)
+	check(lance != null and lance.pierce, "the scribe has a piercing second ability")
+	check(is_equal_approx(first.health, DUMMY.max_health - lance.damage), "the lance hits the first enemy on the line")
+	check(is_equal_approx(second.health, DUMMY.max_health - lance.damage), "and passes through to the second")
+	check(off.health == DUMMY.max_health, "an enemy off the line is missed")
+	check(me.cooldowns[2] > 0.0, "slot 2 has its own cooldown")
+	var d := UnitCommand.from_dict({"b": UnitCommand.BTN_ABILITY_2})
+	check(d.buttons == UnitCommand.BTN_ABILITY_2, "the second ability button survives the network path")
+
+
+func test_stun() -> void:
+	var warden := spawn(WARDEN, 0, Vector3.ZERO)
+	var victim := spawn(SCRIBE, 1, Vector3(0, 0, -2))
+	await ticks(2)
+	# The victim starts a long cast and tries to walk away.
+	aim(victim, Vector3(0, 0, 10))
+	cmd(victim).buttons = UnitCommand.BTN_ABILITY_2
+	cmd(victim).move = Vector2(0, 1)
+	await ticks(3)
+	check(victim.is_casting(), "victim is mid cast")
+	aim(warden, victim.global_position)
+	cmd(warden).buttons = UnitCommand.BTN_ABILITY_2
+	await ticks(1)
+	cmd(warden).buttons = 0
+	await secs(0.5)
+	var slam := WARDEN.get_slot(2)
+	check(victim.is_stunned(), "shield slam stuns")
+	check(not victim.is_casting(), "the stun interrupts the cast")
+	var at := victim.global_position
+	await secs(0.4)
+	check(victim.global_position.distance_to(at) < 0.05, "a stunned unit cannot move")
+	await secs(0.6)
+	check(not victim.is_stunned(), "the stun ends after %.1f s" % slam.stun_duration)
+	await secs(0.5)
+	check(victim.global_position.distance_to(at) > 1.0, "movement returns after the stun")
+	var tower := spawn(TOWER, 1, Vector3(0, 0, -2))
+	await ticks(1)
+	authority.apply_damage(warden, tower, 10.0, slam)
+	check(not tower.is_stunned(), "structures cannot be stunned")
+
+
+func test_knife_slow() -> void:
+	var me := spawn(RUNNER, 0, Vector3.ZERO)
+	var target := spawn(SCRIBE, 1, Vector3(0, 0, -6))
+	await ticks(2)
+	aim(me, target.global_position)
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_2
+	await ticks(1)
+	cmd(me).buttons = 0
+	await secs(0.8)
+	var knife := RUNNER.get_slot(2)
+	check(is_equal_approx(target.health, SCRIBE.max_health - knife.damage), "ember knife hits for its damage")
+	check(is_equal_approx(target.slow_amount, knife.slow_amount), "and slows the target")
+	check(is_equal_approx(target.current_move_speed(), SCRIBE.move_speed * (1.0 - knife.slow_amount)), "slowed speed is applied")

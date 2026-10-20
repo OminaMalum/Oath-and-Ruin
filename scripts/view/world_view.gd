@@ -31,7 +31,11 @@ func setup(a: CombatAuthority, local_unit: Unit) -> void:
 		var t: Node3D = _tells.get(u)
 		if t:
 			t.queue_free()
-		_tells.erase(u))
+		_tells.erase(u)
+		var m: Node3D = _stun_marks.get(u)
+		if m:
+			m.queue_free()
+		_stun_marks.erase(u))
 
 
 func _team_color(u: Unit) -> Color:
@@ -202,6 +206,7 @@ func _process(delta: float) -> void:
 			k = clampf(ar.timer / maxf(ar.ability.ward_duration, 0.01), 0.0, 1.0)  # time left
 		fill.scale = Vector3(maxf(k, 0.01), 1, maxf(k, 0.01))
 	_update_tells()
+	_update_stun_marks()
 	_update_preview()
 	for e in _effects:
 		e.t += delta
@@ -265,6 +270,35 @@ func _update_tells() -> void:
 				tell.look_at(tell.global_position + flat, Vector3.UP)
 		else:
 			tell.global_position = Vector3(u.cast_target.x, 0.04, u.cast_target.z)
+
+
+## Stun marker: a slow ring of small lights over a stunned unit's head.
+var _stun_marks := {}  # Unit -> Node3D
+
+
+func _update_stun_marks() -> void:
+	for u in authority.units:
+		var m: Node3D = _stun_marks.get(u)
+		if u.alive and u.is_stunned():
+			if m == null:
+				m = Node3D.new()
+				for i in 3:
+					var mi := MeshInstance3D.new()
+					var sm := SphereMesh.new()
+					sm.radius = 0.08
+					sm.height = 0.16
+					mi.mesh = sm
+					mi.material_override = Palette.glow(Color(1.0, 0.75, 0.4), 2.0)
+					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+					mi.position = Vector3(0.35, 0, 0).rotated(Vector3.UP, TAU * i / 3.0)
+					m.add_child(mi)
+				add_child(m)
+				_stun_marks[u] = m
+			m.global_position = u.get_global_transform_interpolated().origin + Vector3(0, u.def.height + 0.15, 0)
+			m.rotation.y += 0.08
+		elif m:
+			m.queue_free()
+			_stun_marks.erase(u)
 
 
 ## Flat circle sector on the ground, pointing along -Z.

@@ -158,8 +158,10 @@ func get_command(unit: Unit) -> UnitCommand:
 		c.aim_point = aim
 		c.buttons = UnitCommand.BTN_ATTACK
 		var dist := flat_distance(pos, _target.global_position)
-		if unit.cooldowns.size() > 1 and unit.cooldowns[1] <= 0.0 and _use_ability(unit, unit.get_slot(1), _target, dist, hp):
-			c.buttons |= UnitCommand.BTN_ABILITY_1
+		for slot in range(1, unit.def.slot_count()):
+			if unit.cooldowns[slot] <= 0.0 and _use_ability(unit, unit.get_slot(slot), _target, dist, hp):
+				c.buttons |= UnitCommand.ability_button(slot)
+				break
 		# Ranged champions sidestep while fighting champions, so skillshots can miss.
 		_strafe_timer -= dt
 		if _strafe_timer <= 0.0:
@@ -198,6 +200,16 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 	if a == null:
 		return false
 	var champ := target.def.kind == ChampionDef.Kind.CHAMPION
+	if a.stun_duration > 0.0:
+		# A stun is for champions: when they are casting, fleeing, or about to die.
+		return champ and dist <= a.range + target.def.radius and (target.is_casting() \
+				or target.health / target.max_health < 0.4 or hp < 0.5)
+	if a.delivery == AbilityDef.Delivery.PROJECTILE and a.pierce:
+		# A piercing line: a champion, or two or more enemies lined up behind each other.
+		return dist <= a.range and (champ or _on_line(unit, target, a) >= 2)
+	if a.delivery == AbilityDef.Delivery.PROJECTILE and a.slow_amount > 0.0:
+		# A slowing throw: stick it on a champion that is getting away.
+		return champ and dist <= a.range and dist > unit.def.basic_attack.range
 	match a.delivery:
 		AbilityDef.Delivery.GROUND_AREA:
 			return dist <= a.range and (champ or _clump(unit, target.global_position, a.area_radius) >= 3)
@@ -221,6 +233,21 @@ func _allied_ward(unit: Unit) -> CombatAuthority.SimArea:
 				and ar.source.team == unit.team and flat_distance(unit.global_position, ar.center) <= ar.ability.area_radius + 6.0:
 			return ar
 	return null
+
+
+## Enemies within the line from the unit through `target` out to the range.
+func _on_line(unit: Unit, target: Unit, a: AbilityDef) -> int:
+	var from := unit.global_position
+	var dir := Vector3(target.global_position.x - from.x, 0, target.global_position.z - from.z)
+	if dir.length() < 0.1:
+		return 0
+	var to := from + dir.normalized() * a.range
+	var n := 0
+	for u in authority.units:
+		if u.alive and authority.are_enemies(unit, u) and u.def.kind != ChampionDef.Kind.STRUCTURE \
+				and CombatAuthority._segment_circle_t(from, to, u.global_position, u.def.radius + a.projectile_radius) >= 0.0:
+			n += 1
+	return n
 
 
 func _hurt_ally_within(unit: Unit, r: float) -> bool:

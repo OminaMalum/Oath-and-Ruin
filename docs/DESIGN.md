@@ -136,6 +136,19 @@ ability for now; kits grow gradually.
 | Counterplay | Keep distance, it has the shortest reach | Punish the cooldown; walls stop it |
 | Movement / CC | 80% speed while cutting | Slows do not shorten the leap; walls do |
 
+**Second abilities (E)**
+| | Ruinscribe: Unmaking Lance | Oathwarden: Shield Slam | Ashrunner: Ember Knife |
+|---|---|---|---|
+| Purpose | Punish enemies lined up or held by the glyph | Stop a cast, hold a target for the team | Stick to a runner before the Vault, or finish one |
+| Effect | 70 damage, 16 m line, passes through every enemy | 30 damage and a 0.8 s stun in a 70 degree, 2.6 m arc; interrupts casts and dashes | 35 damage and a 40% slow for 1.2 s on the first enemy hit, 10 m |
+| Timing | 0.45 s windup, 0.25 s recovery, 9 s cooldown | 0.4 s windup, 0.3 s recovery, 10 s cooldown | 0.18 s windup, 5 s cooldown |
+| Tell | A long thin lane on the ground | A narrow arc on the ground | A short lane |
+| Counterplay | Step off the line; it is narrow | Step out of the arc in the windup; stay beyond 2.6 m | Sidestep the throw |
+| Movement / CC | 30% speed in the windup; no CC | 20% speed; the only stun; longest stun wins, never on structures | 80% speed; slow, strongest wins |
+
+Pressing two abilities at once: the ready one wins over one on cooldown. A stunned unit keeps its aim, cannot
+move or buffer input, and its cast or dash is cut.
+
 **Team interaction**: the Oathwarden's ward is where the Ruinscribe commits. Bots playing a ranged champion step
 into a friendly ward during a champion fight and hold a little longer before retreating there.
 
@@ -159,7 +172,12 @@ At level 3 the ability offers two upgrades. Press **1** or **2** (bots pick thro
 In the soak the same champion on each team takes opposite options and the next seed swaps them, so every pick is
 an A/B test.
 
-### Measured (headless soak, 12 seeds)
+### Measured (headless soak, 12 seeds, after the second abilities)
+
+All 12 ended by a core falling, 7.6 to 12.2 min (median about 9.7). Objective claimed in 10 of 12. Oath won 8 of
+12 (the same as before the second abilities; 12 matches cannot separate a bias from luck). Each upgrade option
+won exactly 6 of 12. Ashrunner 92 kills, Ruinscribe 45, Oathwarden 34; the Ruinscribe still deals the most champion
+damage. Before the second abilities (12 seeds):
 
 All 12 ended by a core falling, 8.4 to 13.0 min (median about 11.4). The objective was claimed in 10 of 12. Oath
 won 8 of 12: possibly still a small side bias (an earlier fixed unit order gave Oath 6 of 8 and was fixed by

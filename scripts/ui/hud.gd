@@ -82,7 +82,8 @@ func _draw() -> void:
 		return
 	var vs := get_viewport_rect().size
 	var cam := rig.camera
-	# World bars and names.
+	# World bars and names. Labels that would overlap an earlier one move up.
+	var placed: Array[Rect2] = []
 	for u in authority.units:
 		if not u.alive or u == player:
 			continue  # own health is on the bottom bar; no duplicate over the head
@@ -96,6 +97,21 @@ func _draw() -> void:
 		var p := cam.unproject_position(top)
 		var minion := u.def.kind == ChampionDef.Kind.MINION and u.def.look != ChampionDef.Look.BREAKER
 		var w := 56.0 if minion else 90.0
+		if not minion:
+			var box := Rect2(p - Vector2(w * 0.5, 22), Vector2(w, 34))
+			for _try in 4:
+				var clash := false
+				for r in placed:
+					if r.intersects(box):
+						clash = true
+						break
+				if not clash:
+					break
+				box.position.y -= 34
+			placed.append(box)
+			p = box.position + Vector2(w * 0.5, 22)
+		if u.is_stunned():
+			_text(p + Vector2(-100, 26), "stunned", SMALL, Color(1.0, 0.5, 0.4), HORIZONTAL_ALIGNMENT_CENTER, 200)
 		var col := Palette.ALLY if u.team == player.team else (Palette.NEUTRAL if u.team >= 2 else Palette.ENEMY)
 		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 8 if minion else 10)), u.health / u.max_health, col)
 		# Names only for champions, structures and big units, and only up close.
@@ -172,7 +188,7 @@ func _draw() -> void:
 
 	# Ability slots.
 	var q := player.get_slot(1)
-	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB"]
+	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB", "E"]
 	var slot_w := 150.0
 	var x0 := c.x - (slot_w * player.def.slot_count() + 12 * (player.def.slot_count() - 1)) * 0.5
 	for i in player.def.slot_count():
@@ -192,7 +208,9 @@ func _draw() -> void:
 		_text(r.position + Vector2(0, 58), label, FONT_SIZE, Palette.TEAL if cd <= 0.0 else Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 	if _notice_t > 0.0:
 		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-	if player.slow_timer > 0.0:
+	if player.is_stunned():
+		_text(Vector2(hb.position.x, hb.position.y - 10), "Stunned", FONT_SIZE, Color(1.0, 0.45, 0.35), HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	elif player.slow_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Slowed", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 
 	if not player.alive:
@@ -210,6 +228,7 @@ func _draw() -> void:
 			"Left mouse (hold)  %s" % player.get_slot(0).display_name,
 			("Q hold and release, or right mouse  %s" if player.get_slot(1).delivery == AbilityDef.Delivery.GROUND_AREA \
 				else "Q or right mouse  %s") % player.get_slot(1).display_name,
+			("E  %s" % player.get_slot(2).display_name) if player.get_slot(2) else "",
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  free the mouse",
