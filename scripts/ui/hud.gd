@@ -12,6 +12,8 @@ var player: Unit
 var rig: CameraRig
 var bot: SparringBot
 var show_help: bool = true
+## Connection message from the network session; empty when fine.
+var status: String = ""
 
 var _numbers: Array[Dictionary] = []
 var _font: Font
@@ -123,6 +125,8 @@ func _draw() -> void:
 		_text(Vector2(0, vs.y * 0.42), "Defeated", 48, Color(0.95, 0.85, 0.7), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		_text(Vector2(0, vs.y * 0.42 + 46), "Respawning in %.1f" % maxf(player.respawn_timer, 0.0), 30, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
+	if not status.is_empty():
+		_text(Vector2(0, vs.y * 0.22), status, 30, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if not rig.mouse_captured() and not rig.follow_unit_yaw:
 		_text(Vector2(0, vs.y * 0.30), "Click to play", 36, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if show_help:
@@ -130,7 +134,7 @@ func _draw() -> void:
 			"WASD  move     Mouse  aim and turn",
 			"Left mouse (hold)  Arcane Bolt",
 			"Q or right mouse  Binding Glyph",
-			"F1  dummies fight back: %s" % ("ON" if bot and bot.enabled else "OFF"),
+			"F1  dummies fight back: %s" % ("ON" if bot and bot.enabled else "OFF") if bot else "Online test (server rules)",
 			"F2  hide this     Esc  free the mouse",
 		]
 		for i in lines.size():

@@ -41,7 +41,11 @@ func _ready() -> void:
 	camera.near = 0.1
 	camera.far = 300.0
 	_arm.add_child(camera)
-	if target:
+	snap_to_target()
+
+
+func snap_to_target() -> void:
+	if target and is_inside_tree():
 		yaw = target.aim_yaw
 		global_position = _pivot()
 
