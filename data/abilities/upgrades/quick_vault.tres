@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_edy1m"]
+
+[resource]
+script = ExtResource("1_edy1m")
+id = &"quick_vault"
+display_name = "Quick Vault"
+description = "Upgrade: ready again in 4 s, cuts for 30."
+delivery = 3
+damage = 30.0
+cast_time = 0.08
+recovery = 0.22
+cooldown = 4.0
+move_mult_while_casting = 1.0
+range = 8.0

@@ -454,7 +454,7 @@ func ev_area(id: int, src: int, ability_path: String, center: Vector3) -> void:
 	ar.source = u
 	ar.ability = load(ability_path)
 	ar.center = center
-	ar.timer = ar.ability.area_delay
+	ar.timer = CombatAuthority.area_lifetime(ar.ability)
 	_fx[id] = ar
 	authority.area_spawned.emit(ar)
 

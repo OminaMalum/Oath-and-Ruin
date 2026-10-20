@@ -12,8 +12,9 @@ extends Node3D
 ##   --netbot=MODE                      client test driver: attack | strafe | idle | cheat
 ##   --bot                              dummies fight back from the start
 ##   --quit-after-secs=S                exit after S seconds
+##   --champion=ID                      ruinscribe | oathwarden | ashrunner (match and court)
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
-##   --warp=S                           run the sim 32x fast until S seconds (captures)
+##   --warp=S                           run without drawing until S seconds (needs --fixed-fps 60)
 
 const SCRIBE := preload("res://data/champions/ruinscribe.tres")
 const DUMMY := preload("res://data/champions/training_dummy.tres")
@@ -40,6 +41,8 @@ var _elapsed := 0.0
 
 func _ready() -> void:
 	_parse_args()
+	if args.has("champion"):
+		Session.champion = StringName(args.champion)
 	var mode: String = args.get("mode", Session.mode)
 	if args.has("server") or args.has("connect"):
 		mode = "court"
@@ -82,6 +85,7 @@ func _start_match() -> void:
 	match_ctl = MatchController.new()
 	match_ctl.name = "Match"
 	match_ctl.human_slot = not (args.has("spectate") or autoplay)
+	match_ctl.human_pick = Session.champion
 	match_ctl.bot_seed = int(args.get("seed", "1"))
 	var headless := DisplayServer.get_name() == "headless"
 	if not headless:
@@ -114,8 +118,9 @@ func _parse_args() -> void:
 	_shot_frames = int(args.get("shot-frames", "180"))
 	_warp_until = float(args.get("warp", "-1"))
 	if _warp_until > 0.0:
-		Engine.max_physics_steps_per_frame = 32
-		Engine.time_scale = 32.0
+		# Skip drawing instead of scaling time: Engine.time_scale stretches every
+		# physics step (32x made each tick 0.53 s) and changed match outcomes.
+		RenderingServer.render_loop_enabled = false
 	_quit_after = float(args.get("quit-after-secs", "-1"))
 
 
@@ -136,9 +141,9 @@ func _spawn_dummies() -> void:
 
 func _start_offline() -> void:
 	player = Unit.new()
-	player.def = SCRIBE
+	player.def = Session.champion_def()
 	player.team = 0
-	player.name = "ruinscribe"
+	player.name = String(player.def.id)
 	player.position = Vector3(0, 0, 12)
 	add_child(player)
 	player.add_child(UnitView.new(player))
@@ -255,7 +260,7 @@ func _process(delta: float) -> void:
 		return
 	if _warp_until > 0.0 and (authority.time >= _warp_until or (match_ctl and match_ctl.over)):
 		_warp_until = -1.0
-		Engine.time_scale = 1.0
+		RenderingServer.render_loop_enabled = true
 		_frames = 0  # count shot frames from the end of the warp
 	if _shot_path.is_empty() or _warp_until > 0.0:
 		return

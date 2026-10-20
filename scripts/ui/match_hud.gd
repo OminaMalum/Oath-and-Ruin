@@ -54,8 +54,8 @@ func _draw() -> void:
 		_text(Vector2(x, 38), "%s  %d" % [Palette.TEAM_NAMES[team], st.kills[team]] if team == 0 else "%d  %s" % [st.kills[team], Palette.TEAM_NAMES[team]], 26, col, HORIZONTAL_ALIGNMENT_LEFT if team == 0 else HORIZONTAL_ALIGNMENT_RIGHT, 120)
 		var tw: Unit = match_ctl.towers[team]
 		var co: Unit = match_ctl.cores[team]
-		_small_bar(Rect2(x, 50, 56, 8), tw.health / tw.def.max_health if tw.alive else 0.0, col)
-		_small_bar(Rect2(x + 64, 50, 56, 8), co.health / co.def.max_health if co.alive else 0.0, col)
+		_small_bar(Rect2(x, 50, 56, 8), tw.health / tw.max_health if tw.alive else 0.0, col)
+		_small_bar(Rect2(x + 64, 50, 56, 8), co.health / co.max_health if co.alive else 0.0, col)
 	_text(Vector2(cx - 220, 74), "tower  core", 14, Color(0.85, 0.85, 0.8), HORIZONTAL_ALIGNMENT_LEFT)
 	_marker()
 	_objective_marker(vs)

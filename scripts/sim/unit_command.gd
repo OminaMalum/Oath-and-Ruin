@@ -15,6 +15,8 @@ var aim_point: Vector3 = Vector3.ZERO
 var buttons: int = 0
 ## Optional unit to lock on to (homing attacks only; towers use it).
 var target_id: int = 0
+## Pick an offered ability upgrade: 0 none, 1 or 2 the option.
+var upgrade_choice: int = 0
 
 
 func pressed(button: int) -> bool:
@@ -22,7 +24,7 @@ func pressed(button: int) -> bool:
 
 
 func to_dict() -> Dictionary:
-	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons, "t": target_id}
+	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons, "t": target_id, "u": upgrade_choice}
 
 
 const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1
@@ -48,4 +50,7 @@ static func from_dict(d: Dictionary) -> UnitCommand:
 	var t: Variant = d.get("t")
 	if t is int:
 		c.target_id = maxi(0, t)
+	var u: Variant = d.get("u")
+	if u is int and (u == 1 or u == 2):
+		c.upgrade_choice = u
 	return c

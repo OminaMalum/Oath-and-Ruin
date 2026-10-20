@@ -10,6 +10,11 @@ signal match_over(winner: int)
 signal announce(text: String, team: int)
 
 const SCRIBE := preload("res://data/champions/ruinscribe.tres")
+const WARDEN := preload("res://data/champions/oathwarden.tres")
+const RUNNER := preload("res://data/champions/ashrunner.tres")
+## Each team fields one of each role. Slot 0 holds the lane; slots 1 and 2
+## may go for the objective.
+const ROSTER: Array[ChampionDef] = [SCRIBE, WARDEN, RUNNER]
 const TOWER := preload("res://data/units/tower.tres")
 const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")
@@ -33,6 +38,15 @@ const FIRST_WAVE := 3.0
 const WAVE_EVERY := 25.0
 const FOUNTAIN_RADIUS := 6.0
 const TIME_LIMIT := 25.0 * 60.0
+## Experience: shared by a team's champions within XP_RADIUS of the event.
+const XP_RADIUS := 12.0
+const XP_MINION := 30.0       # split among nearby enemy champions
+const XP_BREAKER := 60.0
+const XP_KILL := 150.0        # to the killer
+const XP_ASSIST := 50.0       # to each other nearby champion of the killer's team
+const XP_STRUCTURE := 120.0   # to every champion of the team
+const XP_BEAST := 100.0
+const XP_PER_SECOND := 1.0    # trickle so nobody falls too far behind
 ## Rising tide: from TIDE_START every new minion hits structures harder,
 ## and from TIDE_EXTRA_MELEE each wave brings one more Shieldbearer.
 ## It keeps a stalemate from lasting: matches should end in 10 to 15 minutes.
@@ -46,6 +60,7 @@ var world: Node3D
 var info := MatchInfo.new()
 var make_view: Callable
 var human_slot: bool = true          # team 0 slot 0 is the player
+var human_pick: StringName = &"ruinscribe"  # champion the player chose
 var bot_seed: int = 1
 
 var champions: Array[Unit] = []
@@ -97,15 +112,34 @@ func start() -> void:
 		towers[team] = tower
 		cores[team] = core
 		structures.append_array([tower, core])
+		var roster := team_roster(team)
 		for slot in 3:
 			var p := info.fountain(team) + Vector3((slot - 1) * 3.0, 0, -s * 2.0)
-			var u := _spawn(SCRIBE, team, p, face)
-			u.name = "%s_%s_%d" % [Palette.TEAM_NAMES[team], SCRIBE.id, slot]
+			var u := _spawn(roster[slot], team, p, face)
+			u.name = "%s_%s_%d" % [Palette.TEAM_NAMES[team], roster[slot].id, slot]
 			info.slots[u] = slot
 			champions.append(u)
 			if not (team == 0 and slot == 0 and human_slot):
 				u.controller = ChampionBot.new(authority, info, bot_seed * 100 + team * 10 + slot)
-			stats.champions[u.name] = {"team": team, "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0}
+			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0}
+			u.upgraded.connect(func(_slot: int, a: AbilityDef) -> void:
+				stats.champions[u.name].upgrade = String(a.id)
+				stats.champions[u.name].upgrade_at = snappedf(authority.time, 0.1)
+				stats.events.append({"t": snappedf(authority.time, 0.1), "event": "upgrade", "unit": u.name, "pick": String(a.id)}))
+			u.leveled.connect(func(lv: int) -> void: stats.champions[u.name].level = lv)
+
+
+## The player's pick goes first on their team (slot 0), the others follow.
+func team_roster(team: int) -> Array[ChampionDef]:
+	var r: Array[ChampionDef] = ROSTER.duplicate()
+	if team == 0 and human_slot:
+		for i in r.size():
+			if r[i].id == human_pick:
+				var d: ChampionDef = r[i]
+				r.remove_at(i)
+				r.push_front(d)
+				break
+	return r
 
 
 func player() -> Unit:
@@ -134,6 +168,8 @@ func _physics_process(dt: float) -> void:
 	if _wave_timer <= 0.0:
 		_wave_timer += WAVE_EVERY
 		_spawn_wave()
+	for u in champions:
+		u.add_xp(XP_PER_SECOND * dt)
 	for u in champions:
 		if u.alive and UnitController.flat_distance(u.global_position, info.fountain(u.team)) <= FOUNTAIN_RADIUS:
 			authority.heal(u, u.def.fountain_heal * dt)
@@ -283,10 +319,37 @@ func _on_damaged(target: Unit, amount: float, source: Unit) -> void:
 			c.damage_to_structures += amount
 
 
+## Gives `amount` to `team`'s living champions within XP_RADIUS of `at`
+## (split between them when `split`).
+func _grant_xp(team: int, at: Vector3, amount: float, split: bool, skip: Unit = null) -> void:
+	var near: Array[Unit] = []
+	for u in champions:
+		if u.alive and u.team == team and u != skip and UnitController.flat_distance(u.global_position, at) <= XP_RADIUS:
+			near.append(u)
+	for u in near:
+		u.add_xp(amount / near.size() if split else amount)
+
+
 func _on_died(target: Unit, killer: Unit) -> void:
 	if over:
 		return
 	var kname: String = killer.name if killer and is_instance_valid(killer) else ""
+	var at := target.global_position
+	match target.def.kind:
+		ChampionDef.Kind.CHAMPION:
+			if killer and is_instance_valid(killer) and killer.def.kind == ChampionDef.Kind.CHAMPION:
+				killer.add_xp(XP_KILL)
+			_grant_xp(1 - target.team, at, XP_ASSIST, false, killer)
+		ChampionDef.Kind.MINION:
+			if target.team < 2:
+				_grant_xp(1 - target.team, at, XP_BREAKER if target.def.look == ChampionDef.Look.BREAKER else XP_MINION, true)
+		ChampionDef.Kind.NEUTRAL:
+			if killer and is_instance_valid(killer) and killer.team < 2:
+				_grant_xp(killer.team, at, XP_BEAST, false)
+		ChampionDef.Kind.STRUCTURE:
+			for u in champions:
+				if u.team == 1 - target.team:
+					u.add_xp(XP_STRUCTURE)
 	match target.def.kind:
 		ChampionDef.Kind.CHAMPION:
 			# Respawns grow with match time: 6 s, plus 2 s per minute, at most 20 s.

@@ -18,6 +18,10 @@ func _ready() -> void:
 	match unit.def.look:
 		ChampionDef.Look.SPELLCASTER:
 			_build_spellcaster()
+		ChampionDef.Look.WARDEN:
+			_build_warden()
+		ChampionDef.Look.SKIRMISHER:
+			_build_skirmisher()
 		ChampionDef.Look.TRAINING_DUMMY:
 			_build_dummy()
 		ChampionDef.Look.MINION_MELEE:
@@ -92,18 +96,7 @@ func _build_spellcaster() -> void:
 	var team_cloth := Palette.mat(Palette.team_color(unit.team).darkened(0.15)) if unit.team < 2 else cloth
 	_part(_cyl(0.30, 0.40, 0.24), team_cloth, Vector3(0, 1.52, 0.02))  # mantle in team colour
 	_part(_cyl(0.26, 0.47, 0.10), team_cloth, Vector3(0, 0.08, 0))     # hem band in team colour
-	if unit.team < 2:
-		var ring := MeshInstance3D.new()  # team ring on the ground, readable from the camera
-		var tm := TorusMesh.new()
-		tm.inner_radius = 0.62
-		tm.outer_radius = 0.72
-		tm.rings = 24
-		ring.mesh = tm
-		ring.material_override = Palette.ground_decal(Palette.team_color(unit.team), 0.7)
-		ring.scale = Vector3(1, 0.05, 1)
-		ring.position = Vector3(0, 0.03, 0)
-		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(ring)
+	_team_ring(0.62)
 	_part(_sphere(0.15), skin, Vector3(0, 1.72, -0.02))                # face
 	_part(_sphere(0.20), robe, Vector3(0, 1.76, 0.05))                 # hood
 	_part(_cyl(0.0, 0.12, 0.28), robe, Vector3(0, 1.9, 0.16), Vector3(-40, 0, 0))  # hood point
@@ -116,6 +109,77 @@ func _build_spellcaster() -> void:
 	var stone := PrismMesh.new()
 	stone.size = Vector3(0.14, 0.24, 0.14)
 	_focus = _part(stone, _focus_mat, Vector3(0.42, 2.14, -0.30))
+
+
+## Team ring on the ground under a champion, readable from the camera.
+func _team_ring(r: float) -> void:
+	if unit.team >= 2:
+		return
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = r
+	tm.outer_radius = r + 0.1
+	tm.rings = 24
+	ring.mesh = tm
+	ring.material_override = Palette.ground_decal(Palette.team_color(unit.team), 0.7)
+	ring.scale = Vector3(1, 0.05, 1)
+	ring.position = Vector3(0, 0.03, 0)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ring)
+
+
+func _team_mat() -> StandardMaterial3D:
+	return Palette.mat(Palette.team_color(unit.team).darkened(0.15)) if unit.team < 2 else Palette.mat(Palette.LEATHER)
+
+
+## Oathwarden: broad and armoured, a tower shield on the left arm and a maul
+## on the right. Wide shoulders so it reads as the frontline at a glance.
+func _build_warden() -> void:
+	var plate := Palette.mat(unit.def.primary_color, 0.5, 0.6)
+	var leather := Palette.mat(Palette.LEATHER_DARK)
+	var brass := Palette.mat(Palette.BRASS, 0.45, 0.8)
+	var wood := Palette.mat(Palette.WOOD)
+	var team := _team_mat()
+	_part(_cyl(0.20, 0.24, 0.8), leather, Vector3(-0.17, 0.4, 0))       # legs
+	_part(_cyl(0.20, 0.24, 0.8), leather, Vector3(0.17, 0.4, 0))
+	_part(_cyl(0.34, 0.40, 0.42), team, Vector3(0, 0.95, 0))            # tabard skirt in team colour
+	_part(_box(Vector3(0.78, 0.62, 0.46)), plate, Vector3(0, 1.38, 0))  # breastplate
+	_part(_sphere(0.24), plate, Vector3(-0.48, 1.62, 0)).scale = Vector3(1.0, 0.7, 1.0)  # pauldrons
+	_part(_sphere(0.24), plate, Vector3(0.48, 1.62, 0)).scale = Vector3(1.0, 0.7, 1.0)
+	_part(_box(Vector3(0.80, 0.10, 0.48)), team, Vector3(0, 1.66, 0))   # team sash across the shoulders
+	_part(_sphere(0.19), plate, Vector3(0, 1.86, 0))                    # helm
+	_part(_box(Vector3(0.26, 0.05, 0.05)), Palette.mat(Color(0.08, 0.08, 0.08)), Vector3(0, 1.86, -0.18))  # visor slit
+	_part(_box(Vector3(0.10, 1.05, 0.72)), plate, Vector3(-0.62, 1.15, -0.12))  # tower shield
+	_part(_box(Vector3(0.12, 0.8, 0.10)), team, Vector3(-0.68, 1.15, -0.12))    # shield stripe
+	_part(_cyl(0.035, 0.04, 1.3), wood, Vector3(0.58, 1.0, -0.25), Vector3(-15, 0, 0))  # maul haft
+	_part(_box(Vector3(0.36, 0.26, 0.26)), Palette.mat(Palette.STONE_DARK), Vector3(0.58, 1.68, -0.43))  # maul head
+	_focus_mat = Palette.glow(unit.def.accent_color, 1.0)
+	_focus = _part(_cyl(0.11, 0.11, 0.05, 16), _focus_mat, Vector3(-0.69, 1.4, -0.12), Vector3(0, 0, 90))  # shield boss
+	_part(_cyl(0.13, 0.13, 0.03, 16), brass, Vector3(-0.68, 1.4, -0.12), Vector3(0, 0, 90))
+	_team_ring(0.72)
+
+
+## Ashrunner: lean, hooded, two short blades held low. Light silhouette with
+## a long scarf in team colour that streams behind it.
+func _build_skirmisher() -> void:
+	var cloth := Palette.mat(unit.def.primary_color)
+	var leather := Palette.mat(Palette.LEATHER_DARK)
+	var steel := Palette.mat(Palette.IRON, 0.35, 0.8)
+	var skin := Palette.mat(Color(0.70, 0.55, 0.44))
+	var team := _team_mat()
+	_part(_cyl(0.11, 0.13, 0.8), leather, Vector3(-0.12, 0.4, 0.05), Vector3(-10, 0, 0))  # legs, mid-stride
+	_part(_cyl(0.11, 0.13, 0.8), leather, Vector3(0.12, 0.4, -0.05), Vector3(10, 0, 0))
+	_part(_cyl(0.18, 0.22, 0.6), cloth, Vector3(0, 1.1, 0.05), Vector3(15, 0, 0))     # torso, leaning in
+	_part(_box(Vector3(0.40, 0.07, 0.26)), leather, Vector3(0, 0.84, 0.02))          # belt
+	_part(_sphere(0.13), skin, Vector3(0, 1.5, -0.06))                                # face
+	_part(_sphere(0.17), cloth, Vector3(0, 1.53, 0.0))                                # hood
+	_part(_box(Vector3(0.36, 0.12, 0.30)), team, Vector3(0, 1.36, 0.04))             # scarf wrap
+	_part(_box(Vector3(0.14, 0.05, 0.75)), team, Vector3(0.05, 1.32, 0.48), Vector3(-15, 0, 0))  # scarf tail
+	_part(_box(Vector3(0.04, 0.03, 0.6)), steel, Vector3(-0.32, 0.95, -0.30))  # blades
+	_part(_box(Vector3(0.04, 0.03, 0.6)), steel, Vector3(0.32, 0.95, -0.30))
+	_focus_mat = Palette.glow(unit.def.accent_color, 1.0)
+	_focus = _part(_sphere(0.05), _focus_mat, Vector3(0, 1.36, -0.13))  # clasp
+	_team_ring(0.55)
 
 
 ## Training dummy: straw body on a post with a painted target shield.

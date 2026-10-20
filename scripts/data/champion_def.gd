@@ -2,7 +2,7 @@ class_name ChampionDef
 extends Resource
 ## Base stats and kit for a champion (or any unit that uses the same rules).
 
-enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER }
+enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER }
 ## What rules apply: who can be targeted by whom, who respawns, who moves.
 enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_f12kd"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/long_vault.tres" id="2_dpkbq"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/quick_vault.tres" id="3_asbq5"]
+
+[resource]
+script = ExtResource("1_f12kd")
+id = &"vault"
+display_name = "Vault"
+description = "Leap 8 m the way you are moving (forward if standing), cutting every enemy passed through. Walls stop it; slows do not shorten it. Counterplay: punish the 6 s cooldown."
+delivery = 3
+damage = 40.0
+cast_time = 0.08
+recovery = 0.22
+cooldown = 6.0
+move_mult_while_casting = 1.0
+range = 8.0
+upgrades = Array[Resource]([ExtResource("2_dpkbq"), ExtResource("3_asbq5")])

@@ -1,6 +1,8 @@
 [gd_resource type="Resource" script_class="AbilityDef" format=3]
 
 [ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_yppqn"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/wide_glyph.tres" id="2_og8lo"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/deep_glyph.tres" id="3_qxacs"]
 
 [resource]
 script = ExtResource("1_yppqn")
@@ -17,3 +19,4 @@ area_radius = 2.6
 area_delay = 0.75
 slow_amount = 0.35
 slow_duration = 1.5
+upgrades = Array[Resource]([ExtResource("2_og8lo"), ExtResource("3_qxacs")])

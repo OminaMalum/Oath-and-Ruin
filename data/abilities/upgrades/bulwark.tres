@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_fmxl8"]
+
+[resource]
+script = ExtResource("1_fmxl8")
+id = &"bulwark"
+display_name = "Bulwark"
+description = "Upgrade: a smaller ward (3.2 m) that blocks half of all damage."
+delivery = 4
+cast_time = 0.35
+recovery = 0.1
+cooldown = 12.0
+move_mult_while_casting = 0.0
+range = 0.0
+area_radius = 3.2
+ward_reduction = 0.5

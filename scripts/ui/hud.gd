@@ -97,7 +97,7 @@ func _draw() -> void:
 		var minion := u.def.kind == ChampionDef.Kind.MINION and u.def.look != ChampionDef.Look.BREAKER
 		var w := 56.0 if minion else 90.0
 		var col := Palette.ALLY if u.team == player.team else (Palette.NEUTRAL if u.team >= 2 else Palette.ENEMY)
-		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 8 if minion else 10)), u.health / u.def.max_health, col)
+		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 8 if minion else 10)), u.health / u.max_health, col)
 		# Names only for champions, structures and big units, and only up close.
 		# Structures are named by the match HUD's next-target marker instead.
 		if not minion and u.def.kind != ChampionDef.Kind.STRUCTURE and u.def.look != ChampionDef.Look.TRAINING_DUMMY and dist < 30.0:
@@ -146,16 +146,37 @@ func _draw() -> void:
 
 	# Own health, bottom centre.
 	var hb := Rect2(Vector2(c.x - 220, vs.y - 128), Vector2(440, 26))
-	_bar(hb, player.health / player.def.max_health, Palette.SELF_HEALTH)
-	_text(Vector2(hb.position.x, hb.position.y + 21), "%d / %d" % [ceili(player.health), roundi(player.def.max_health)], FONT_SIZE, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	_bar(hb, player.health / player.max_health, Palette.SELF_HEALTH)
+	_text(Vector2(hb.position.x, hb.position.y + 21), "%d / %d" % [ceili(player.health), roundi(player.max_health)], FONT_SIZE, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	_text(Vector2(hb.position.x - 230, hb.position.y + 21), player.def.display_name, FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_RIGHT, 220)
+	if player.xp > 0.0 or player.level > 1:
+		# Level and progress to the next one, right of the health bar.
+		var lv_text := "Level %d" % player.level
+		_text(Vector2(hb.position.x + hb.size.x + 14, hb.position.y + 21), lv_text, FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_LEFT, 160)
+		if player.level < Unit.LEVEL_XP.size():
+			var lo := Unit.LEVEL_XP[player.level - 1]
+			var hi := Unit.LEVEL_XP[player.level]
+			_bar(Rect2(Vector2(hb.position.x + hb.size.x + 14, hb.position.y + 30), Vector2(120, 6)), (player.xp - lo) / (hi - lo), Palette.BRASS)
+	if player.upgrade_pending:
+		# The upgrade offer: two big cards above the ability bar, keys 1 and 2.
+		var opts := player.upgrade_options()
+		_text(Vector2(0, vs.y - 312), "Level %d: choose an upgrade for %s" % [Unit.UPGRADE_LEVEL, player.def.get_slot(1).display_name], FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		for i in opts.size():
+			var card := Rect2(Vector2(c.x - 410 + i * 420, vs.y - 290), Vector2(400, 140))
+			draw_rect(card.grow(2), Palette.BRASS)
+			draw_rect(card, Color(0.13, 0.11, 0.10, 0.95))
+			_text(card.position + Vector2(16, 36), "%d   %s" % [i + 1, opts[i].display_name], 28, Palette.TEAL, HORIZONTAL_ALIGNMENT_LEFT, card.size.x - 32)
+			var desc := opts[i].description.trim_prefix("Upgrade: ")
+			var font := get_theme_default_font()
+			draw_multiline_string(font, card.position + Vector2(16, 72), desc, HORIZONTAL_ALIGNMENT_LEFT, card.size.x - 32, 20, 3, Color(0.92, 0.90, 0.84))
 
 	# Ability slots.
-	var keys := ["LMB", "Q hold / RMB"]
+	var q := player.get_slot(1)
+	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB"]
 	var slot_w := 150.0
 	var x0 := c.x - (slot_w * player.def.slot_count() + 12 * (player.def.slot_count() - 1)) * 0.5
 	for i in player.def.slot_count():
-		var a := player.def.get_slot(i)
+		var a := player.get_slot(i)
 		var r := Rect2(Vector2(x0 + i * (slot_w + 12), vs.y - 92), Vector2(slot_w, 70))
 		var cd := player.cooldowns[i] if player.alive else 0.0
 		var casting := player.cast_slot == i and player.is_casting()
@@ -186,8 +207,10 @@ func _draw() -> void:
 	if show_help:
 		var lines := [
 			"WASD  move     Mouse  aim and turn",
-			"Left mouse (hold)  Arcane Bolt",
-			"Q hold and release, or right mouse  Binding Glyph",
+			"Left mouse (hold)  %s" % player.get_slot(0).display_name,
+			("Q hold and release, or right mouse  %s" if player.get_slot(1).delivery == AbilityDef.Delivery.GROUND_AREA \
+				else "Q or right mouse  %s") % player.get_slot(1).display_name,
+			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  free the mouse",
 		]

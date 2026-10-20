@@ -34,6 +34,6 @@ func get_command(unit: Unit) -> UnitCommand:
 	c.move = Vector2(sin(_t * 1.3), 0.25 if best > 12.0 else -0.1)
 	if best <= unit.def.basic_attack.range - 1.0:
 		c.buttons |= UnitCommand.BTN_ATTACK
-	if unit.def.slot_count() > 1 and unit.cooldowns[1] <= 0.0 and best <= unit.def.get_slot(1).range:
+	if unit.def.slot_count() > 1 and unit.cooldowns[1] <= 0.0 and best <= unit.get_slot(1).range:
 		c.buttons |= UnitCommand.BTN_ABILITY_1
 	return c

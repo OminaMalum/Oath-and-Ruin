@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_6r2s1"]
+[ext_resource type="Resource" path="res://data/abilities/vault.tres" id="2_pbhpc"]
+[ext_resource type="Resource" path="res://data/abilities/twin_cut.tres" id="3_qx4h6"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_opjgf"]
+
+[resource]
+script = ExtResource("4_opjgf")
+id = &"ashrunner"
+display_name = "Ashrunner"
+role = "Mobile skirmisher"
+look = 9
+max_health = 500.0
+move_speed = 6.8
+radius = 0.38
+height = 1.7
+fountain_heal = 80.0
+basic_attack = ExtResource("3_qx4h6")
+abilities = Array[ExtResource("1_6r2s1")]([ExtResource("2_pbhpc")])
+primary_color = Color(0.36, 0.27, 0.2, 1)
+accent_color = Color(0.45, 0.85, 0.55, 1)

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_1t301"]
+
+[resource]
+script = ExtResource("1_1t301")
+id = &"twin_cut"
+display_name = "Twin Cut"
+description = "Fast paired blade strike at close range. Counterplay: keep distance; it has the shortest reach."
+delivery = 2
+damage = 34.0
+cast_time = 0.12
+recovery = 0.15
+cooldown = 0.6
+move_mult_while_casting = 0.8
+range = 2.6
+arc_degrees = 90.0

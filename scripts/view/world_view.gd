@@ -26,6 +26,7 @@ func setup(a: CombatAuthority, local_unit: Unit) -> void:
 	a.area_spawned.connect(_on_area_spawned)
 	a.area_detonated.connect(_on_area_detonated)
 	a.unit_damaged.connect(_on_unit_damaged)
+	a.melee_swung.connect(_on_melee_swung)
 	a.unit_removed.connect(func(u: Unit) -> void:
 		var t: Node3D = _tells.get(u)
 		if t:
@@ -111,6 +112,9 @@ func _on_projectile_ended(p: CombatAuthority.SimProjectile, at: Vector3) -> void
 
 
 func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
+	if ar.ability.delivery == AbilityDef.Delivery.WARD:
+		_spawn_ward(ar)
+		return
 	var n := Node3D.new()
 	var col := _team_color(ar.source)
 	var r := ar.ability.area_radius
@@ -127,11 +131,39 @@ func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
 	_areas[ar] = n
 
 
+## A ward: a solid ring and a faint dome in the caster's team colour, with an
+## inner disc that shrinks as its time runs out.
+func _spawn_ward(ar: CombatAuthority.SimArea) -> void:
+	var n := Node3D.new()
+	var col := _team_color(ar.source)
+	var r := ar.ability.area_radius
+	n.add_child(_ring(r, 0.16, Palette.ground_decal(col, 0.95)))
+	var fill := _disc(r, Palette.ground_decal(col, 0.18), 0.03)
+	fill.name = "Fill"
+	n.add_child(fill)
+	var dome := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = r
+	sm.height = r * 2.0
+	sm.is_hemisphere = true
+	dome.mesh = sm
+	var dm := Palette.ground_decal(col, 0.10)
+	dome.material_override = dm
+	dome.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	dome.scale = Vector3(1, 0.45, 1)
+	n.add_child(dome)
+	add_child(n)
+	n.global_position = ar.center + Vector3(0, 0.03, 0)
+	_areas[ar] = n
+
+
 func _on_area_detonated(ar: CombatAuthority.SimArea) -> void:
 	var n: Node3D = _areas.get(ar)
 	if n:
 		n.queue_free()
 		_areas.erase(ar)
+	if ar.ability.delivery == AbilityDef.Delivery.WARD:
+		return
 	_spawn_burst(ar.center + Vector3(0, 0.3, 0), ar.source.def.accent_color, ar.ability.area_radius, 0.3)
 
 
@@ -166,6 +198,8 @@ func _process(delta: float) -> void:
 	for ar: CombatAuthority.SimArea in _areas:
 		var fill: Node3D = _areas[ar].get_node("Fill")
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)
+		if ar.ability.delivery == AbilityDef.Delivery.WARD:
+			k = clampf(ar.timer / maxf(ar.ability.ward_duration, 0.01), 0.0, 1.0)  # time left
 		fill.scale = Vector3(maxf(k, 0.01), 1, maxf(k, 0.01))
 	_update_tells()
 	_update_preview()
@@ -173,8 +207,9 @@ func _process(delta: float) -> void:
 		e.t += delta
 		var k: float = e.t / e.life
 		var mi: MeshInstance3D = e.node
-		mi.scale = Vector3.ONE * lerpf(0.1, e.size, minf(k, 1.0))
-		(e.mat as StandardMaterial3D).albedo_color.a = 1.0 - k
+		if e.size > 0.0:
+			mi.scale = Vector3.ONE * lerpf(0.1, e.size, minf(k, 1.0))
+		(e.mat as StandardMaterial3D).albedo_color.a = (1.0 - k) * (0.7 if e.size < 0.0 else 1.0)
 		if k >= 1.0:
 			mi.queue_free()
 	_effects = _effects.filter(func(e: Dictionary) -> bool: return e.t < e.life)
@@ -184,12 +219,13 @@ func _process(delta: float) -> void:
 ## glyph will land (already clamped to range), before committing.
 func _update_preview() -> void:
 	var hc := viewer.controller as HumanController if viewer and is_instance_valid(viewer) else null
-	var active := hc != null and hc.preview_slot > 0 and viewer.alive
+	var active := hc != null and hc.preview_slot > 0 and viewer.alive \
+			and viewer.get_slot(hc.preview_slot) and viewer.get_slot(hc.preview_slot).delivery == AbilityDef.Delivery.GROUND_AREA
 	if not active:
 		if _preview:
 			_preview.visible = false
 		return
-	var a := viewer.def.get_slot(hc.preview_slot)
+	var a := viewer.get_slot(hc.preview_slot)
 	if _preview == null:
 		_preview = Node3D.new()
 		var ready_col := Color(0.95, 0.95, 0.9)
@@ -218,7 +254,10 @@ func _update_tells() -> void:
 			tell = _make_tell(u, a)
 			_tells[u] = tell
 		tell.visible = true
-		if a.delivery == AbilityDef.Delivery.PROJECTILE:
+		if a.delivery == AbilityDef.Delivery.MELEE_ARC:
+			tell.global_position = u.get_global_transform_interpolated().origin + Vector3(0, 0.04, 0)
+			tell.rotation.y = u.aim_yaw
+		elif a.delivery == AbilityDef.Delivery.PROJECTILE or a.delivery == AbilityDef.Delivery.DASH:
 			var from := u.get_global_transform_interpolated().origin
 			var flat := Vector3(u.cast_target.x - from.x, 0, u.cast_target.z - from.z)
 			if flat.length() > 0.01:
@@ -228,10 +267,58 @@ func _update_tells() -> void:
 			tell.global_position = Vector3(u.cast_target.x, 0.04, u.cast_target.z)
 
 
+## Flat circle sector on the ground, pointing along -Z.
+func _sector(radius: float, degrees: float, m: Material) -> MeshInstance3D:
+	var verts := PackedVector3Array()
+	var steps := 16
+	var half := deg_to_rad(degrees * 0.5)
+	for i in steps:
+		var a0 := -half + (2.0 * half) * i / steps
+		var a1 := -half + (2.0 * half) * (i + 1) / steps
+		verts.append(Vector3.ZERO)
+		verts.append(Vector3(-sin(a0), 0, -cos(a0)) * radius)
+		verts.append(Vector3(-sin(a1), 0, -cos(a1)) * radius)
+	var am := ArrayMesh.new()
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var mi := MeshInstance3D.new()
+	mi.mesh = am
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+## The swing itself: a bright sector that fades in a fifth of a second.
+func _on_melee_swung(caster: Unit, a: AbilityDef) -> void:
+	var m := Palette.ground_decal(caster.def.accent_color, 0.7)
+	var mi := _sector(a.range, a.arc_degrees, m)
+	add_child(mi)
+	mi.global_position = caster.global_position + Vector3(0, 0.06, 0)
+	mi.rotation.y = caster.aim_yaw
+	_effects.append({"node": mi, "mat": m, "t": 0.0, "life": 0.2, "size": -1.0})
+
+
 func _make_tell(u: Unit, a: AbilityDef) -> Node3D:
 	var n := Node3D.new()
 	n.set_meta("ability", a)
 	var col := _team_color(u)
+	if a.delivery == AbilityDef.Delivery.MELEE_ARC:
+		n.add_child(_sector(a.range, a.arc_degrees, Palette.ground_decal(col, 0.30)))
+		add_child(n)
+		return n
+	if a.delivery == AbilityDef.Delivery.DASH:
+		var lane := MeshInstance3D.new()
+		var b := BoxMesh.new()
+		b.size = Vector3(u.def.radius * 2.0, 0.02, a.dash_distance)
+		lane.mesh = b
+		lane.position = Vector3(0, 0, -a.dash_distance * 0.5)
+		lane.material_override = Palette.ground_decal(col, 0.4)
+		lane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		n.add_child(lane)
+		add_child(n)
+		return n
 	if a.delivery == AbilityDef.Delivery.PROJECTILE:
 		var lane := MeshInstance3D.new()
 		var b := BoxMesh.new()

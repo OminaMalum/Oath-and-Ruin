@@ -4,7 +4,11 @@ extends Resource
 ## kept separate on purpose: damage, range, cast time, recovery, cooldown,
 ## projectile speed and targeting are independent knobs.
 
-enum Delivery { PROJECTILE, GROUND_AREA }
+## PROJECTILE flies from the muzzle. GROUND_AREA bursts at a point after a delay.
+## MELEE_ARC hits every enemy in a cone in front at release. DASH carries the
+## caster along its move direction and hits enemies it passes through. WARD
+## plants a circle on the caster that shields allied champions inside.
+enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 
 @export var id: StringName
 @export var display_name: String = ""
@@ -48,3 +52,23 @@ enum Delivery { PROJECTILE, GROUND_AREA }
 ## Fraction of move speed removed (0.3 = 30% slow).
 @export var slow_amount: float = 0.0
 @export var slow_duration: float = 0.0
+
+@export_group("Melee arc")
+## Full width of the cone in degrees (120 = 60 each side of the aim).
+@export var arc_degrees: float = 120.0
+
+@export_group("Dash")
+@export var dash_distance: float = 8.0
+@export var dash_duration: float = 0.22
+
+@export_group("Ward")
+## How long the ward stands (area_radius sets its size).
+@export var ward_duration: float = 3.5
+## Fraction of damage removed for allied champions inside (0.35 = 35% less).
+@export var ward_reduction: float = 0.35
+
+@export_group("Upgrades")
+## The two versions offered at UPGRADE_LEVEL (AbilityDef resources); picking
+## one replaces this ability. Typed as Resource: a script holding a typed array
+## of its own class keeps itself alive and leaks at exit.
+@export var upgrades: Array[Resource] = []

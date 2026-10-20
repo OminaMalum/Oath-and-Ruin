@@ -33,6 +33,30 @@ var aim_yaw: float = 0.0
 var aim_point: Vector3 = Vector3.ZERO
 ## Match rule multiplier on this unit's damage to structures (rising tide).
 var structure_bonus: float = 1.0
+## Dash in progress (DASH delivery): the sim moves the unit, not its input.
+var dash_timer: float = 0.0
+var dash_velocity: Vector3 = Vector3.ZERO
+var dash_ability: AbilityDef
+var dash_hit: Array[Unit] = []
+## Last flat move direction from the command, in world space (dash aim).
+var move_dir: Vector3 = Vector3.ZERO
+
+## Progression (match rules feed xp; the unit applies levels and the pick).
+const LEVEL_XP: Array[float] = [0.0, 300.0, 700.0, 1200.0, 1800.0]  # xp to reach levels 1..5
+const HEALTH_PER_LEVEL := 0.07
+const DAMAGE_PER_LEVEL := 0.06
+const UPGRADE_LEVEL := 3
+signal leveled(level: int)
+signal upgraded(slot: int, a: AbilityDef)
+var max_health: float = 0.0
+var level: int = 1
+var xp: float = 0.0
+## Damage multiplier from level (champions only).
+var damage_mult: float = 1.0
+## Slot -> AbilityDef chosen as an upgrade (replaces the def's ability).
+var slot_overrides := {}
+## True while an upgrade offer waits for a pick.
+var upgrade_pending: bool = false
 
 var cast_phase: CastPhase = CastPhase.NONE
 var cast_slot: int = -1
@@ -72,7 +96,48 @@ func _ready() -> void:
 	spawn_transform = global_transform
 	aim_yaw = rotation.y
 	cooldowns.resize(def.slot_count())
-	health = def.max_health
+	max_health = def.max_health
+	health = max_health
+
+
+## The ability in a slot for this unit (an upgrade pick replaces the def's).
+func get_slot(slot: int) -> AbilityDef:
+	return slot_overrides.get(slot, def.get_slot(slot))
+
+
+## The two upgrades offered for slot 1, if any.
+func upgrade_options() -> Array[AbilityDef]:
+	var out: Array[AbilityDef] = []
+	var a := def.get_slot(1)
+	if a:
+		for u in a.upgrades:
+			out.append(u as AbilityDef)
+	return out
+
+
+func add_xp(amount: float) -> void:
+	if def.kind != ChampionDef.Kind.CHAMPION or amount <= 0.0:
+		return
+	xp += amount
+	while level < LEVEL_XP.size() and xp >= LEVEL_XP[level]:
+		level += 1
+		var frac := health / max_health
+		max_health = def.max_health * (1.0 + HEALTH_PER_LEVEL * (level - 1))
+		damage_mult = 1.0 + DAMAGE_PER_LEVEL * (level - 1)
+		if alive:
+			health = max_health * frac
+		if level == UPGRADE_LEVEL and upgrade_options().size() == 2:
+			upgrade_pending = true
+		leveled.emit(level)
+
+
+func choose_upgrade(option: int) -> void:
+	var opts := upgrade_options()
+	if not upgrade_pending or option < 1 or option > opts.size():
+		return
+	upgrade_pending = false
+	slot_overrides[1] = opts[option - 1]
+	upgraded.emit(1, opts[option - 1])
 
 
 func is_casting() -> bool:
@@ -80,11 +145,11 @@ func is_casting() -> bool:
 
 
 func cast_ability() -> AbilityDef:
-	return def.get_slot(cast_slot) if cast_slot >= 0 else null
+	return get_slot(cast_slot) if cast_slot >= 0 else null
 
 
 func cooldown_fraction(slot: int) -> float:
-	var a := def.get_slot(slot)
+	var a := get_slot(slot)
 	if a == null or a.cooldown <= 0.0:
 		return 0.0
 	return clampf(cooldowns[slot] / a.cooldown, 0.0, 1.0)
@@ -119,6 +184,8 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 
 	aim_yaw = cmd.aim_yaw
 	aim_point = cmd.aim_point
+	if cmd.upgrade_choice > 0:
+		choose_upgrade(cmd.upgrade_choice)
 	rotation.y = aim_yaw
 
 	_update_buffer(cmd, dt)
@@ -127,15 +194,26 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 		_try_start_cast(buffered_slot, cmd, authority)
 
 	var dir := Vector3(cmd.move.x, 0.0, -cmd.move.y).limit_length(1.0).rotated(Vector3.UP, aim_yaw)
+	move_dir = dir
 	var speed := current_move_speed()
+	var top_speed := def.move_speed
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
+	if dash_timer > 0.0:
+		dash_timer -= dt
+		velocity.x = dash_velocity.x
+		velocity.z = dash_velocity.z
+		top_speed = dash_velocity.length()
 	velocity.y = 0.0 if is_on_floor() else velocity.y - GRAVITY * dt
 	var before := global_position
 	move_and_slide()
+	if dash_timer > 0.0 or dash_ability != null:
+		authority.dash_contact(self, before)
+		if dash_timer <= 0.0:
+			dash_ability = null
 	# Guard: the physics step may never carry a unit faster than its speed.
 	var moved := Vector2(global_position.x - before.x, global_position.z - before.z)
-	var limit := maxf(def.move_speed, 0.01) * dt * 1.02
+	var limit := maxf(top_speed, 0.01) * dt * 1.02
 	if moved.length() > limit:
 		var fixed := moved.limit_length(limit)
 		global_position = Vector3(before.x + fixed.x, global_position.y, before.z + fixed.y)
@@ -156,7 +234,7 @@ func _update_buffer(cmd: UnitCommand, dt: float) -> void:
 
 
 func _try_start_cast(slot: int, cmd: UnitCommand, authority: CombatAuthority) -> void:
-	var a := def.get_slot(slot)
+	var a := get_slot(slot)
 	if a == null or cooldowns[slot] > 0.0:
 		# Keep an ability press only if it will come off cooldown within the
 		# buffer window; otherwise drop it so the basic attack is not blocked.
@@ -195,6 +273,14 @@ func clamp_target(a: AbilityDef, point: Vector3) -> Vector3:
 		flat = forward()
 	if a.delivery == AbilityDef.Delivery.GROUND_AREA:
 		flat = flat.limit_length(a.range)
+	elif a.delivery == AbilityDef.Delivery.WARD:
+		return Vector3(from.x, from.y, from.z)
+	elif a.delivery == AbilityDef.Delivery.DASH:
+		# Dashes go the way the unit is moving (WASD), forward when standing.
+		var d := move_dir if move_dir.length() > 0.1 else forward()
+		d.y = 0.0
+		d = d.normalized() * a.dash_distance
+		return Vector3(from.x + d.x, from.y, from.z + d.z)
 	else:
 		flat = flat.normalized() * a.range
 	return Vector3(from.x + flat.x, from.y, from.z + flat.z)
@@ -224,7 +310,19 @@ func _advance_cast(dt: float, authority: CombatAuthority) -> void:
 		cast_slot = -1
 
 
+func start_dash(a: AbilityDef, target: Vector3) -> void:
+	var dir := Vector3(target.x - global_position.x, 0.0, target.z - global_position.z)
+	if dir.length() < 0.1:
+		dir = forward()
+	dash_velocity = dir.normalized() * (a.dash_distance / maxf(a.dash_duration, 0.01))
+	dash_timer = a.dash_duration
+	dash_ability = a
+	dash_hit.clear()
+
+
 func interrupt_cast() -> void:
+	dash_timer = 0.0
+	dash_ability = null
 	cast_phase = CastPhase.NONE
 	cast_slot = -1
 	buffered_slot = -1
@@ -264,7 +362,7 @@ func respawn() -> void:
 	global_transform = spawn_transform
 	aim_yaw = spawn_transform.basis.get_euler().y
 	alive = true
-	health = def.max_health
+	health = max_health
 	for i in cooldowns.size():
 		cooldowns[i] = 0.0
 	collision_layer = LAYER_UNITS

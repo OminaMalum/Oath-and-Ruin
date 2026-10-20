@@ -14,6 +14,10 @@ signal unit_respawned(target: Unit)
 signal unit_removed(target: Unit)
 ## Damage refused because the target is protected (a core behind its tower).
 signal damage_blocked(target: Unit, source: Unit)
+## A melee arc was released (for swing visuals; hits come as unit_damaged).
+signal melee_swung(caster: Unit, a: AbilityDef)
+## A dash started (for trail visuals; the unit's own position replicates).
+signal dash_started(caster: Unit, a: AbilityDef)
 
 ## Tests turn this off and call step() themselves.
 @export var auto_step: bool = true
@@ -87,7 +91,12 @@ func _physics_process(delta: float) -> void:
 func step(dt: float) -> void:
 	tick += 1
 	time += dt
-	for u in units.duplicate():
+	# Alternate the stepping order every tick so neither team always acts first
+	# (a fixed order let Oath win 6 of 8 mirrored bot matches).
+	var order := units.duplicate()
+	if tick % 2 == 0:
+		order.reverse()
+	for u in order:
 		if u.alive:
 			var cmd: UnitCommand = u.controller.get_command(u) if u.controller else UnitCommand.new()
 			u.sim_step(cmd, dt, self)
@@ -122,16 +131,64 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 			p.target = target_unit if a.homing else null
 			projectiles.append(p)
 			projectile_spawned.emit(p)
-		AbilityDef.Delivery.GROUND_AREA:
+		AbilityDef.Delivery.GROUND_AREA, AbilityDef.Delivery.WARD:
 			var ar := SimArea.new()
 			ar.id = _next_fx_id
 			_next_fx_id += 1
 			ar.source = caster
 			ar.ability = a
 			ar.center = Vector3(target.x, 0.0, target.z)
-			ar.timer = a.area_delay
+			ar.timer = area_lifetime(a)
 			areas.append(ar)
 			area_spawned.emit(ar)
+		AbilityDef.Delivery.MELEE_ARC:
+			melee_swung.emit(caster, a)
+			var fwd := caster.forward()
+			var half := deg_to_rad(a.arc_degrees * 0.5)
+			for u in units.duplicate():
+				if not u.alive or u == caster or (a.hits_enemies_only and not are_enemies(caster, u)):
+					continue
+				var to := Vector3(u.global_position.x - caster.global_position.x, 0.0, u.global_position.z - caster.global_position.z)
+				if to.length() > a.range + u.def.radius:
+					continue
+				if to.length() > u.def.radius and absf(fwd.signed_angle_to(to, Vector3.UP)) > half:
+					continue
+				apply_damage(caster, u, a.damage, a)
+		AbilityDef.Delivery.DASH:
+			caster.start_dash(a, target)
+			dash_started.emit(caster, a)
+
+
+## Ground areas burst after their delay; wards stand for their duration.
+static func area_lifetime(a: AbilityDef) -> float:
+	return a.ward_duration if a.delivery == AbilityDef.Delivery.WARD else a.area_delay
+
+
+## Called by a dashing unit each tick with where it started the tick: every
+## enemy it passes through takes the dash damage once.
+func dash_contact(u: Unit, from: Vector3) -> void:
+	var a := u.dash_ability
+	if a == null or a.damage <= 0.0:
+		return
+	for e in units:
+		if not e.alive or not are_enemies(u, e) or e in u.dash_hit:
+			continue
+		if _segment_circle_t(from, u.global_position, e.global_position, e.def.radius + u.def.radius) >= 0.0:
+			u.dash_hit.append(e)
+			apply_damage(u, e, a.damage, a)
+
+
+## Damage multiplier for a champion standing in an allied ward (strongest wins).
+func ward_factor(target: Unit) -> float:
+	if target.def.kind != ChampionDef.Kind.CHAMPION:
+		return 1.0
+	var best := 0.0
+	for ar in areas:
+		if ar.alive and ar.ability.delivery == AbilityDef.Delivery.WARD and is_instance_valid(ar.source) \
+				and ar.source.team == target.team \
+				and Vector2(target.global_position.x - ar.center.x, target.global_position.z - ar.center.z).length() <= ar.ability.area_radius + target.def.radius:
+			best = maxf(best, ar.ability.ward_reduction)
+	return 1.0 - best
 
 
 func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> bool:
@@ -146,6 +203,9 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 		if a != null:
 			amount *= a.structure_damage_mult
 		amount *= source.structure_bonus
+	amount *= ward_factor(target)
+	if source.def.kind == ChampionDef.Kind.CHAMPION:
+		amount *= source.damage_mult
 	target.health -= amount
 	target.last_attacker = source
 	target.last_attacked_at = time
@@ -168,7 +228,7 @@ func kill(target: Unit) -> void:
 
 func heal(target: Unit, amount: float) -> void:
 	if target.alive and amount > 0.0:
-		target.health = minf(target.def.max_health, target.health + amount)
+		target.health = minf(target.max_health, target.health + amount)
 
 
 func _step_projectiles(dt: float) -> void:
@@ -261,7 +321,10 @@ static func _segment_circle_t(from: Vector3, to: Vector3, center: Vector3, r: fl
 func _step_areas(dt: float) -> void:
 	for ar in areas:
 		ar.timer -= dt
-		if ar.timer <= 0.0:
+		if ar.timer <= 0.0 and ar.ability.delivery == AbilityDef.Delivery.WARD:
+			ar.alive = false
+			area_detonated.emit(ar)  # a ward simply ends
+		elif ar.timer <= 0.0:
 			ar.alive = false
 			for u in units:
 				if not u.alive:

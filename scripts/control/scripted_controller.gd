@@ -12,4 +12,6 @@ func get_command(_unit: Unit) -> UnitCommand:
 	c.aim_yaw = command.aim_yaw
 	c.aim_point = command.aim_point
 	c.buttons = command.buttons
+	c.target_id = command.target_id
+	c.upgrade_choice = command.upgrade_choice
 	return c

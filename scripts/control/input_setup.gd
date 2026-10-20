@@ -7,6 +7,8 @@ const KEYS := {
 	"move_left": [KEY_A, KEY_LEFT],
 	"move_right": [KEY_D, KEY_RIGHT],
 	"ability_1_preview": [KEY_Q],
+	"upgrade_1": [KEY_1],
+	"upgrade_2": [KEY_2],
 	"restart": [KEY_R],
 	"menu": [KEY_M],
 	"toggle_bot": [KEY_F1],

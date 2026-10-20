@@ -15,7 +15,7 @@ func _ready() -> void:
 	box.set_anchors_preset(Control.PRESET_CENTER)
 	box.add_theme_constant_override("separation", 18)
 	box.custom_minimum_size = Vector2(520, 0)
-	box.position = Vector2(-260, -220)
+	box.position = Vector2(-260, -300)
 	add_child(box)
 	var title := Label.new()
 	title.text = "Oath & Ruin"
@@ -29,6 +29,28 @@ func _ready() -> void:
 	sub.add_theme_font_size_override("font_size", 20)
 	sub.add_theme_color_override("font_color", Color(0.75, 0.72, 0.65))
 	box.add_child(sub)
+	# Champion pick: three big toggles, the role written under each name.
+	var pick_label := Label.new()
+	pick_label.text = "Your champion"
+	pick_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pick_label.add_theme_font_size_override("font_size", 24)
+	pick_label.add_theme_color_override("font_color", Color(0.85, 0.80, 0.70))
+	box.add_child(pick_label)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+	var group := ButtonGroup.new()
+	for c in [["Ruinscribe", "Ranged caster", &"ruinscribe"], ["Oathwarden", "Frontline", &"oathwarden"], ["Ashrunner", "Skirmisher", &"ashrunner"]]:
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_group = group
+		b.text = "%s\n%s" % [c[0], c[1]]
+		b.custom_minimum_size = Vector2(165, 84)
+		b.add_theme_font_size_override("font_size", 22)
+		var id: StringName = c[2]
+		b.button_pressed = Session.champion == id
+		b.pressed.connect(func() -> void: Session.champion = id)
+		row.add_child(b)
 	for item in [["3v3 Bot Match", "match"], ["Training Court", "court"], ["Quit", "quit"]]:
 		var b := Button.new()
 		b.text = item[0]
@@ -37,4 +59,4 @@ func _ready() -> void:
 		var mode: String = item[1]
 		b.pressed.connect(func() -> void: chosen.emit(mode))
 		box.add_child(b)
-	(box.get_child(2) as Button).grab_focus.call_deferred()
+	(box.get_child(4) as Button).grab_focus.call_deferred()
