@@ -41,12 +41,13 @@ const TIME_LIMIT := 25.0 * 60.0
 ## Experience: shared by a team's champions within XP_RADIUS of the event.
 const XP_RADIUS := 12.0
 const XP_MINION := 30.0       # split among nearby enemy champions
+const XP_LAST_HIT := 20.0     # on top, to the champion that landed the killing blow
 const XP_BREAKER := 60.0
 const XP_KILL := 150.0        # to the killer
 const XP_ASSIST := 50.0       # to each other nearby champion of the killer's team
 const XP_STRUCTURE := 120.0   # to every champion of the team
 const XP_BEAST := 100.0
-const XP_PER_SECOND := 1.0    # trickle so nobody falls too far behind
+const XP_PER_SECOND := 1.5    # trickle so nobody falls too far behind
 ## Rising tide: from TIDE_START every new minion hits structures harder,
 ## and from TIDE_EXTRA_MELEE each wave brings one more Shieldbearer.
 ## It keeps a stalemate from lasting: matches should end in 10 to 15 minutes.
@@ -343,6 +344,8 @@ func _on_died(target: Unit, killer: Unit) -> void:
 		ChampionDef.Kind.MINION:
 			if target.team < 2:
 				_grant_xp(1 - target.team, at, XP_BREAKER if target.def.look == ChampionDef.Look.BREAKER else XP_MINION, true)
+				if killer and is_instance_valid(killer) and killer.def.kind == ChampionDef.Kind.CHAMPION:
+					killer.add_xp(XP_LAST_HIT)  # the last hit is worth going for
 		ChampionDef.Kind.NEUTRAL:
 			if killer and is_instance_valid(killer) and killer.team < 2:
 				_grant_xp(killer.team, at, XP_BEAST, false)

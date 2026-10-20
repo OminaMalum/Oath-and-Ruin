@@ -38,7 +38,7 @@ func _run() -> void:
 		"test_upgrade_choice", "test_roster",
 		"test_second_slot_and_pierce", "test_stun", "test_knife_slow",
 		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
-		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember",
+		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember", "test_last_hit_xp",
 	]
 	for t: String in tests:
 		_make_world()
@@ -844,3 +844,19 @@ func test_passive_ember() -> void:
 	authority.apply_damage(me, victim, 10.0, RUNNER.basic_attack)
 	check(me.cooldowns[1] == 0.0, "a champion kill resets Vault")
 	check(is_equal_approx(me.health, 200.0 + me.max_health * RUNNER.passive_value), "and heals %.0f%% of max health" % (RUNNER.passive_value * 100.0))
+
+
+func test_last_hit_xp() -> void:
+	var mc := _match()
+	await ticks(2)
+	var killer: Unit = mc.champions[0]
+	var ally: Unit = mc.champions[1]
+	var minion := spawn(MELEE, 1, killer.global_position + Vector3(0, 0, -2))
+	await ticks(1)
+	var k0 := killer.xp
+	var a0 := ally.xp
+	authority.apply_damage(killer, minion, 99999.0, killer.def.basic_attack)
+	var share := MatchController.XP_MINION / 3.0  # three champions stand at the fountain
+	check(is_equal_approx(ally.xp - a0, share), "a nearby ally gets its share of the minion (%.1f)" % (ally.xp - a0))
+	check(is_equal_approx(killer.xp - k0, share + MatchController.XP_LAST_HIT), "the last hit pays %.0f on top (%.1f)" % [MatchController.XP_LAST_HIT, killer.xp - k0])
+	authority.auto_step = true

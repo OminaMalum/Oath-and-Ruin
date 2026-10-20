@@ -44,7 +44,7 @@ var dash_hit: Array[Unit] = []
 var move_dir: Vector3 = Vector3.ZERO
 
 ## Progression (match rules feed xp; the unit applies levels and the pick).
-const LEVEL_XP: Array[float] = [0.0, 300.0, 700.0, 1200.0, 1800.0]  # xp to reach levels 1..5
+const LEVEL_XP: Array[float] = [0.0, 220.0, 500.0, 850.0, 1300.0]  # xp to reach levels 1..5
 const HEALTH_PER_LEVEL := 0.07
 const DAMAGE_PER_LEVEL := 0.06
 const UPGRADE_LEVEL := 3

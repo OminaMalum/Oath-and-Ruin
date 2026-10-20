@@ -174,9 +174,9 @@ that is refused with a reason on the HUD. Bots save them for a hurt champion, tw
 ### Levels (minimal progression)
 
 Champions level 1 to 5. Each level adds 7% health and 6% damage. Experience: 30 per enemy minion death (split among
-nearby champions), 150 to the killer of a champion and 50 to each nearby ally, 120 to the whole team per structure,
-100 for the Shrinebearer, plus 1 per second. Levels need 300, 700, 1200 and 1800 experience; level 3 comes at
-about 3.5 minutes.
+nearby champions) plus 20 to the champion that lands the last hit, 150 to the killer of a champion and 50 to each nearby ally, 120 to the whole team per structure,
+100 for the Shrinebearer, plus 1.5 per second. Levels need 220, 500, 850 and 1300 experience (lowered 2026-10-20
+after Anthony's first play felt leveling slow: before, level 3 came at about 3.7 minutes for bots).
 
 ### The upgrade choice (one test)
 
