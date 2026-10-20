@@ -10,7 +10,7 @@ Each gate ends with a runnable checkpoint, verification evidence and remaining r
 - **Gate 2, complete bot match**: small mirrored map, one lane, tower and core per team, small flanks, one neutral
   camp with a visible reward, minion waves, tower targeting, respawn, victory, results, restart. One champion,
   mirrored picks, bots fill slots.
-- **Gate 3, three champions**: add the frontline fighter and the mobile skirmisher, complete kits gradually, one
+- **Gate 3, three champions** (first pass done: Oathwarden and Ashrunner with one ability each, levels, one upgrade choice): add the frontline fighter and the mobile skirmisher, complete kits gradually, one
   minimal progression system, a small set of upgrades, then one test of a choice between two ability upgrades.
 - **Gate 4, playability and presentation**: readability, animation, audio, HUD, performance on a stated machine,
   bot reliability, match telemetry (duration, deaths, captures, damage sources, stalls).

@@ -1,4 +1,4 @@
-# Design notes (Milestone 1 and Gate 2)
+# Design notes (Milestone 1, Gate 2 and Gate 3)
 
 ## Combat rules in this build
 
@@ -43,8 +43,8 @@ respawn on the player.
 
 ## Gate 2: the 3v3 bot match
 
-Mode: **3v3 Bot Match** from the menu (or `-- --mode=match`, `--spectate` for six bots). Mirrored picks: all six
-champions are Ruinscribes. Team colours are teal (Oath) and amber (Ruin); the wild camp is amethyst.
+Mode: **3v3 Bot Match** from the menu (or `-- --mode=match`, `--spectate` for six bots). Since Gate 3 each team
+fields one of each champion (mirrored picks); the player's pick takes slot 0. Team colours are teal (Oath) and amber (Ruin); the wild camp is amethyst.
 
 ### Map (Lanebreaker Ruins, graybox)
 
@@ -103,6 +103,71 @@ All 8 ended by a core falling: 8.5, 10.5, 11.8, 11.8, 13.1, 16.5, 19.3 and 23.0 
 Objective claimed in 7 of 8 matches. First champion fight at 15 to 16 s. Champion deaths 2 to 11 per match.
 Zero script errors. The longest quiet spell without structure damage is still up to 9 minutes in some seeds.
 
+## Gate 3: three champions, levels and one upgrade choice
+
+Pick a champion on the menu (or `--champion=ruinscribe|oathwarden|ashrunner`). Each has a basic attack and one
+ability for now; kits grow gradually.
+
+| | Ruinscribe | Oathwarden | Ashrunner |
+|---|---|---|---|
+| Role | Ranged spellcaster | Frontline fighter | Mobile skirmisher |
+| Distance | 18 m bolts, 14 m glyph | 3.2 m | 2.6 m |
+| Commitment | Low: pokes from range | High: has to stand in the fight | Medium: in and out |
+| Mobility | 6.2 m/s, slowed while casting | 5.8 m/s | 6.8 m/s plus an 8 m leap |
+| Health | 560 | 820 | 500 |
+
+**Oathwarden**
+| | Cleave (basic, LMB) | Warding Stand (Q / RMB) |
+|---|---|---|
+| Purpose | Hit everything in front | Let the team commit to a fight |
+| Effect | 55 damage in a 120 degree, 3.2 m arc | 4 m ward for 3.5 s: allied champions inside take 35% less damage |
+| Timing | 0.25 s windup, 1.0 s interval | 0.35 s plant (rooted), 12 s cooldown |
+| Tell | The arc shows on the ground during the windup | Solid ring, faint dome, an inner disc that shrinks with time left |
+| Counterplay | Stay out of 3 m, step out during the windup | Back off and wait it out, or fight outside the circle |
+| Movement / CC | 50% speed while swinging | Champions only (not minions or structures); strongest ward wins, they do not stack |
+
+**Ashrunner**
+| | Twin Cut (basic, LMB) | Vault (Q / RMB) |
+|---|---|---|
+| Purpose | Fast close damage | Gap close or escape |
+| Effect | 34 damage in a 90 degree, 2.6 m arc | Leap 8 m the way you move (forward if standing); 40 damage to each enemy passed through, once |
+| Timing | 0.12 s windup, 0.6 s interval | 0.08 s windup, 0.22 s leap, 6 s cooldown |
+| Tell | Arc on the ground | A lane on the ground shows the leap during the windup |
+| Counterplay | Keep distance, it has the shortest reach | Punish the cooldown; walls stop it |
+| Movement / CC | 80% speed while cutting | Slows do not shorten the leap; walls do |
+
+**Team interaction**: the Oathwarden's ward is where the Ruinscribe commits. Bots playing a ranged champion step
+into a friendly ward during a champion fight and hold a little longer before retreating there.
+
+### Levels (minimal progression)
+
+Champions level 1 to 5. Each level adds 7% health and 6% damage. Experience: 30 per enemy minion death (split among
+nearby champions), 150 to the killer of a champion and 50 to each nearby ally, 120 to the whole team per structure,
+100 for the Shrinebearer, plus 1 per second. Levels need 300, 700, 1200 and 1800 experience; level 3 comes at
+about 3.5 minutes.
+
+### The upgrade choice (one test)
+
+At level 3 the ability offers two upgrades. Press **1** or **2** (bots pick through the same command).
+
+| Ability | Option 1 | Option 2 |
+|---|---|---|
+| Binding Glyph | Wide Glyph: 3.4 m circle, 75 damage | Deep Glyph: 55% slow for 2 s |
+| Warding Stand | Long Stand: lasts 5 s | Bulwark: 3.2 m, blocks 50% |
+| Vault | Long Vault: 10.5 m | Quick Vault: 4 s cooldown, 30 damage |
+
+In the soak the same champion on each team takes opposite options and the next seed swaps them, so every pick is
+an A/B test.
+
+### Measured (headless soak, 12 seeds)
+
+All 12 ended by a core falling, 8.4 to 13.0 min (median about 11.4). The objective was claimed in 10 of 12. Oath
+won 8 of 12: possibly still a small side bias (an earlier fixed unit order gave Oath 6 of 8 and was fixed by
+alternating who acts first each tick), but 12 matches cannot tell. Upgrades: option 1 won 7 of 12 for each
+champion, option 2 won 5 of 12. That is no real difference in 12 matches. Role spread across the 12 matches:
+Ashrunner 113 kills, Ruinscribe 44, Oathwarden 28. Ruinscribe dealt the most champion damage and nearly all the
+structure damage. Deaths were 62 to 86 per champion. Zero script errors.
+
 ## Not in this build (on purpose)
 
-Second and third abilities, ultimate, passive, upgrade choice, items, more champions. See `docs/ROADMAP.md`.
+Second and third abilities, ultimates, passives, items, more champions. See `docs/ROADMAP.md`.

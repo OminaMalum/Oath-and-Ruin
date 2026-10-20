@@ -8,10 +8,12 @@ Third-person fantasy MOBA for Windows. Original setting and champions. Godot **4
 1. Install Godot 4.7.2-stable (standard build, not .NET): https://github.com/godotengine/godot/releases/tag/4.7.2-stable
 2. Open `project.godot` and press Play (F5). Or run a Windows build: `OathAndRuin.exe` (from the PR or release).
 
-The menu offers **3v3 Bot Match**, **Training Court** and **Quit**.
+The menu offers a champion pick (**Ruinscribe**, **Oathwarden**, **Ashrunner**), then **3v3 Bot Match**,
+**Training Court** and **Quit**.
 
-Controls: **WASD** move, **mouse** turn and aim (the reticle is the aim), **hold left mouse** Arcane Bolt,
-**hold Q** to preview Binding Glyph and release to cast, or **right mouse** to cast it at once, **F1** dummies
+Controls: **WASD** move, **mouse** turn and aim (the reticle is the aim), **hold left mouse** basic attack,
+**Q** or **right mouse** the ability (for Binding Glyph, hold Q to preview and release to cast), **1 / 2** pick an
+upgrade at level 3, **F1** dummies
 fight back on/off (court), **F2** hide help, **Esc** free the mouse (click to recapture). After a match: **R**
 play again, **M** menu.
 

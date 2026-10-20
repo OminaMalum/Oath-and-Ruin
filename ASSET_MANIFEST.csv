@@ -9,3 +9,4 @@ Projectile / glyph / telegraph effects,Oath & Ruin project (code-built primitive
 App icon,Oath & Ruin project (hand-written SVG),n/a (original),2026-10-20,Project-owned,No,Provisional: name is not final,icon.svg,Placeholder until name and branding are chosen
 Lane map geometry (Lanebreaker Ruins graybox),Oath & Ruin project (code-built primitives),n/a (original),2026-10-20,Project-owned,No,None,scripts/arena/lane_map_builder.gd,Graybox
 Tower / core / minion / Breaker / Shrinebearer placeholder models,Oath & Ruin project (code-built primitives),n/a (original),2026-10-20,Project-owned,No,None,scripts/view/unit_view.gd,Placeholder
+Oathwarden and Ashrunner placeholder models; melee swing / dash / ward effects,Oath & Ruin project (code-built primitives),n/a (original),2026-10-20,Project-owned,No,None,scripts/view/unit_view.gd; scripts/view/world_view.gd,Placeholder

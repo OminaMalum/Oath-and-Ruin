@@ -10,6 +10,8 @@ const DUMMY := preload("res://data/champions/training_dummy.tres")
 const TOWER := preload("res://data/units/tower.tres")
 const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")
+const WARDEN := preload("res://data/champions/oathwarden.tres")
+const RUNNER := preload("res://data/champions/ashrunner.tres")
 const DT := 1.0 / 60.0
 
 var failures: int = 0
@@ -32,6 +34,8 @@ func _run() -> void:
 		"test_unit_data_uses_ability_files", "test_tower_targeting", "test_core_protected_by_tower",
 		"test_structure_damage_rules", "test_homing_shot_follows", "test_siege_units_ignore_minions",
 		"test_match_victory", "test_objective_capture",
+		"test_melee_arc", "test_dash", "test_dash_stopped_by_wall", "test_ward", "test_levels",
+		"test_upgrade_choice", "test_roster",
 	]
 	for t: String in tests:
 		_make_world()
@@ -485,3 +489,140 @@ func test_objective_capture() -> void:
 		"standing alone in the circle for 3 s claims it (%s)" % [mc.stats.objective_captures])
 	check(mc.siege != null and mc.siege.team == 0 and (mc.siege.controller as MinionController).structures_only,
 		"the claimed beast marches for the claiming team and goes for structures")
+
+
+# --- Gate 3 champions and progression ----------------------------------------
+
+func test_melee_arc() -> void:
+	var me := spawn(WARDEN, 0, Vector3.ZERO)
+	var front := spawn(DUMMY, 1, Vector3(0.8, 0, -2.5))
+	var behind := spawn(DUMMY, 1, Vector3(0, 0, 2.5))
+	var far := spawn(DUMMY, 1, Vector3(0, 0, -6))
+	var ally := spawn(SCRIBE, 0, Vector3(-0.8, 0, -2.0))
+	await ticks(2)
+	aim(me, Vector3(0, 0, -10))
+	cmd(me).buttons = UnitCommand.BTN_ATTACK
+	await ticks(1)
+	cmd(me).buttons = 0
+	await secs(0.5)
+	var dmg := WARDEN.basic_attack.damage
+	check(is_equal_approx(front.health, DUMMY.max_health - dmg), "cleave hits an enemy in the arc (%.0f)" % front.health)
+	check(behind.health == DUMMY.max_health, "cleave misses an enemy behind")
+	check(far.health == DUMMY.max_health, "cleave misses an enemy out of reach")
+	check(ally.health == SCRIBE.max_health, "cleave does not hurt allies")
+
+
+func test_dash() -> void:
+	var me := spawn(RUNNER, 0, Vector3.ZERO)
+	var crossed := spawn(DUMMY, 1, Vector3(0, 0, -4))
+	await ticks(2)
+	aim(me, Vector3(0, 0, -10))
+	me.apply_slow(0.5, 5.0)
+	cmd(me).move = Vector2(0, 1)
+	await ticks(2)
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_1
+	await ticks(1)
+	cmd(me).buttons = 0
+	cmd(me).move = Vector2.ZERO
+	var start := me.global_position
+	await secs(0.5)
+	var vault := RUNNER.get_slot(1)
+	var moved := Vector2(me.global_position.x - start.x, me.global_position.z - start.z).length()
+	check(absf(moved - vault.dash_distance) < 0.6, "vault carries the full distance even while slowed (%.2f m)" % moved)
+	check(is_equal_approx(crossed.health, DUMMY.max_health - vault.damage), "vault cuts an enemy it passes through once")
+	check(me.cooldowns[1] > 0.0, "vault goes on cooldown")
+
+
+func test_dash_stopped_by_wall() -> void:
+	add_wall(Vector3(0, 1, -4), Vector3(6, 2, 0.5))
+	var me := spawn(RUNNER, 0, Vector3.ZERO)
+	await ticks(2)
+	aim(me, Vector3(0, 0, -10))
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_1
+	await ticks(1)
+	cmd(me).buttons = 0
+	await secs(0.5)
+	check(me.global_position.z > -4.0, "a wall stops the vault (z %.2f)" % me.global_position.z)
+
+
+func test_ward() -> void:
+	var warden := spawn(WARDEN, 0, Vector3.ZERO)
+	var caster := spawn(SCRIBE, 0, Vector3(2, 0, 0))
+	var outside := spawn(SCRIBE, 0, Vector3(9, 0, 0))
+	var enemy := spawn(SCRIBE, 1, Vector3(0, 0, -12))
+	var minion := spawn(MELEE, 0, Vector3(-1, 0, 1))
+	await ticks(2)
+	cmd(warden).buttons = UnitCommand.BTN_ABILITY_1
+	await ticks(1)
+	cmd(warden).buttons = 0
+	await secs(0.5)
+	var ward := warden.get_slot(1)
+	check(authority.areas.size() == 1, "warding stand plants a ward")
+	authority.apply_damage(enemy, caster, 100.0, null)
+	authority.apply_damage(enemy, outside, 100.0, null)
+	authority.apply_damage(enemy, minion, 100.0, null)
+	check(is_equal_approx(SCRIBE.max_health - caster.health, 100.0 * (1.0 - ward.ward_reduction)), "an allied champion inside takes less damage (%.0f)" % (SCRIBE.max_health - caster.health))
+	check(is_equal_approx(SCRIBE.max_health - outside.health, 100.0), "a champion outside takes full damage")
+	check(is_equal_approx(MELEE.max_health - minion.health, 100.0), "minions are not warded")
+	await secs(ward.ward_duration)
+	check(authority.areas.is_empty(), "the ward ends after its duration")
+
+
+func test_levels() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	var target := spawn(DUMMY, 1, Vector3(0, 0, -5))
+	await ticks(2)
+	var leveled := [0]
+	me.leveled.connect(func(_l: int) -> void: leveled[0] += 1)
+	me.health = me.max_health * 0.5
+	me.add_xp(Unit.LEVEL_XP[1])
+	check(me.level == 2 and leveled[0] == 1, "enough xp reaches level 2")
+	check(is_equal_approx(me.max_health, SCRIBE.max_health * (1.0 + Unit.HEALTH_PER_LEVEL)), "level raises max health")
+	check(is_equal_approx(me.health / me.max_health, 0.5), "level keeps the health fraction")
+	authority.apply_damage(me, target, 100.0, SCRIBE.basic_attack)
+	check(is_equal_approx(DUMMY.max_health - target.health, 100.0 * (1.0 + Unit.DAMAGE_PER_LEVEL)), "level raises damage")
+	me.add_xp(99999.0)
+	check(me.level == Unit.LEVEL_XP.size(), "level caps at %d" % Unit.LEVEL_XP.size())
+	var minion := spawn(MELEE, 0, Vector3(3, 0, 0))
+	await ticks(1)
+	minion.add_xp(99999.0)
+	check(minion.level == 1, "only champions gain levels")
+
+
+func test_upgrade_choice() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	await ticks(2)
+	cmd(me).upgrade_choice = 2
+	await ticks(2)
+	check(me.get_slot(1) == SCRIBE.get_slot(1), "no upgrade before the offer")
+	me.add_xp(Unit.LEVEL_XP[Unit.UPGRADE_LEVEL - 1])
+	check(me.upgrade_pending, "level %d offers an upgrade" % Unit.UPGRADE_LEVEL)
+	var opts := me.upgrade_options()
+	check(opts.size() == 2 and opts[0] != opts[1], "two different options")
+	await ticks(2)
+	check(not me.upgrade_pending and me.get_slot(1) == opts[1], "command picks option 2 (%s)" % me.get_slot(1).id)
+	cmd(me).upgrade_choice = 1
+	await ticks(2)
+	check(me.get_slot(1) == opts[1], "the pick cannot be changed later")
+	check(SCRIBE.get_slot(1) != opts[1], "the shared champion data is not changed")
+	var d := UnitCommand.from_dict({"u": 7})
+	check(d.upgrade_choice == 0, "an invalid upgrade choice from the network is dropped")
+	for def: ChampionDef in [SCRIBE, WARDEN, RUNNER]:
+		check(def.get_slot(1).upgrades.size() == 2, "%s has two upgrade options" % def.id)
+
+
+func test_roster() -> void:
+	var mc := MatchController.new()
+	mc.human_slot = true
+	mc.human_pick = &"ashrunner"
+	world.add_child(mc)
+	mc.setup(authority, world)
+	var r0 := mc.team_roster(0)
+	var r1 := mc.team_roster(1)
+	check(r0[0].id == &"ashrunner" and r0.size() == 3, "the player's pick takes slot 0")
+	check(r1[0].id == &"ruinscribe", "the bot team keeps the default order")
+	var ids := {}
+	for d in r0:
+		ids[d.id] = true
+	check(ids.size() == 3, "one of each role per team")
+	await ticks(1)

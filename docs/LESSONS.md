@@ -20,3 +20,9 @@ Reviewed 2026-10-20 (Spires of Ruin in Unreal 5.8, Runners in three.js, the KOTO
    edits to `data/abilities/*.tres` (the minions' x2 structure damage) silently did nothing. Matches stalled and
    tuning chased the wrong cause. Now a test fails if any unit file carries an ability that is not an ability
    file, and the bootstrap scripts are gone.
+9. Gate 3: `Engine.time_scale` does not add physics steps, it stretches each one (x32 made every tick 0.53 s), so
+   a sped-up capture played a different match. Captures now skip drawing instead and match the plain run.
+10. Gate 3: stepping units in a fixed order gave the first team the first hit in every even trade (Oath won 6 of
+    8 mirrored matches). The authority now alternates the order each tick.
+11. Gate 3: a script holding a typed array of its own class (`Array[AbilityDef]` inside AbilityDef) leaked at exit
+    and the network test caught the error line. Such arrays are typed `Array[Resource]`.
