@@ -18,11 +18,14 @@ signal unit_respawned(target: Unit)
 var units: Array[Unit] = []
 var projectiles: Array[SimProjectile] = []
 var areas: Array[SimArea] = []
+var _next_fx_id: int = 1
 var tick: int = 0
+var _next_unit_id: int = 1
 
 
 class SimProjectile:
 	extends RefCounted
+	var id: int = 0
 	var source: Unit
 	var ability: AbilityDef
 	var position: Vector3
@@ -33,6 +36,7 @@ class SimProjectile:
 
 class SimArea:
 	extends RefCounted
+	var id: int = 0
 	var source: Unit
 	var ability: AbilityDef
 	var center: Vector3
@@ -40,8 +44,32 @@ class SimArea:
 	var alive: bool = true
 
 
-func register_unit(u: Unit) -> void:
+func register_unit(u: Unit, net_id: int = 0) -> void:
+	u.net_id = net_id if net_id > 0 else _next_unit_id
+	_next_unit_id = maxi(_next_unit_id, u.net_id + 1)
 	units.append(u)
+
+
+func find_unit(net_id: int) -> Unit:
+	for u in units:
+		if u.net_id == net_id:
+			return u
+	return null
+
+
+## Removes a unit and anything it has in flight, so nothing refers to a
+## freed node.
+func remove_unit(u: Unit) -> void:
+	units.erase(u)
+	for p in projectiles:
+		if p.source == u:
+			_end_projectile(p, p.position)
+	projectiles = projectiles.filter(func(x: SimProjectile) -> bool: return x.alive)
+	for ar in areas:
+		if ar.source == u:
+			ar.alive = false
+	areas = areas.filter(func(x: SimArea) -> bool: return x.alive)
+	u.queue_free()
 
 
 func _physics_process(delta: float) -> void:
@@ -72,6 +100,8 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3) -> void:
 	match a.delivery:
 		AbilityDef.Delivery.PROJECTILE:
 			var p := SimProjectile.new()
+			p.id = _next_fx_id
+			_next_fx_id += 1
 			p.source = caster
 			p.ability = a
 			p.position = caster.muzzle_position()
@@ -81,6 +111,8 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3) -> void:
 			projectile_spawned.emit(p)
 		AbilityDef.Delivery.GROUND_AREA:
 			var ar := SimArea.new()
+			ar.id = _next_fx_id
+			_next_fx_id += 1
 			ar.source = caster
 			ar.ability = a
 			ar.center = Vector3(target.x, 0.0, target.z)

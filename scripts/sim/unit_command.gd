@@ -23,10 +23,24 @@ func to_dict() -> Dictionary:
 	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons}
 
 
+const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1
+
+
+## Rebuilds a command from untrusted data. Wrong types, NaN or infinite
+## values and unknown buttons are dropped; move is clamped to length 1.
+## Range and cooldown limits are enforced later by the unit rules.
 static func from_dict(d: Dictionary) -> UnitCommand:
 	var c := UnitCommand.new()
-	c.move = (d.get("m", Vector2.ZERO) as Vector2).limit_length(1.0)
-	c.aim_yaw = d.get("y", 0.0)
-	c.aim_point = d.get("a", Vector3.ZERO)
-	c.buttons = d.get("b", 0)
+	var m: Variant = d.get("m")
+	if m is Vector2 and (m as Vector2).is_finite():
+		c.move = (m as Vector2).limit_length(1.0)
+	var y: Variant = d.get("y")
+	if (y is float or y is int) and is_finite(float(y)):
+		c.aim_yaw = wrapf(float(y), -PI, PI)
+	var a: Variant = d.get("a")
+	if a is Vector3 and (a as Vector3).is_finite():
+		c.aim_point = a
+	var b: Variant = d.get("b")
+	if b is int:
+		c.buttons = int(b) & ALL_BUTTONS
 	return c

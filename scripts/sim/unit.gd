@@ -21,6 +21,8 @@ const LAYER_UNITS := 2
 @export var team: int = 0
 
 var controller: UnitController
+## Stable id shared by server and clients.
+var net_id: int = 0
 var health: float = 0.0
 var alive: bool = true
 var respawn_timer: float = 0.0
@@ -42,7 +44,10 @@ var slow_timer: float = 0.0
 
 func _ready() -> void:
 	collision_layer = LAYER_UNITS
-	collision_mask = LAYER_WORLD | LAYER_UNITS
+	# Units do not body-block each other for now. Overlapping CharacterBody3D
+	# capsules were pushed apart faster than run speed (29 m/s measured), and
+	# a MOBA needs a deliberate rule for champion and minion blocking anyway.
+	collision_mask = LAYER_WORLD
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = def.radius
@@ -112,7 +117,14 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	velocity.y = 0.0 if is_on_floor() else velocity.y - GRAVITY * dt
+	var before := global_position
 	move_and_slide()
+	# Guard: the physics step may never carry a unit faster than its speed.
+	var moved := Vector2(global_position.x - before.x, global_position.z - before.z)
+	var limit := def.move_speed * dt * 1.02
+	if moved.length() > limit:
+		var fixed := moved.limit_length(limit)
+		global_position = Vector3(before.x + fixed.x, global_position.y, before.z + fixed.y)
 
 
 func _update_buffer(cmd: UnitCommand, dt: float) -> void:
