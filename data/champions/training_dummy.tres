@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_vntuy"]
+[ext_resource type="Resource" path="res://data/abilities/dummy_sling.tres" id="2_n3fct"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="3_ekqdw"]
+
+[resource]
+script = ExtResource("3_ekqdw")
+id = &"training_dummy"
+display_name = "Training Dummy"
+role = "Target"
+look = 1
+max_health = 900.0
+move_speed = 0.0
+respawn_time = 4.0
+basic_attack = ExtResource("2_n3fct")
+primary_color = Color(0.74, 0.62, 0.38, 1)
+accent_color = Color(1, 0.62, 0.2, 1)

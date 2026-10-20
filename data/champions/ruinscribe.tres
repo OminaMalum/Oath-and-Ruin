@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_vd65r"]
+[ext_resource type="Resource" path="res://data/abilities/binding_glyph.tres" id="2_aiors"]
+[ext_resource type="Resource" path="res://data/abilities/arcane_bolt.tres" id="3_q3762"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_ea64g"]
+
+[resource]
+script = ExtResource("4_ea64g")
+id = &"ruinscribe"
+display_name = "Ruinscribe"
+role = "Ranged spellcaster"
+max_health = 560.0
+move_speed = 6.2
+basic_attack = ExtResource("3_q3762")
+abilities = Array[ExtResource("1_vd65r")]([ExtResource("2_aiors")])
+primary_color = Color(0.4, 0.12, 0.11, 1)
+accent_color = Color(0.25, 0.8, 0.78, 1)
