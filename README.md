@@ -8,9 +8,23 @@ Third-person fantasy MOBA for Windows. Original setting and champions. Godot **4
 1. Install Godot 4.7.2-stable (standard build, not .NET): https://github.com/godotengine/godot/releases/tag/4.7.2-stable
 2. Open `project.godot` and press Play (F5). Or run a Windows build: `OathAndRuin.exe` (from the PR or release).
 
+The menu offers **3v3 Bot Match**, **Training Court** and **Quit**.
+
 Controls: **WASD** move, **mouse** turn and aim (the reticle is the aim), **hold left mouse** Arcane Bolt,
-**Q or right mouse** Binding Glyph, **F1** dummies fight back on/off, **F2** hide help, **Esc** free the mouse
-(click to recapture).
+**hold Q** to preview Binding Glyph and release to cast, or **right mouse** to cast it at once, **F1** dummies
+fight back on/off (court), **F2** hide help, **Esc** free the mouse (click to recapture). After a match: **R**
+play again, **M** menu.
+
+## Bot match (Gate 2)
+
+```
+godot --path . -- --mode=match                        you plus two bots against three bots
+godot --path . -- --mode=match --spectate             six bots
+tools/soak.sh 8                                       eight headless bot matches, one summary line each
+```
+
+Each match prints a `MATCHLOG` JSON line and saves it under `user://telemetry/`. Rules and numbers are in
+`docs/DESIGN.md`.
 
 ## Network test (Gate 1)
 
@@ -33,11 +47,12 @@ can fight back, in a small ruined courtyard built from primitives. See `docs/DES
 | Path | What |
 |---|---|
 | `scripts/sim/` | Gameplay state and rules. `CombatAuthority` steps every unit on the 60 Hz physics tick and is the only thing that changes health. `Unit` is per-combatant state. `UnitCommand` is one tick of intent. |
-| `scripts/control/` | Command producers: `HumanController` (keyboard and mouse), `SparringBot`, `DemoController`, `ScriptedController` (tests). All go through the same `UnitCommand` path. |
+| `scripts/control/` | Command producers: `HumanController` (keyboard and mouse), `ChampionBot`, `MinionController`, `TowerController`, `NeutralController`, `SparringBot`, `ScriptedController` (tests). All go through the same `UnitCommand` path. |
 | `scripts/view/` | Camera rig, unit models, projectiles, telegraphs. Read state only. |
 | `scripts/ui/` | HUD (drawn in code, large type). |
 | `scripts/data/` + `data/` | `ChampionDef` and `AbilityDef` resources; tuning lives in the `.tres` files. |
-| `scripts/arena/` | Arena built from primitives. |
+| `scripts/arena/` | Proving Court and the lane map, built from primitives. |
+| `scripts/match/` | `MatchController` (waves, structures, objective, respawns, victory, telemetry) and `MatchInfo` (what bots may know). |
 | `tests/` | Headless gameplay tests. |
 | `tools/` | Test, export and data bootstrap scripts. |
 
@@ -48,6 +63,7 @@ tools/run_tests.sh          headless gameplay tests (exit code = failures)
 tools/export_windows.sh     Windows x86_64 export to build/windows/OathAndRuin.exe
 tools/net_test.sh           multi-process network test (server plus four clients)
 godot --path . -- --autoplay --bot --shot=out.png --shot-frames=200   self-playing capture
+godot --fixed-fps 60 --path . -- --mode=match --spectate --warp=190 --shot=out.png --shot-frames=20   capture mid match
 ```
 
 ## Assets and licenses

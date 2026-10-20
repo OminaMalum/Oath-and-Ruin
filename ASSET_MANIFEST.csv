@@ -7,3 +7,5 @@ Training dummy placeholder model,Oath & Ruin project (code-built primitives),n/a
 Proving Court arena geometry and procedural stone material,Oath & Ruin project (code-built primitives and noise),n/a (original),2026-10-20,Project-owned,No,None,scripts/arena/arena_builder.gd,Graybox: replace with modeled kit pieces
 Projectile / glyph / telegraph effects,Oath & Ruin project (code-built primitives),n/a (original),2026-10-20,Project-owned,No,None,scripts/view/world_view.gd,Placeholder
 App icon,Oath & Ruin project (hand-written SVG),n/a (original),2026-10-20,Project-owned,No,Provisional: name is not final,icon.svg,Placeholder until name and branding are chosen
+Lane map geometry (Lanebreaker Ruins graybox),Oath & Ruin project (code-built primitives),n/a (original),2026-10-20,Project-owned,No,None,scripts/arena/lane_map_builder.gd,Graybox
+Tower / core / minion / Breaker / Shrinebearer placeholder models,Oath & Ruin project (code-built primitives),n/a (original),2026-10-20,Project-owned,No,None,scripts/view/unit_view.gd,Placeholder

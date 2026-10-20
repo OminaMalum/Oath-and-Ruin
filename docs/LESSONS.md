@@ -13,3 +13,10 @@ Reviewed 2026-10-20 (Spires of Ruin in Unreal 5.8, Runners in three.js, the KOTO
 6. Spires spent many rounds on visual polish before the loop was fun, and Runners did branding before gameplay.
    Gameplay first.
 7. Never drive the engine on Anthony's PC while he has the editor open.
+
+## Found in this project
+
+8. Gate 2: a one-off data bootstrap script saved the unit files with private copies of their attacks, so later
+   edits to `data/abilities/*.tres` (the minions' x2 structure damage) silently did nothing. Matches stalled and
+   tuning chased the wrong cause. Now a test fails if any unit file carries an ability that is not an ability
+   file, and the bootstrap scripts are gone.

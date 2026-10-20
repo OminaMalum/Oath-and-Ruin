@@ -7,6 +7,9 @@ extends SceneTree
 
 const SCRIBE := preload("res://data/champions/ruinscribe.tres")
 const DUMMY := preload("res://data/champions/training_dummy.tres")
+const TOWER := preload("res://data/units/tower.tres")
+const CORE := preload("res://data/units/core.tres")
+const MELEE := preload("res://data/units/minion_melee.tres")
 const DT := 1.0 / 60.0
 
 var failures: int = 0
@@ -26,6 +29,9 @@ func _run() -> void:
 		"test_death_and_respawn", "test_area_can_be_dodged", "test_area_hits_and_slows",
 		"test_bot_obeys_range_and_cooldown", "test_casting_slows_movement",
 		"test_dead_units_ignore_commands", "test_command_roundtrip",
+		"test_unit_data_uses_ability_files", "test_tower_targeting", "test_core_protected_by_tower",
+		"test_structure_damage_rules", "test_homing_shot_follows", "test_siege_units_ignore_minions",
+		"test_match_victory", "test_objective_capture",
 	]
 	for t: String in tests:
 		_make_world()
@@ -327,3 +333,155 @@ func test_command_roundtrip() -> void:
 	check(d.move.length() <= 1.0001, "received move vector clamped")
 	check(d.aim_yaw == c.aim_yaw and d.aim_point == c.aim_point and d.buttons == c.buttons, "fields survive")
 	await ticks(1)
+
+
+# --- Gate 2 match rules ------------------------------------------------------
+
+## Unit files must point at the ability files, not carry stale copies of them
+## (a stale copy hid the minions' structure damage bonus for a whole tuning pass).
+func test_unit_data_uses_ability_files() -> void:
+	for dir in ["res://data/units", "res://data/champions"]:
+		for f in DirAccess.get_files_at(dir):
+			if not f.ends_with(".tres"):
+				continue
+			var d: ChampionDef = load(dir + "/" + f)
+			var all: Array = [d.basic_attack]
+			all.append_array(d.abilities)
+			for a in all:
+				if a != null:
+					check((a as AbilityDef).resource_path.begins_with("res://data/abilities/"),
+						"%s uses an ability file (got '%s')" % [f, (a as AbilityDef).resource_path])
+	await ticks(1)
+
+
+func test_tower_targeting() -> void:
+	var tower := spawn(TOWER, 1, Vector3.ZERO)
+	tower.controller = TowerController.new(authority)
+	var minion := spawn(MELEE, 0, Vector3(0, 0, 10))
+	var champ := spawn(SCRIBE, 0, Vector3(3, 0, 8))
+	var ally := spawn(SCRIBE, 1, Vector3(3, 0, 4))
+	await ticks(2)
+	var tc: TowerController = tower.controller
+	check(tc.current == minion, "tower shoots the minion before the champion")
+	authority.apply_damage(champ, ally, 10.0, SCRIBE.basic_attack)
+	await ticks(2)
+	check(tc.current == champ, "tower switches to a champion who hits an allied champion near it")
+	champ.global_position = Vector3(0, 0, 40)  # walks out of range
+	await secs(2.5)
+	check(tc.current == minion, "tower returns to the minion once the champion is out of range")
+
+
+func test_core_protected_by_tower() -> void:
+	var tower := spawn(TOWER, 1, Vector3(0, 0, -10))
+	var core := spawn(CORE, 1, Vector3(0, 0, -20))
+	core.protectors = [tower]
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	await ticks(2)
+	var blocked := [0]
+	authority.damage_blocked.connect(func(_t: Unit, _s: Unit) -> void: blocked[0] += 1)
+	authority.apply_damage(me, core, 100.0, SCRIBE.basic_attack)
+	check(core.health == CORE.max_health and blocked[0] == 1, "core takes no damage while its tower stands")
+	authority.kill(tower)
+	authority.apply_damage(me, core, 100.0, SCRIBE.basic_attack)
+	check(is_equal_approx(core.health, CORE.max_health - 100.0), "core takes damage once its tower falls")
+
+
+func test_structure_damage_rules() -> void:
+	var tower := spawn(TOWER, 1, Vector3(0, 0, -10))
+	var minion := spawn(MELEE, 0, Vector3.ZERO)
+	var me := spawn(SCRIBE, 0, Vector3(4, 0, 0))
+	var other := spawn(MELEE, 1, Vector3(-4, 0, 0))
+	await ticks(2)
+	var strike := MELEE.basic_attack
+	authority.apply_damage(minion, tower, strike.damage, strike)
+	var once := TOWER.max_health - tower.health
+	check(is_equal_approx(once, strike.damage * strike.structure_damage_mult) and strike.structure_damage_mult > 1.0,
+		"minion strike gets its structure bonus (%.1f)" % once)
+	minion.structure_bonus = 2.0
+	var before := tower.health
+	authority.apply_damage(minion, tower, strike.damage, strike)
+	check(is_equal_approx(before - tower.health, once * 2.0), "rising tide bonus multiplies structure damage")
+	authority.apply_damage(minion, other, strike.damage, strike)
+	check(is_equal_approx(other.health, MELEE.max_health - strike.damage), "bonuses do not apply to minions")
+	authority.apply_damage(me, tower, 42.0, SCRIBE.basic_attack)
+	check(is_equal_approx(before - tower.health, once * 2.0 + 42.0), "champion bolts hit structures for plain damage")
+
+
+func test_homing_shot_follows() -> void:
+	var tower := spawn(TOWER, 1, Vector3.ZERO)
+	tower.controller = TowerController.new(authority)
+	var champ := spawn(SCRIBE, 0, Vector3(0, 0, 12))
+	await ticks(2)
+	var hit := [false]
+	authority.unit_damaged.connect(func(t: Unit, _a: float, s: Unit) -> void:
+		if t == champ and s == tower: hit[0] = true)
+	# Make the tower target the champion, then sidestep during the shot.
+	var ally := spawn(SCRIBE, 1, Vector3(2, 0, 4))
+	authority.apply_damage(champ, ally, 1.0, SCRIBE.basic_attack)
+	cmd(champ).move = Vector2(1, 0)
+	await secs(1.5)
+	check(hit[0], "tower shot follows a target that moves sideways")
+
+
+func test_siege_units_ignore_minions() -> void:
+	var tower := spawn(TOWER, 1, Vector3(0, 0, -30))
+	var breaker := spawn(load("res://data/units/minion_breaker.tres"), 0, Vector3.ZERO)
+	var mc := MinionController.new(authority, PackedVector3Array([Vector3(0, 0, -30)]))
+	mc.structures_only = true
+	breaker.controller = mc
+	var blocker := spawn(MELEE, 1, Vector3(1.5, 0, -3))
+	await secs(1.0)
+	check(blocker.health == MELEE.max_health, "breaker does not stop to fight a minion")
+	check(breaker.global_position.z < -2.0, "breaker keeps walking to the structure (z %.1f)" % breaker.global_position.z)
+	await secs(8.0)
+	check(tower.health < TOWER.max_health, "breaker hits the tower")
+
+
+func _match() -> MatchController:
+	var mc := MatchController.new()
+	mc.human_slot = false
+	world.add_child(mc)
+	mc.setup(authority, world)
+	mc.start()
+	for c in mc.champions:
+		c.controller = ScriptedController.new()  # stand still: the test drives the rules
+	return mc
+
+
+func test_match_victory() -> void:
+	var mc := _match()
+	await ticks(2)
+	var won := [-2]
+	mc.match_over.connect(func(w: int) -> void: won[0] = w)
+	var hitter: Unit = mc.champions[0]
+	authority.apply_damage(hitter, mc.cores[1], 99999.0, SCRIBE.basic_attack)
+	check(mc.cores[1].alive and not mc.over, "core cannot fall while its tower stands")
+	authority.apply_damage(hitter, mc.towers[1], 99999.0, SCRIBE.basic_attack)
+	authority.apply_damage(hitter, mc.cores[1], 99999.0, SCRIBE.basic_attack)
+	await ticks(1)
+	check(mc.over and won[0] == 0 and mc.stats.winner == "Oath" and mc.stats.reason == "core destroyed",
+		"destroying the enemy core wins (winner %s)" % mc.stats.winner)
+	check(not authority.auto_step, "the field freezes on the result")
+	authority.auto_step = true
+
+
+func test_objective_capture() -> void:
+	var mc := _match()
+	mc.beast_timer = 0.05
+	await ticks(6)
+	check(mc.beast_state == MatchController.Beast.AWAKE and mc.beast != null, "beast wakes on its timer")
+	authority.kill(mc.beast)
+	await ticks(1)
+	check(mc.beast_state == MatchController.Beast.CAPTURE, "beast down opens the capture circle")
+	var a: Unit = mc.champions[0]
+	var b: Unit = mc.champions[3]
+	a.global_position = mc.objective_position() + Vector3(1, 0, 0)
+	b.global_position = mc.objective_position() + Vector3(-1, 0, 0)
+	await secs(4.0)
+	check(mc.beast_state == MatchController.Beast.CAPTURE, "a contested circle is not claimed")
+	b.global_position = Vector3(0, 0, -60)
+	await secs(3.3)
+	check(mc.beast_state == MatchController.Beast.OUT and mc.stats.objective_captures == [1, 0],
+		"standing alone in the circle for 3 s claims it (%s)" % [mc.stats.objective_captures])
+	check(mc.siege != null and mc.siege.team == 0 and (mc.siege.controller as MinionController).structures_only,
+		"the claimed beast marches for the claiming team and goes for structures")
