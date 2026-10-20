@@ -11,6 +11,7 @@ var _projectiles := {}  # SimProjectile -> Node3D
 var _areas := {}        # SimArea -> Node3D
 var _tells := {}        # Unit -> Node3D
 var _effects: Array[Dictionary] = []
+var _preview: Node3D
 
 
 func _ready() -> void:
@@ -25,6 +26,11 @@ func setup(a: CombatAuthority, local_unit: Unit) -> void:
 	a.area_spawned.connect(_on_area_spawned)
 	a.area_detonated.connect(_on_area_detonated)
 	a.unit_damaged.connect(_on_unit_damaged)
+	a.unit_removed.connect(func(u: Unit) -> void:
+		var t: Node3D = _tells.get(u)
+		if t:
+			t.queue_free()
+		_tells.erase(u))
 
 
 func _team_color(u: Unit) -> Color:
@@ -162,6 +168,7 @@ func _process(delta: float) -> void:
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)
 		fill.scale = Vector3(maxf(k, 0.01), 1, maxf(k, 0.01))
 	_update_tells()
+	_update_preview()
 	for e in _effects:
 		e.t += delta
 		var k: float = e.t / e.life
@@ -171,6 +178,27 @@ func _process(delta: float) -> void:
 		if k >= 1.0:
 			mi.queue_free()
 	_effects = _effects.filter(func(e: Dictionary) -> bool: return e.t < e.life)
+
+
+## Local player's ground-target preview while Q is held: exactly where the
+## glyph will land (already clamped to range), before committing.
+func _update_preview() -> void:
+	var hc := viewer.controller as HumanController if viewer and is_instance_valid(viewer) else null
+	var active := hc != null and hc.preview_slot > 0 and viewer.alive
+	if not active:
+		if _preview:
+			_preview.visible = false
+		return
+	var a := viewer.def.get_slot(hc.preview_slot)
+	if _preview == null:
+		_preview = Node3D.new()
+		var ready_col := Color(0.95, 0.95, 0.9)
+		_preview.add_child(_ring(a.area_radius, 0.08, Palette.ground_decal(ready_col, 0.9)))
+		_preview.add_child(_disc(a.area_radius, Palette.ground_decal(ready_col, 0.08)))
+		add_child(_preview)
+	_preview.visible = true
+	var p := viewer.clamp_target(a, hc.rig.get_aim_point(viewer))
+	_preview.global_position = Vector3(p.x, 0.05, p.z)
 
 
 ## Windup telegraphs: a lane on the ground for projectiles, a circle for

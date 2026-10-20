@@ -16,6 +16,9 @@ var show_help: bool = true
 var status: String = ""
 
 var _numbers: Array[Dictionary] = []
+var _notice: String = ""
+var _notice_t: float = 0.0
+var _hits_taken: Array[Dictionary] = []  # {from: Vector3, t}
 var _font: Font
 
 
@@ -25,6 +28,16 @@ func setup(a: CombatAuthority, p: Unit, r: CameraRig, b: SparringBot) -> void:
 	rig = r
 	bot = b
 	a.unit_damaged.connect(_on_damaged)
+	a.damage_blocked.connect(func(t: Unit, src: Unit) -> void:
+		if src == player and t.protectors.size() > 0:
+			notice("%s is protected by its tower" % t.def.display_name))
+	p.cast_rejected.connect(func(_slot: int, reason: String) -> void: notice(reason))
+
+
+## A short message above the ability bar explaining why something did not happen.
+func notice(text: String) -> void:
+	_notice = text
+	_notice_t = 1.4
 
 
 func _ready() -> void:
@@ -33,7 +46,9 @@ func _ready() -> void:
 	_font = ThemeDB.fallback_font
 
 
-func _on_damaged(target: Unit, amount: float, _source: Unit) -> void:
+func _on_damaged(target: Unit, amount: float, source: Unit) -> void:
+	if target == player and source and is_instance_valid(source):
+		_hits_taken.append({"from": source.global_position, "t": 0.0})
 	_numbers.append({"pos": target.global_position + Vector3(0, target.def.height + 0.4, 0),
 		"text": str(roundi(amount)), "t": 0.0, "enemy": target.team != player.team})
 
@@ -43,6 +58,10 @@ func _process(delta: float) -> void:
 		n.t += delta
 		n.pos += Vector3(0, 1.2 * delta, 0)
 	_numbers = _numbers.filter(func(n: Dictionary) -> bool: return n.t < 0.9)
+	for h in _hits_taken:
+		h.t += delta
+	_hits_taken = _hits_taken.filter(func(h: Dictionary) -> bool: return h.t < 1.2)
+	_notice_t -= delta
 	queue_redraw()
 
 
@@ -70,11 +89,18 @@ func _draw() -> void:
 		var top := u.get_global_transform_interpolated().origin + Vector3(0, u.def.height + 0.35, 0)
 		if cam.is_position_behind(top):
 			continue
+		# Far units drop their bars and names: the top bar covers distant structures.
+		var dist := cam.global_position.distance_to(top)
+		if dist > 48.0:
+			continue
 		var p := cam.unproject_position(top)
-		var w := 90.0 if u != player else 70.0
-		var col := Palette.SELF_HEALTH if u == player else (Palette.ALLY if u.team == player.team else Palette.ENEMY)
-		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 10)), u.health / u.def.max_health, col)
-		if u.def.look != ChampionDef.Look.TRAINING_DUMMY:  # names for champions only; less clutter
+		var minion := u.def.kind == ChampionDef.Kind.MINION and u.def.look != ChampionDef.Look.BREAKER
+		var w := 56.0 if minion else 90.0
+		var col := Palette.ALLY if u.team == player.team else (Palette.NEUTRAL if u.team >= 2 else Palette.ENEMY)
+		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 8 if minion else 10)), u.health / u.def.max_health, col)
+		# Names only for champions, structures and big units, and only up close.
+		# Structures are named by the match HUD's next-target marker instead.
+		if not minion and u.def.kind != ChampionDef.Kind.STRUCTURE and u.def.look != ChampionDef.Look.TRAINING_DUMMY and dist < 30.0:
 			_text(p + Vector2(-100, -8), u.def.display_name, SMALL, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 200)
 	for n in _numbers:
 		if cam.is_position_behind(n.pos):
@@ -84,13 +110,39 @@ func _draw() -> void:
 		var col := Color(1, 0.9, 0.55, a) if n.enemy else Color(1, 0.45, 0.35, a)
 		_text(p + Vector2(10, -14), n.text, 30, col, HORIZONTAL_ALIGNMENT_CENTER, 100)
 
-	# Reticle.
+	# Reticle: white normally, amber on an enemy in range, grey with a label
+	# when the enemy is out of range or a wall is in the way.
 	var c := vs * 0.5
-	var over_enemy := _reticle_on_enemy()
-	var rc := Palette.ENEMY if over_enemy else Color(0.95, 0.93, 0.88)
+	var aim := _aim_state()
+	var rc := Color(0.95, 0.93, 0.88)
+	var tip_text := ""
+	match aim:
+		"in_range":
+			rc = Palette.ENEMY
+		"out_of_range":
+			rc = Color(0.6, 0.6, 0.6)
+			tip_text = "Out of range"
+		"blocked":
+			rc = Color(0.6, 0.6, 0.6)
+			tip_text = "Blocked"
 	draw_arc(c, 11, 0, TAU, 32, Color(0, 0, 0, 0.6), 4)
 	draw_arc(c, 11, 0, TAU, 32, rc, 2)
 	draw_circle(c, 2.5, rc)
+	if aim == "blocked":
+		draw_line(c + Vector2(-9, 9), c + Vector2(9, -9), Color(0, 0, 0, 0.7), 4)
+		draw_line(c + Vector2(-9, 9), c + Vector2(9, -9), rc, 2)
+	if not tip_text.is_empty():
+		_text(c + Vector2(-100, 40), tip_text, SMALL, rc, HORIZONTAL_ALIGNMENT_CENTER, 200)
+	# Where hits on you came from: a wedge around the reticle.
+	for h in _hits_taken:
+		var to: Vector3 = (h.from as Vector3) - player.global_position
+		var ang := atan2(-to.x, -to.z) - rig.yaw  # 0 = straight ahead
+		var dir := Vector2(-sin(ang), -cos(ang))
+		var alpha := 1.0 - (h.t as float) / 1.2
+		var tip := c + dir * 150.0
+		var side := Vector2(-dir.y, dir.x) * 26.0
+		var base_pt := c + dir * 118.0
+		draw_colored_polygon(PackedVector2Array([tip, base_pt + side, base_pt - side]), Color(1.0, 0.35, 0.25, 0.8 * alpha))
 
 	# Own health, bottom centre.
 	var hb := Rect2(Vector2(c.x - 220, vs.y - 128), Vector2(440, 26))
@@ -99,7 +151,7 @@ func _draw() -> void:
 	_text(Vector2(hb.position.x - 230, hb.position.y + 21), player.def.display_name, FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_RIGHT, 220)
 
 	# Ability slots.
-	var keys := ["LMB", "Q / RMB"]
+	var keys := ["LMB", "Q hold / RMB"]
 	var slot_w := 150.0
 	var x0 := c.x - (slot_w * player.def.slot_count() + 12 * (player.def.slot_count() - 1)) * 0.5
 	for i in player.def.slot_count():
@@ -117,6 +169,8 @@ func _draw() -> void:
 		if cd > 0.0 and a.cooldown >= 1.5:
 			label = "%.1f" % cd
 		_text(r.position + Vector2(0, 58), label, FONT_SIZE, Palette.TEAL if cd <= 0.0 else Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+	if _notice_t > 0.0:
+		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if player.slow_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Slowed", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 
@@ -133,8 +187,8 @@ func _draw() -> void:
 		var lines := [
 			"WASD  move     Mouse  aim and turn",
 			"Left mouse (hold)  Arcane Bolt",
-			"Q or right mouse  Binding Glyph",
-			"F1  dummies fight back: %s" % ("ON" if bot and bot.enabled else "OFF") if bot else "Online test (server rules)",
+			"Q hold and release, or right mouse  Binding Glyph",
+			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  free the mouse",
 		]
 		for i in lines.size():
@@ -142,11 +196,32 @@ func _draw() -> void:
 	_text(Vector2(vs.x - 260, 36), "%d fps" % Engine.get_frames_per_second(), SMALL, Color(0.8, 0.8, 0.8), HORIZONTAL_ALIGNMENT_RIGHT, 236)
 
 
-func _reticle_on_enemy() -> bool:
+## "none", "in_range", "out_of_range" or "blocked" for the basic attack,
+## judged the way the game will judge the shot: from the champion's muzzle,
+## flat, against walls and range.
+func _aim_state() -> String:
+	if not player.alive or player.def.basic_attack == null:
+		return "none"
+	var aim := rig.get_aim_point(player)
+	var muzzle := player.muzzle_position()
+	var flat := Vector3(aim.x - muzzle.x, 0.0, aim.z - muzzle.z)
 	var vp := get_viewport()
 	var centre := vp.get_visible_rect().size * 0.5
 	var from := rig.camera.project_ray_origin(centre)
 	var to := from + rig.camera.project_ray_normal(centre) * 80.0
-	var q := PhysicsRayQueryParameters3D.create(from, to, Unit.LAYER_WORLD | Unit.LAYER_UNITS, [player.get_rid()])
-	var hit := rig.get_world_3d().direct_space_state.intersect_ray(q)
-	return not hit.is_empty() and hit.collider is Unit and (hit.collider as Unit).team != player.team
+	var space := rig.get_world_3d().direct_space_state
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, Unit.LAYER_WORLD | Unit.LAYER_UNITS, [player.get_rid()]))
+	var enemy: Unit = null
+	if not hit.is_empty() and hit.collider is Unit and (hit.collider as Unit).team != player.team:
+		enemy = hit.collider
+	# Would the bolt's flat path hit a wall before reaching the aim point?
+	var reach := minf(flat.length(), player.def.basic_attack.range)
+	if reach > 1.0:
+		var end := muzzle + flat.normalized() * reach
+		var wall := space.intersect_ray(PhysicsRayQueryParameters3D.create(muzzle, end, Unit.LAYER_WORLD))
+		if not wall.is_empty() and (enemy != null or reach - muzzle.distance_to(wall.position) > 1.5):
+			return "blocked"
+	if enemy:
+		var d := UnitController.flat_distance(player.global_position, enemy.global_position) - enemy.def.radius
+		return "in_range" if d <= player.def.basic_attack.range else "out_of_range"
+	return "none"

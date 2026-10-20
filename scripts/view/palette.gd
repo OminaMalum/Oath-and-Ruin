@@ -22,6 +22,15 @@ const AMBER := Color(1.0, 0.62, 0.20)
 const ALLY := Color(0.30, 0.85, 0.85)
 const ENEMY := Color(1.0, 0.55, 0.15)
 const SELF_HEALTH := Color(0.40, 0.85, 0.35)
+## Fixed team identities for structures, minions and banners.
+const TEAM_OATH := Color(0.25, 0.78, 0.78)
+const TEAM_RUIN := Color(0.95, 0.55, 0.18)
+const TEAM_NAMES := ["Oath", "Ruin", "Wild"]
+const NEUTRAL := Color(0.72, 0.58, 0.92)  # the wild camp: amethyst, apart from both teams
+
+
+static func team_color(team: int) -> Color:
+	return TEAM_OATH if team == 0 else (TEAM_RUIN if team == 1 else NEUTRAL)
 
 
 static func mat(c: Color, rough: float = 0.85, metal: float = 0.0) -> StandardMaterial3D:
