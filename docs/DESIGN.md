@@ -114,7 +114,7 @@ ability for now; kits grow gradually.
 | Distance | 18 m bolts, 14 m glyph | 3.2 m | 2.6 m |
 | Commitment | Low: pokes from range | High: has to stand in the fight | Medium: in and out |
 | Mobility | 6.2 m/s, slowed while casting | 5.8 m/s | 6.8 m/s plus an 8 m leap |
-| Health | 560 | 820 | 500 |
+| Health | 560 | 820 | 470 |
 
 **Oathwarden**
 | | Cleave (basic, LMB) | Warding Stand (Q / RMB) |
@@ -130,8 +130,8 @@ ability for now; kits grow gradually.
 | | Twin Cut (basic, LMB) | Vault (Q / RMB) |
 |---|---|---|
 | Purpose | Fast close damage | Gap close or escape |
-| Effect | 34 damage in a 90 degree, 2.6 m arc | Leap 8 m the way you move (forward if standing); 40 damage to each enemy passed through, once |
-| Timing | 0.12 s windup, 0.6 s interval | 0.08 s windup, 0.22 s leap, 6 s cooldown |
+| Effect | 30 damage in a 90 degree, 2.6 m arc | Leap 8 m the way you move (forward if standing); 36 damage to each enemy passed through, once |
+| Timing | 0.12 s windup, 0.6 s interval | 0.08 s windup, 0.22 s leap, 7 s cooldown |
 | Tell | Arc on the ground | A lane on the ground shows the leap during the windup |
 | Counterplay | Keep distance, it has the shortest reach | Punish the cooldown; walls stop it |
 | Movement / CC | 80% speed while cutting | Slows do not shorten the leap; walls do |
@@ -140,7 +140,7 @@ ability for now; kits grow gradually.
 | | Ruinscribe: Unmaking Lance | Oathwarden: Shield Slam | Ashrunner: Ember Knife |
 |---|---|---|---|
 | Purpose | Punish enemies lined up or held by the glyph | Stop a cast, hold a target for the team | Stick to a runner before the Vault, or finish one |
-| Effect | 70 damage, 16 m line, passes through every enemy | 30 damage and a 0.8 s stun in a 70 degree, 2.6 m arc; interrupts casts and dashes | 35 damage and a 40% slow for 1.2 s on the first enemy hit, 10 m |
+| Effect | 70 damage, 16 m line, passes through every enemy | 30 damage and a 0.8 s stun in a 70 degree, 2.6 m arc; interrupts casts and dashes | 30 damage and a 40% slow for 1.2 s on the first enemy hit, 10 m |
 | Timing | 0.45 s windup, 0.25 s recovery, 9 s cooldown | 0.4 s windup, 0.3 s recovery, 10 s cooldown | 0.18 s windup, 5 s cooldown |
 | Tell | A long thin lane on the ground | A narrow arc on the ground | A short lane |
 | Counterplay | Step off the line; it is narrow | Step out of the arc in the windup; stay beyond 2.6 m | Sidestep the throw |
@@ -151,6 +151,25 @@ move or buffer input, and its cast or dash is cut.
 
 **Team interaction**: the Oathwarden's ward is where the Ruinscribe commits. Bots playing a ranged champion step
 into a friendly ward during a champion fight and hold a little longer before retreating there.
+
+**Ultimates (R, from level 4)**
+| | Ruinscribe: Unmaking Word | Oathwarden: Unbroken Oath | Ashrunner: Ashfall |
+|---|---|---|---|
+| Purpose | Punish a group or a hurt champion from range | Hold a fight the team is losing | Open or close a fight on two targets at once |
+| Effect | 4.5 m circle up to 14 m away: 170 damage and a 50% slow for 2 s | 4 m ward for 5 s: allied champions inside take 45% less and heal 30 a second | 11 m leap: 110 damage and a 0.6 s stun on every enemy crossed |
+| Timing | 0.3 s windup, 1.1 s delay, 60 s cooldown | 0.25 s windup, 70 s cooldown | 0.12 s windup, 0.28 s leap, 60 s cooldown |
+| Tell | A big circle drawn for over a second | A big ring and dome | A long lane along the move direction |
+| Counterplay | Walk out of the circle | Leave the ring; it does not move | Step off the line |
+| Movement / CC | 30% speed in the windup; slow | 50% speed; no CC | Walls stop it; the only stun in the kit |
+
+Ultimates sit in slot 3 (`is_ultimate` on the AbilityDef) and unlock at level 4 (`Unit.ULT_LEVEL`); a press before
+that is refused with a reason on the HUD. Bots save them for a hurt champion, two enemy champions together, or
+(the Oath) a hurt team.
+
+**Passives** (resolved in the CombatAuthority, data on the ChampionDef)
+| Ruinscribe: Inscribed | Oathwarden: Resolve | Ashrunner: Ember |
+|---|---|---|
+| Every third Arcane Bolt on the same target hits for 50% more (count per target, resets on respawn; abilities do not count) | Below half health takes 15% less damage | A champion kill resets Vault and heals 12% of max health |
 
 ### Levels (minimal progression)
 
@@ -167,10 +186,21 @@ At level 3 the ability offers two upgrades. Press **1** or **2** (bots pick thro
 |---|---|---|
 | Binding Glyph | Wide Glyph: 3.4 m circle, 75 damage | Deep Glyph: 55% slow for 2 s |
 | Warding Stand | Long Stand: lasts 5 s | Bulwark: 3.2 m, blocks 50% |
-| Vault | Long Vault: 10.5 m | Quick Vault: 4 s cooldown, 30 damage |
+| Vault | Long Vault: 10.5 m | Quick Vault: 5 s cooldown, 28 damage |
 
 In the soak the same champion on each team takes opposite options and the next seed swaps them, so every pick is
 an A/B test.
+
+### Measured (headless soak, 48 seeds, after ultimates and passives)
+
+Two runs of 24 seeds. All 48 ended by a core falling, 6.5 to 14.3 min (median about 11). The objective was
+claimed in 41 of 48. Oath won 21 of 48 and Ruin 27: no side bias (the earlier 8 of 12 was luck). Seeds 25 to 48
+(after the Ashrunner trim: 470 health, Twin Cut 30, Vault 36 damage on a 7 s cooldown, Ember Knife 30): Ashrunner
+199 kills, Ruinscribe 138, Oathwarden 75. The Ashrunner's share fell from 61% to 48% over the three passes; it still
+takes the most kills because it finishes hurt targets, while it deals the least champion damage of the three.
+Upgrades (each picked 24 times): Wide Glyph won 14, Deep Glyph 10; Long Stand 14, Bulwark 10; Long Vault 12, Quick
+Vault 12. The first 24 seeds showed every team fielding one of the same two upgrade trios, because the pick was a
+function of seed plus slot; each slot now reads its own bit of the seed. Zero script errors.
 
 ### Measured (headless soak, 12 seeds, after the second abilities)
 
@@ -188,4 +218,4 @@ structure damage. Deaths were 62 to 86 per champion. Zero script errors.
 
 ## Not in this build (on purpose)
 
-Second and third abilities, ultimates, passives, items, more champions. See `docs/ROADMAP.md`.
+Third regular abilities, items, more champions. See `docs/ROADMAP.md`.

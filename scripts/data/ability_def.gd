@@ -14,6 +14,8 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 @export var display_name: String = ""
 @export_multiline var description: String = ""
 @export var delivery: Delivery = Delivery.PROJECTILE
+## Ultimates sit in the last slot (R) and unlock at Unit.ULT_LEVEL.
+@export var is_ultimate: bool = false
 
 @export_group("Damage")
 @export var damage: float = 0.0
@@ -70,6 +72,8 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 @export var ward_duration: float = 3.5
 ## Fraction of damage removed for allied champions inside (0.35 = 35% less).
 @export var ward_reduction: float = 0.35
+## Health per second for allied champions inside the ward (0 = none).
+@export var heal_per_second: float = 0.0
 
 @export_group("Upgrades")
 ## The two versions offered at UPGRADE_LEVEL (AbilityDef resources); picking

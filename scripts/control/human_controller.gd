@@ -41,4 +41,6 @@ func get_command(unit: Unit) -> UnitCommand:
 		c.buttons |= UnitCommand.BTN_ABILITY_1
 	if Input.is_action_just_pressed("ability_2"):
 		c.buttons |= UnitCommand.BTN_ABILITY_2
+	if Input.is_action_just_pressed("ability_3"):
+		c.buttons |= UnitCommand.BTN_ABILITY_3
 	return c

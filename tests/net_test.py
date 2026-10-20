@@ -87,9 +87,14 @@ for name, txt in logs.items():
 # Damage is decided by the server; the victim's client sees the same hits.
 dmg_on_B = [float(x) for x in re.findall(rf"damage target={uB} amount=(\d+) source={uA}", S)]
 check(len(dmg_on_B) >= 5, f"server applied A's hits to B ({len(dmg_on_B)} hits)")
+# B's client is disconnected on purpose later in the run, so compare only the
+# hits up to B's first death (B is still connected for all of those).
+first_death = S.find(f"death target={uB}")
+hits_before_death = len(re.findall(rf"damage target={uB} amount=(\d+) source={uA}", S[:first_death] if first_death >= 0 else S))
 seen_B = len(re.findall(rf"saw damage target={uB}", logs["B"]))
-check(seen_B >= len([1 for _ in dmg_on_B]) * 0.8, f"B's client saw those hits ({seen_B})")
-check(set(dmg_on_B) <= {42.0, 85.0}, f"only legal damage values {sorted(set(dmg_on_B))}")
+check(seen_B >= hits_before_death * 0.8, f"B's client saw those hits ({seen_B} of {hits_before_death})")
+# Arcane Bolt 42, its Inscribed third hit 63, Binding Glyph 85.
+check(set(dmg_on_B) <= {42.0, 63.0, 85.0}, f"only legal damage values {sorted(set(dmg_on_B))}")
 
 # Death and respawn.
 check(re.search(rf"death target={uB} killer={uA}", S) is not None, "server killed B (A credited)")

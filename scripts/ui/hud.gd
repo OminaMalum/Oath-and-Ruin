@@ -188,7 +188,7 @@ func _draw() -> void:
 
 	# Ability slots.
 	var q := player.get_slot(1)
-	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB", "E"]
+	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB", "E", "R"]
 	var slot_w := 150.0
 	var x0 := c.x - (slot_w * player.def.slot_count() + 12 * (player.def.slot_count() - 1)) * 0.5
 	for i in player.def.slot_count():
@@ -203,9 +203,16 @@ func _draw() -> void:
 			draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * f)), Color(0, 0, 0, 0.55))
 		_text(r.position + Vector2(0, 26), a.display_name, SMALL, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 		var label: String = keys[i] if i < keys.size() else ""
-		if cd > 0.0 and a.cooldown >= 1.5:
+		var locked := a.is_ultimate and not player.ultimate_ready_level()
+		if locked:
+			draw_rect(r, Color(0, 0, 0, 0.55))
+			label = "Level %d" % Unit.ULT_LEVEL
+		elif cd > 0.0 and a.cooldown >= 1.5:
 			label = "%.1f" % cd
-		_text(r.position + Vector2(0, 58), label, FONT_SIZE, Palette.TEAL if cd <= 0.0 else Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		_text(r.position + Vector2(0, 58), label, FONT_SIZE, Palette.TEAL if cd <= 0.0 and not locked else Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+	if not player.def.passive_name.is_empty():
+		# The passive, one line above the health bar.
+		_text(Vector2(c.x - 420, hb.position.y - 36), "%s: %s" % [player.def.passive_name, player.def.passive_description], SMALL, Color(0.85, 0.82, 0.75), HORIZONTAL_ALIGNMENT_CENTER, 840)
 	if _notice_t > 0.0:
 		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if player.is_stunned():
@@ -229,6 +236,7 @@ func _draw() -> void:
 			("Q hold and release, or right mouse  %s" if player.get_slot(1).delivery == AbilityDef.Delivery.GROUND_AREA \
 				else "Q or right mouse  %s") % player.get_slot(1).display_name,
 			("E  %s" % player.get_slot(2).display_name) if player.get_slot(2) else "",
+			("R  %s (ultimate, level %d)" % [player.get_slot(3).display_name, Unit.ULT_LEVEL]) if player.get_slot(3) else "",
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  free the mouse",

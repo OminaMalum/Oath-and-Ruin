@@ -207,6 +207,7 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 	amount *= ward_factor(target)
 	if source.def.kind == ChampionDef.Kind.CHAMPION:
 		amount *= source.damage_mult
+	amount *= passive_damage_factor(source, target, a)
 	target.health -= amount
 	target.last_attacker = source
 	target.last_attacked_at = time
@@ -219,7 +220,34 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 	if target.health <= 0.0:
 		target.set_dead(source)
 		unit_died.emit(target, source)
+		_on_kill(source, target)
 	return true
+
+
+## Passive multipliers on one hit. INSCRIBE counts basic attack hits per
+## target; RESOLVE softens hits while the target is below half health.
+func passive_damage_factor(source: Unit, target: Unit, a: AbilityDef) -> float:
+	var f := 1.0
+	if source.def.passive == ChampionDef.Passive.INSCRIBE and a != null and a == source.def.basic_attack \
+			and target.def.kind != ChampionDef.Kind.STRUCTURE:
+		var n: int = source.hit_streak.get(target.net_id, 0) + 1
+		if n >= 3:
+			n = 0
+			f *= 1.0 + source.def.passive_value
+		source.hit_streak[target.net_id] = n
+	if target.def.passive == ChampionDef.Passive.RESOLVE and target.health < target.max_health * 0.5:
+		f *= 1.0 - target.def.passive_value
+	return f
+
+
+## EMBER: a champion kill resets the killer's slot 1 and heals it.
+func _on_kill(killer: Unit, victim: Unit) -> void:
+	if killer == null or not is_instance_valid(killer) or not killer.alive:
+		return
+	if killer.def.passive == ChampionDef.Passive.EMBER and victim.def.kind == ChampionDef.Kind.CHAMPION:
+		if killer.cooldowns.size() > 1:
+			killer.cooldowns[1] = 0.0
+		heal(killer, killer.max_health * killer.def.passive_value)
 
 
 ## Rule-driven removal (a timed-out siege beast), no killer credited.
@@ -331,6 +359,12 @@ static func _segment_circle_t(from: Vector3, to: Vector3, center: Vector3, r: fl
 func _step_areas(dt: float) -> void:
 	for ar in areas:
 		ar.timer -= dt
+		if ar.ability.delivery == AbilityDef.Delivery.WARD and ar.ability.heal_per_second > 0.0 \
+				and is_instance_valid(ar.source):
+			for u in units:
+				if u.alive and u.team == ar.source.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+						and Vector2(u.global_position.x - ar.center.x, u.global_position.z - ar.center.z).length() <= ar.ability.area_radius + u.def.radius:
+					heal(u, ar.ability.heal_per_second * dt)
 		if ar.timer <= 0.0 and ar.ability.delivery == AbilityDef.Delivery.WARD:
 			ar.alive = false
 			area_detonated.emit(ar)  # a ward simply ends

@@ -37,6 +37,8 @@ func _run() -> void:
 		"test_melee_arc", "test_dash", "test_dash_stopped_by_wall", "test_ward", "test_levels",
 		"test_upgrade_choice", "test_roster",
 		"test_second_slot_and_pierce", "test_stun", "test_knife_slow",
+		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
+		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember",
 	]
 	for t: String in tests:
 		_make_world()
@@ -696,3 +698,149 @@ func test_knife_slow() -> void:
 	check(is_equal_approx(target.health, SCRIBE.max_health - knife.damage), "ember knife hits for its damage")
 	check(is_equal_approx(target.slow_amount, knife.slow_amount), "and slows the target")
 	check(is_equal_approx(target.current_move_speed(), SCRIBE.move_speed * (1.0 - knife.slow_amount)), "slowed speed is applied")
+
+
+# --- Gate 3, ultimates and passives --------------------------------------------
+
+func _level_up(u: Unit, level: int) -> void:
+	u.add_xp(Unit.LEVEL_XP[level - 1])
+	if u.upgrade_pending:
+		u.choose_upgrade(1)
+
+
+func test_ultimate_unlock() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	var target := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	for def: ChampionDef in [SCRIBE, WARDEN, RUNNER]:
+		var r := def.get_slot(3)
+		check(r != null and r.is_ultimate and r.cooldown >= 45.0, "%s has an ultimate in slot 3 with a long cooldown" % def.id)
+		check(not def.passive_name.is_empty() and def.passive != ChampionDef.Passive.NONE, "%s has a passive" % def.id)
+	var rejected := [""]
+	me.cast_rejected.connect(func(_slot: int, reason: String) -> void: rejected[0] = reason)
+	aim(me, target.global_position)
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_3
+	await ticks(2)
+	cmd(me).buttons = 0
+	check(not me.is_casting() and me.cooldowns[3] == 0.0, "the ultimate does not cast before level %d" % Unit.ULT_LEVEL)
+	check(rejected[0].contains("level"), "the press is refused with a reason (%s)" % rejected[0])
+	_level_up(me, Unit.ULT_LEVEL)
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_3
+	await ticks(2)
+	cmd(me).buttons = 0
+	check(me.is_casting() and me.cast_slot == 3, "at level %d the ultimate casts" % Unit.ULT_LEVEL)
+	var d := UnitCommand.from_dict({"b": UnitCommand.BTN_ABILITY_3})
+	check(d.buttons == UnitCommand.BTN_ABILITY_3 and UnitCommand.ability_button(3) == UnitCommand.BTN_ABILITY_3, "the ultimate button survives the network path")
+
+
+func test_unmaking_word() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	var inside := spawn(DUMMY, 1, Vector3(1.5, 0, -10))
+	var outside := spawn(DUMMY, 1, Vector3(7, 0, -10))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	aim(me, Vector3(0, 0, -10))
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_3
+	await ticks(1)
+	cmd(me).buttons = 0
+	var word := SCRIBE.get_slot(3)
+	await secs(word.cast_time + 0.2)
+	check(authority.areas.size() == 1 and is_equal_approx(authority.areas[0].ability.area_radius, word.area_radius), "the word draws its circle")
+	check(inside.health == DUMMY.max_health, "nothing happens before the delay")
+	await secs(word.area_delay + 0.1)
+	var expect := word.damage * me.damage_mult
+	check(is_equal_approx(DUMMY.max_health - inside.health, expect), "inside takes the burst (%.0f)" % (DUMMY.max_health - inside.health))
+	check(outside.health == DUMMY.max_health, "outside the circle is untouched")
+	check(is_equal_approx(inside.slow_amount, word.slow_amount), "the burst slows")
+	check(me.cooldowns[3] > 50.0, "the ultimate is on its long cooldown")
+
+
+func test_unbroken_oath() -> void:
+	var warden := spawn(WARDEN, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(2, 0, 0))
+	var far := spawn(SCRIBE, 0, Vector3(12, 0, 0))
+	var enemy := spawn(SCRIBE, 1, Vector3(0, 0, -14))
+	await ticks(2)
+	_level_up(warden, Unit.ULT_LEVEL)
+	ally.health = 100.0
+	far.health = 100.0
+	cmd(warden).buttons = UnitCommand.BTN_ABILITY_3
+	await ticks(1)
+	cmd(warden).buttons = 0
+	var oath := WARDEN.get_slot(3)
+	await secs(0.5)
+	check(authority.areas.size() == 1 and authority.areas[0].ability == oath, "the oath stands as a ward")
+	authority.apply_damage(enemy, ally, 100.0, null)
+	check(is_equal_approx(100.0 - ally.health + oath.heal_per_second * 0.0, 100.0 * (1.0 - oath.ward_reduction)) or ally.health > 100.0 * oath.ward_reduction, "an ally inside takes less")
+	var before := ally.health
+	await secs(1.0)
+	check(ally.health - before > oath.heal_per_second * 0.8 and ally.health - before < oath.heal_per_second * 1.2, "an ally inside heals about %.0f a second (%.0f)" % [oath.heal_per_second, ally.health - before])
+	check(far.health == 100.0, "an ally outside does not heal")
+	await secs(oath.ward_duration)
+	check(authority.areas.is_empty(), "the oath ends after %.0f s" % oath.ward_duration)
+
+
+func test_ashfall() -> void:
+	var me := spawn(RUNNER, 0, Vector3.ZERO)
+	var crossed := spawn(SCRIBE, 1, Vector3(0, 0, -5))
+	var missed := spawn(SCRIBE, 1, Vector3(4, 0, -5))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	aim(me, Vector3(0, 0, -20))
+	cmd(me).move = Vector2(0, 1)
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_3
+	await ticks(1)
+	cmd(me).buttons = 0
+	var fall := RUNNER.get_slot(3)
+	await secs(fall.cast_time + fall.dash_duration + 0.1)
+	cmd(me).move = Vector2.ZERO
+	check(me.global_position.z < -fall.dash_distance + 1.0, "the leap carries %.0f m (%.1f)" % [fall.dash_distance, -me.global_position.z])
+	check(is_equal_approx(SCRIBE.max_health - crossed.health, fall.damage * me.damage_mult), "an enemy crossed takes the damage")
+	check(crossed.is_stunned(), "and is stunned")
+	check(missed.health == SCRIBE.max_health and not missed.is_stunned(), "an enemy off the line is untouched")
+
+
+func test_passive_inscribe() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	var target := spawn(DUMMY, 1, Vector3(0, 0, -6))
+	var other := spawn(DUMMY, 1, Vector3(3, 0, -6))
+	await ticks(2)
+	var bolt := SCRIBE.basic_attack
+	var hits: Array[float] = []
+	target.damaged.connect(func(amount: float, _src: Unit) -> void: hits.append(amount))
+	for i in 3:
+		authority.apply_damage(me, target, bolt.damage, bolt)
+	check(hits.size() == 3 and is_equal_approx(hits[0], bolt.damage) and is_equal_approx(hits[1], bolt.damage), "the first two bolts hit normally")
+	check(is_equal_approx(hits[2], bolt.damage * (1.0 + SCRIBE.passive_value)), "the third bolt on the same target hits for +%.0f%%" % (SCRIBE.passive_value * 100.0))
+	authority.apply_damage(me, other, bolt.damage, bolt)
+	check(is_equal_approx(DUMMY.max_health - other.health, bolt.damage), "the count is per target")
+	authority.apply_damage(me, target, 10.0, SCRIBE.get_slot(1))
+	check(is_equal_approx(DUMMY.max_health - target.health, bolt.damage * (3.0 + SCRIBE.passive_value) + 10.0), "abilities do not count or get the bonus")
+
+
+func test_passive_resolve() -> void:
+	var warden := spawn(WARDEN, 0, Vector3.ZERO)
+	var enemy := spawn(SCRIBE, 1, Vector3(0, 0, -6))
+	await ticks(2)
+	authority.apply_damage(enemy, warden, 100.0, null)
+	check(is_equal_approx(WARDEN.max_health - warden.health, 100.0), "above half health a hit lands in full")
+	warden.health = warden.max_health * 0.4
+	var before := warden.health
+	authority.apply_damage(enemy, warden, 100.0, null)
+	check(is_equal_approx(before - warden.health, 100.0 * (1.0 - WARDEN.passive_value)), "below half health hits are softened by %.0f%%" % (WARDEN.passive_value * 100.0))
+
+
+func test_passive_ember() -> void:
+	var me := spawn(RUNNER, 0, Vector3.ZERO)
+	var victim := spawn(SCRIBE, 1, Vector3(0, 0, -3))
+	var minion := spawn(MELEE, 1, Vector3(2, 0, -3))
+	await ticks(2)
+	me.health = 200.0
+	me.cooldowns[1] = 5.0
+	minion.health = 1.0
+	authority.apply_damage(me, minion, 10.0, RUNNER.basic_attack)
+	check(me.cooldowns[1] == 5.0 and me.health == 200.0, "a minion kill does nothing")
+	victim.health = 1.0
+	authority.apply_damage(me, victim, 10.0, RUNNER.basic_attack)
+	check(me.cooldowns[1] == 0.0, "a champion kill resets Vault")
+	check(is_equal_approx(me.health, 200.0 + me.max_health * RUNNER.passive_value), "and heals %.0f%% of max health" % (RUNNER.passive_value * 100.0))

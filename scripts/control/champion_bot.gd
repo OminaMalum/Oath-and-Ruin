@@ -37,9 +37,14 @@ func _init(a: CombatAuthority, info: MatchInfo, seed_value: int) -> void:
 	authority = a
 	match_info = info
 	_rng.seed = seed_value
-	# Seeds are match_seed * 100 + team * 10 + slot: the same champion on the
-	# two teams takes opposite options, and the next seed swaps them (A/B test).
-	upgrade_pick = 1 + ((seed_value / 100) + (seed_value / 10) % 10 + seed_value % 10) % 2
+	# Seeds are match_seed * 100 + team * 10 + slot. The same champion on the
+	# two teams takes opposite options (A/B test), and each slot reads its own
+	# bit of the match seed, so the three picks on a team vary between seeds
+	# instead of always forming the same two trios.
+	var match_seed := seed_value / 100
+	var team := (seed_value / 10) % 10
+	var slot := seed_value % 10
+	upgrade_pick = 1 + (((match_seed >> slot) & 1) + team) % 2
 
 
 func get_command(unit: Unit) -> UnitCommand:
@@ -200,6 +205,8 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 	if a == null:
 		return false
 	var champ := target.def.kind == ChampionDef.Kind.CHAMPION
+	if a.is_ultimate:
+		return _use_ultimate(unit, a, target, dist, hp)
 	if a.stun_duration > 0.0:
 		# A stun is for champions: when they are casting, fleeing, or about to die.
 		return champ and dist <= a.range + target.def.radius and (target.is_casting() \
@@ -224,6 +231,33 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 			return champ and dist > unit.def.basic_attack.range + 0.5 and dist <= a.dash_distance + 1.0 \
 					and (t_hp < 0.5 or hp > 0.6) and _safe_from_tower(unit, target.global_position)
 	return false
+
+
+## Ultimates are saved for champion fights that matter: a hurt target, two
+## enemy champions together, or its own team in trouble.
+func _use_ultimate(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: float) -> bool:
+	if not unit.ultimate_ready_level() or target.def.kind != ChampionDef.Kind.CHAMPION:
+		return false
+	var t_hp := target.health / target.max_health
+	var pair := _enemy_champions_within(unit, target.global_position, 5.0) >= 2
+	match a.delivery:
+		AbilityDef.Delivery.GROUND_AREA:
+			return dist <= a.range and (pair or t_hp < 0.6)
+		AbilityDef.Delivery.WARD:
+			return dist <= 8.0 and (hp < 0.6 or _hurt_ally_within(unit, a.area_radius + 2.0))
+		AbilityDef.Delivery.DASH:
+			return dist > unit.def.basic_attack.range + 0.5 and dist <= a.dash_distance + 1.0 \
+					and (pair or t_hp < 0.6) and _safe_from_tower(unit, target.global_position)
+	return dist <= a.range and (pair or t_hp < 0.6)
+
+
+func _enemy_champions_within(unit: Unit, at: Vector3, r: float) -> int:
+	var n := 0
+	for u in authority.units:
+		if u.alive and authority.are_enemies(unit, u) and u.def.kind == ChampionDef.Kind.CHAMPION \
+				and flat_distance(at, u.global_position) <= r:
+			n += 1
+	return n
 
 
 ## A friendly ward close enough to step into (within 6 m of its edge).

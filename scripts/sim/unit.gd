@@ -48,6 +48,8 @@ const LEVEL_XP: Array[float] = [0.0, 300.0, 700.0, 1200.0, 1800.0]  # xp to reac
 const HEALTH_PER_LEVEL := 0.07
 const DAMAGE_PER_LEVEL := 0.06
 const UPGRADE_LEVEL := 3
+## Ultimates (AbilityDef.is_ultimate) can be cast from this level.
+const ULT_LEVEL := 4
 signal leveled(level: int)
 signal upgraded(slot: int, a: AbilityDef)
 var max_health: float = 0.0
@@ -59,6 +61,8 @@ var damage_mult: float = 1.0
 var slot_overrides := {}
 ## True while an upgrade offer waits for a pick.
 var upgrade_pending: bool = false
+## INSCRIBE passive: basic attack hits landed per target (net_id -> count).
+var hit_streak := {}
 
 var cast_phase: CastPhase = CastPhase.NONE
 var cast_slot: int = -1
@@ -248,8 +252,16 @@ func _update_buffer(cmd: UnitCommand, dt: float) -> void:
 		buffer_timer = INPUT_BUFFER
 
 
+func ultimate_ready_level() -> bool:
+	return level >= ULT_LEVEL
+
+
 func _try_start_cast(slot: int, cmd: UnitCommand, authority: CombatAuthority) -> void:
 	var a := get_slot(slot)
+	if a != null and a.is_ultimate and not ultimate_ready_level():
+		cast_rejected.emit(slot, "%s unlocks at level %d" % [a.display_name, ULT_LEVEL])
+		buffered_slot = -1
+		return
 	if a == null or cooldowns[slot] > 0.0:
 		# Keep an ability press only if it will come off cooldown within the
 		# buffer window; otherwise drop it so the basic attack is not blocked.
@@ -393,5 +405,6 @@ func respawn() -> void:
 	health = max_health
 	for i in cooldowns.size():
 		cooldowns[i] = 0.0
+	hit_streak.clear()
 	collision_layer = LAYER_UNITS
 	respawned.emit()

@@ -13,8 +13,8 @@ The menu offers a champion pick (**Ruinscribe**, **Oathwarden**, **Ashrunner**),
 
 Controls: **WASD** move, **mouse** turn and aim (the reticle is the aim), **hold left mouse** basic attack,
 **Q** or **right mouse** the first ability (for Binding Glyph, hold Q to preview and release to cast), **E** the
-second ability, **1 / 2** pick an upgrade at level 3, **F1** dummies
-fight back on/off (court), **F2** hide help, **Esc** free the mouse (click to recapture). After a match: **R**
+second ability, **R** the ultimate (from level 4), **1 / 2** pick an upgrade at level 3, **F1** dummies
+fight back on/off (court), **F2** hide help, **Esc** free the mouse (click to recapture). After a match: **F5**
 play again, **M** menu.
 
 ## Bot match (Gate 2)

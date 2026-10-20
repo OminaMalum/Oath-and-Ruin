@@ -6,11 +6,11 @@
 script = ExtResource("1_edy1m")
 id = &"quick_vault"
 display_name = "Quick Vault"
-description = "Upgrade: ready again in 4 s, cuts for 30."
+description = "Upgrade: ready again in 5 s, cuts for 28."
 delivery = 3
-damage = 30.0
+damage = 28.0
 cast_time = 0.08
 recovery = 0.22
-cooldown = 4.0
+cooldown = 5.0
 move_mult_while_casting = 1.0
 range = 8.0
