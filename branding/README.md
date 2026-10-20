@@ -1,6 +1,6 @@
 # PactFall title concepts (working name)
 
-Working name picked by Anthony on 2026-10-20: PactFall (casing being confirmed). Earlier Kivivala concepts are kept in `../kivivala/` for reference.
+Working name picked by Anthony on 2026-10-20: **PactFall** (capital F in running text; the logo is all caps). Earlier Kivivala concepts are kept in `../kivivala/` for reference.
 
 ## Folders
 
