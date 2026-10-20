@@ -13,6 +13,8 @@ var aim_yaw: float = 0.0
 ## World point the unit wants to hit.
 var aim_point: Vector3 = Vector3.ZERO
 var buttons: int = 0
+## Optional unit to lock on to (homing attacks only; towers use it).
+var target_id: int = 0
 
 
 func pressed(button: int) -> bool:
@@ -20,7 +22,7 @@ func pressed(button: int) -> bool:
 
 
 func to_dict() -> Dictionary:
-	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons}
+	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons, "t": target_id}
 
 
 const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1
@@ -43,4 +45,7 @@ static func from_dict(d: Dictionary) -> UnitCommand:
 	var b: Variant = d.get("b")
 	if b is int:
 		c.buttons = int(b) & ALL_BUTTONS
+	var t: Variant = d.get("t")
+	if t is int:
+		c.target_id = maxi(0, t)
 	return c

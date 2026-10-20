@@ -6,14 +6,16 @@ const KEYS := {
 	"move_back": [KEY_S, KEY_DOWN],
 	"move_left": [KEY_A, KEY_LEFT],
 	"move_right": [KEY_D, KEY_RIGHT],
-	"ability_1": [KEY_Q],
+	"ability_1_preview": [KEY_Q],
+	"restart": [KEY_R],
+	"menu": [KEY_M],
 	"toggle_bot": [KEY_F1],
 	"toggle_help": [KEY_F2],
 	"release_mouse": [KEY_ESCAPE],
 }
 const MOUSE := {
 	"attack": [MOUSE_BUTTON_LEFT],
-	"ability_1": [MOUSE_BUTTON_RIGHT],
+	"ability_1_quick": [MOUSE_BUTTON_RIGHT],
 }
 
 

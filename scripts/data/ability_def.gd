@@ -26,6 +26,9 @@ enum Delivery { PROJECTILE, GROUND_AREA }
 ## Movement speed multiplier during windup and recovery (0 roots the caster).
 @export var move_mult_while_casting: float = 0.5
 
+## Multiplier against structures (minions siege: 2.0).
+@export var structure_damage_mult: float = 1.0
+
 @export_group("Targeting")
 ## Max distance for a projectile's travel or a ground target's placement.
 @export var range: float = 15.0
@@ -33,6 +36,8 @@ enum Delivery { PROJECTILE, GROUND_AREA }
 @export_group("Projectile")
 @export var projectile_speed: float = 30.0
 @export var projectile_radius: float = 0.3
+## Homing shots follow their target and can only hit it (towers).
+@export var homing: bool = false
 
 @export_group("Ground area")
 @export var area_radius: float = 2.5

@@ -2,19 +2,25 @@ class_name ChampionDef
 extends Resource
 ## Base stats and kit for a champion (or any unit that uses the same rules).
 
-enum Look { SPELLCASTER, TRAINING_DUMMY }
+enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER }
+## What rules apply: who can be targeted by whom, who respawns, who moves.
+enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 
 @export var id: StringName
 @export var display_name: String = ""
 @export var role: String = ""
 @export var look: Look = Look.SPELLCASTER
+@export var kind: Kind = Kind.CHAMPION
 
 @export_group("Stats")
 @export var max_health: float = 600.0
 @export var move_speed: float = 6.0
 @export var radius: float = 0.45
 @export var height: float = 1.8
+## Negative: never respawns (minions are removed, structures stay as ruins).
 @export var respawn_time: float = 5.0
+## Health per second while standing in the own team's fountain.
+@export var fountain_heal: float = 0.0
 
 @export_group("Kit")
 @export var basic_attack: AbilityDef

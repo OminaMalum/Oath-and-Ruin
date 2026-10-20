@@ -11,6 +11,9 @@ signal area_detonated(a: SimArea)
 signal unit_damaged(target: Unit, amount: float, source: Unit)
 signal unit_died(target: Unit, killer: Unit)
 signal unit_respawned(target: Unit)
+signal unit_removed(target: Unit)
+## Damage refused because the target is protected (a core behind its tower).
+signal damage_blocked(target: Unit, source: Unit)
 
 ## Tests turn this off and call step() themselves.
 @export var auto_step: bool = true
@@ -20,6 +23,8 @@ var projectiles: Array[SimProjectile] = []
 var areas: Array[SimArea] = []
 var _next_fx_id: int = 1
 var tick: int = 0
+## Seconds of simulated time since start.
+var time: float = 0.0
 var _next_unit_id: int = 1
 
 
@@ -30,6 +35,7 @@ class SimProjectile:
 	var ability: AbilityDef
 	var position: Vector3
 	var direction: Vector3
+	var target: Unit  # homing only
 	var travelled: float = 0.0
 	var alive: bool = true
 
@@ -69,6 +75,7 @@ func remove_unit(u: Unit) -> void:
 		if ar.source == u:
 			ar.alive = false
 	areas = areas.filter(func(x: SimArea) -> bool: return x.alive)
+	unit_removed.emit(u)
 	u.queue_free()
 
 
@@ -79,15 +86,20 @@ func _physics_process(delta: float) -> void:
 
 func step(dt: float) -> void:
 	tick += 1
-	for u in units:
+	time += dt
+	for u in units.duplicate():
 		if u.alive:
-			var cmd := u.controller.get_command(u) if u.controller else UnitCommand.new()
+			var cmd: UnitCommand = u.controller.get_command(u) if u.controller else UnitCommand.new()
 			u.sim_step(cmd, dt, self)
-		else:
+		elif u.def.respawn_time >= 0.0:
 			u.respawn_timer -= dt
 			if u.respawn_timer <= 0.0:
 				u.respawn()
 				unit_respawned.emit(u)
+		elif u.def.kind == ChampionDef.Kind.MINION:
+			u.corpse_timer -= dt
+			if u.corpse_timer <= 0.0:
+				remove_unit(u)
 	_step_projectiles(dt)
 	_step_areas(dt)
 
@@ -96,7 +108,7 @@ func are_enemies(a: Unit, b: Unit) -> bool:
 	return a.team != b.team
 
 
-func release_ability(caster: Unit, a: AbilityDef, target: Vector3) -> void:
+func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: Unit = null) -> void:
 	match a.delivery:
 		AbilityDef.Delivery.PROJECTILE:
 			var p := SimProjectile.new()
@@ -107,6 +119,7 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3) -> void:
 			p.position = caster.muzzle_position()
 			var flat := Vector3(target.x - caster.global_position.x, 0.0, target.z - caster.global_position.z)
 			p.direction = flat.normalized() if flat.length() > 0.01 else caster.forward()
+			p.target = target_unit if a.homing else null
 			projectiles.append(p)
 			projectile_spawned.emit(p)
 		AbilityDef.Delivery.GROUND_AREA:
@@ -126,7 +139,16 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 		return false
 	if a != null and a.hits_enemies_only and not are_enemies(source, target):
 		return false
+	if target.is_protected():
+		damage_blocked.emit(target, source)
+		return false
+	if target.def.kind == ChampionDef.Kind.STRUCTURE:
+		if a != null:
+			amount *= a.structure_damage_mult
+		amount *= source.structure_bonus
 	target.health -= amount
+	target.last_attacker = source
+	target.last_attacked_at = time
 	target.damaged.emit(amount, source)
 	unit_damaged.emit(target, amount, source)
 	if a != null and a.slow_amount > 0.0:
@@ -137,10 +159,25 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 	return true
 
 
+## Rule-driven removal (a timed-out siege beast), no killer credited.
+func kill(target: Unit) -> void:
+	if target.alive:
+		target.set_dead(null)
+		unit_died.emit(target, null)
+
+
+func heal(target: Unit, amount: float) -> void:
+	if target.alive and amount > 0.0:
+		target.health = minf(target.def.max_health, target.health + amount)
+
+
 func _step_projectiles(dt: float) -> void:
 	var space := get_viewport().world_3d.direct_space_state if is_inside_tree() else null
 	for p in projectiles:
 		var a := p.ability
+		if a.homing:
+			_step_homing(p, dt)
+			continue
 		var step_len := minf(a.projectile_speed * dt, a.range - p.travelled)
 		var from := p.position
 		var to := from + p.direction * step_len
@@ -175,6 +212,26 @@ func _step_projectiles(dt: float) -> void:
 			if p.travelled >= a.range - 0.001:
 				_end_projectile(p, to)
 	projectiles = projectiles.filter(func(x: SimProjectile) -> bool: return x.alive)
+
+
+## Homing shots fly at the target's chest and can only hit that target.
+func _step_homing(p: SimProjectile, dt: float) -> void:
+	var t := p.target
+	if t == null or not is_instance_valid(t) or not t.alive:
+		_end_projectile(p, p.position)
+		return
+	var aim := t.global_position + Vector3(0, t.def.height * 0.5, 0)
+	var to := aim - p.position
+	var step_len := p.ability.projectile_speed * dt
+	if to.length() <= step_len + t.def.radius:
+		apply_damage(p.source, t, p.ability.damage, p.ability)
+		_end_projectile(p, aim)
+		return
+	p.direction = to.normalized()
+	p.position += p.direction * step_len
+	p.travelled += step_len
+	if p.travelled > p.ability.range * 3.0:
+		_end_projectile(p, p.position)  # safety: never chase forever
 
 
 func _end_projectile(p: SimProjectile, at: Vector3) -> void:

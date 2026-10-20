@@ -12,6 +12,7 @@ display_name = "Ruinscribe"
 role = "Ranged spellcaster"
 max_health = 560.0
 move_speed = 6.2
+fountain_heal = 80.0
 basic_attack = ExtResource("3_q3762")
 abilities = Array[ExtResource("1_vd65r")]([ExtResource("2_aiors")])
 primary_color = Color(0.4, 0.12, 0.11, 1)

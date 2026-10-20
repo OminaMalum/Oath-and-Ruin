@@ -8,6 +8,8 @@ signal cast_released(slot: int, ability: AbilityDef, target: Vector3)
 signal damaged(amount: float, source: Unit)
 signal died(killer: Unit)
 signal respawned
+## A press that could not become a cast, with a short reason for the HUD.
+signal cast_rejected(slot: int, reason: String)
 
 enum CastPhase { NONE, WINDUP, RECOVERY }
 
@@ -29,6 +31,8 @@ var respawn_timer: float = 0.0
 var spawn_transform: Transform3D
 var aim_yaw: float = 0.0
 var aim_point: Vector3 = Vector3.ZERO
+## Match rule multiplier on this unit's damage to structures (rising tide).
+var structure_bonus: float = 1.0
 
 var cast_phase: CastPhase = CastPhase.NONE
 var cast_slot: int = -1
@@ -40,6 +44,16 @@ var buffer_timer: float = 0.0
 
 var slow_amount: float = 0.0
 var slow_timer: float = 0.0
+
+## Lock-on target for homing abilities, chosen at cast start.
+var cast_target_unit: Unit
+## While any of these is alive this unit cannot be damaged (a core behind its tower).
+var protectors: Array[Unit] = []
+## Seconds a dead unit that never respawns stays before removal (minions).
+var corpse_timer: float = 1.0
+## Last unit that damaged this one and when (authority time), for tower aggro.
+var last_attacker: Unit
+var last_attacked_at: float = -100.0
 
 
 func _ready() -> void:
@@ -110,7 +124,7 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 	_update_buffer(cmd, dt)
 	_advance_cast(dt, authority)
 	if not is_casting() and buffered_slot >= 0:
-		_try_start_cast(buffered_slot)
+		_try_start_cast(buffered_slot, cmd, authority)
 
 	var dir := Vector3(cmd.move.x, 0.0, -cmd.move.y).limit_length(1.0).rotated(Vector3.UP, aim_yaw)
 	var speed := current_move_speed()
@@ -121,7 +135,7 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 	move_and_slide()
 	# Guard: the physics step may never carry a unit faster than its speed.
 	var moved := Vector2(global_position.x - before.x, global_position.z - before.z)
-	var limit := def.move_speed * dt * 1.02
+	var limit := maxf(def.move_speed, 0.01) * dt * 1.02
 	if moved.length() > limit:
 		var fixed := moved.limit_length(limit)
 		global_position = Vector3(before.x + fixed.x, global_position.y, before.z + fixed.y)
@@ -141,15 +155,24 @@ func _update_buffer(cmd: UnitCommand, dt: float) -> void:
 		buffer_timer = INPUT_BUFFER
 
 
-func _try_start_cast(slot: int) -> void:
+func _try_start_cast(slot: int, cmd: UnitCommand, authority: CombatAuthority) -> void:
 	var a := def.get_slot(slot)
 	if a == null or cooldowns[slot] > 0.0:
 		# Keep an ability press only if it will come off cooldown within the
 		# buffer window; otherwise drop it so the basic attack is not blocked.
 		if a == null or slot == 0 or cooldowns[slot] > buffer_timer:
+			if a != null and slot != 0:
+				cast_rejected.emit(slot, "%s ready in %.1f s" % [a.display_name, cooldowns[slot]])
 			buffered_slot = -1
 		return
 	buffered_slot = -1
+	cast_target_unit = null
+	if a.homing:
+		var t := authority.find_unit(cmd.target_id)
+		if t == null or not t.alive or not authority.are_enemies(self, t) \
+				or _flat_distance(t) > a.range + t.def.radius:
+			return  # no valid lock: nothing happens, no cooldown spent
+		cast_target_unit = t
 	cast_slot = slot
 	cast_phase = CastPhase.WINDUP
 	cast_timer = a.cast_time
@@ -158,6 +181,10 @@ func _try_start_cast(slot: int) -> void:
 	cooldowns[slot] = a.cooldown
 	cast_target = clamp_target(a, aim_point)
 	cast_started.emit(slot, a, cast_target)
+
+
+func _flat_distance(other: Unit) -> float:
+	return Vector2(other.global_position.x - global_position.x, other.global_position.z - global_position.z).length()
 
 
 ## Ground targets are clamped to range; projectiles keep only the direction.
@@ -182,9 +209,14 @@ func _advance_cast(dt: float, authority: CombatAuthority) -> void:
 		# Ground targets follow the aim during windup; projectiles too, so the
 		# release goes where the player is looking at that moment.
 		cast_target = clamp_target(a, aim_point)
+		if a.homing and cast_target_unit:
+			cast_target = cast_target_unit.global_position
 		if cast_timer <= 0.0:
+			if a.homing and (cast_target_unit == null or not is_instance_valid(cast_target_unit) or not cast_target_unit.alive):
+				interrupt_cast()  # target gone during the windup
+				return
 			cast_released.emit(cast_slot, a, cast_target)
-			authority.release_ability(self, a, cast_target)
+			authority.release_ability(self, a, cast_target, cast_target_unit)
 			cast_phase = CastPhase.RECOVERY
 			cast_timer += a.recovery
 	if cast_phase == CastPhase.RECOVERY and cast_timer <= 0.0:
@@ -196,6 +228,14 @@ func interrupt_cast() -> void:
 	cast_phase = CastPhase.NONE
 	cast_slot = -1
 	buffered_slot = -1
+	cast_target_unit = null
+
+
+func is_protected() -> bool:
+	for p in protectors:
+		if is_instance_valid(p) and p.alive:
+			return true
+	return false
 
 
 func apply_slow(amount: float, duration: float) -> void:
@@ -213,6 +253,7 @@ func set_dead(killer: Unit) -> void:
 	slow_amount = 0.0
 	slow_timer = 0.0
 	respawn_timer = def.respawn_time
+	corpse_timer = 1.0
 	velocity = Vector3.ZERO
 	collision_layer = 0
 	died.emit(killer)
