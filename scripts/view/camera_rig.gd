@@ -37,8 +37,10 @@ func _ready() -> void:
 	_arm = SpringArm3D.new()
 	_arm.spring_length = distance
 	_arm.margin = 0.2
-	# Walls and structures push the camera in; other units never do.
-	_arm.collision_mask = Unit.LAYER_WORLD | Unit.LAYER_STRUCTURE
+	# Walls push the camera in. Towers and cores do not: a tower right
+	# behind the champion pulled the camera into its face and hid the
+	# champion (2:45 on seed 31). They fade out instead (_fade_structures).
+	_arm.collision_mask = Unit.LAYER_WORLD
 	var probe := SphereShape3D.new()
 	probe.radius = 0.25
 	_arm.shape = probe
@@ -110,6 +112,7 @@ func _process(delta: float) -> void:
 	var want_d := _arm.get_hit_length()
 	_cam_d = want_d if want_d < _cam_d else minf(_cam_d + ARM_OUT_SPEED * delta, want_d)
 	camera.position = Vector3(0, 0, _cam_d)
+	_fade_structures()
 	if audit:
 		_audit_sample()
 
@@ -131,11 +134,43 @@ func _keep_body_visible(delta: float) -> void:
 	var length := minf(_arm.spring_length + 3.0 * delta, distance)
 	while length > ARM_MIN:
 		var cam := global_position + back * length
-		var q := PhysicsRayQueryParameters3D.create(cam, hip, Unit.LAYER_WORLD | Unit.LAYER_STRUCTURE)
+		var q := PhysicsRayQueryParameters3D.create(cam, hip, Unit.LAYER_WORLD)
 		if space.intersect_ray(q).is_empty():
 			break
 		length -= 0.3
 	_arm.spring_length = maxf(length, ARM_MIN)
+
+
+## Fade any tower or core between the camera and the champion, or within
+## 4 m of the camera, for this frame. View only.
+func _fade_structures() -> void:
+	var space := get_world_3d().direct_space_state
+	var cam := camera.global_position
+	var base := target.get_global_transform_interpolated().origin
+	var hits: Array[Unit] = []
+	for h: float in [HIP_HEIGHT, target.def.height * 0.9]:
+		var exclude: Array[RID] = []
+		for i in 3:
+			var q := PhysicsRayQueryParameters3D.create(cam, base + Vector3(0, h, 0), Unit.LAYER_STRUCTURE, exclude)
+			var r := space.intersect_ray(q)
+			if r.is_empty():
+				break
+			if r.collider is Unit and not hits.has(r.collider):
+				hits.append(r.collider)
+			exclude.append(r.rid)
+	var probe := PhysicsShapeQueryParameters3D.new()
+	var ball := SphereShape3D.new()
+	ball.radius = 4.0  # a tower this close fills the screen and hides the fight behind it
+	probe.shape = ball
+	probe.transform = Transform3D(Basis(), cam)
+	probe.collision_mask = Unit.LAYER_STRUCTURE
+	for r in space.intersect_shape(probe, 4):
+		if r.collider is Unit and not hits.has(r.collider):
+			hits.append(r.collider)
+	for u in hits:
+		for c in u.get_children():
+			if c is UnitView:
+				(c as UnitView).fade_for_camera()
 
 
 ## What the reticle is over: first world or unit surface along the camera
@@ -177,7 +212,7 @@ func _audit_sample() -> void:
 	var space := get_world_3d().direct_space_state
 	var cam := camera.global_position
 	var base := target.get_global_transform_interpolated().origin
-	var mask := Unit.LAYER_WORLD | Unit.LAYER_STRUCTURE
+	var mask := Unit.LAYER_WORLD  # towers and cores fade, so only walls hide the champion
 	var head := space.intersect_ray(PhysicsRayQueryParameters3D.create(cam, base + Vector3(0, target.def.height * 0.9, 0), mask))
 	var hip := space.intersect_ray(PhysicsRayQueryParameters3D.create(cam, base + Vector3(0, HIP_HEIGHT, 0), mask))
 	var st := audit_stats

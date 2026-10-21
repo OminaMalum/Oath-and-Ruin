@@ -8,6 +8,13 @@ var _materials: Array[StandardMaterial3D] = []
 var _focus: MeshInstance3D  # the part that glows during windups
 var _focus_mat: StandardMaterial3D
 var _flash: float = 0.0
+## Camera fade (towers and cores between the camera and the champion).
+var _fade_hold := 0.0
+var _alpha := 1.0
+
+
+func fade_for_camera() -> void:
+	_fade_hold = 0.15
 ## Presentation (view only, the sim never reads it): every part sits under
 ## `_body`, which leans with movement, bobs at a walking rhythm and falls over
 ## on death. The Ruinscribe's staff hangs from `_arm`, a pivot at the
@@ -398,6 +405,13 @@ func _ruin() -> void:
 
 
 func _process(delta: float) -> void:
+	_fade_hold = maxf(0.0, _fade_hold - delta)
+	var want_a := 0.28 if _fade_hold > 0.0 else 1.0
+	if absf(_alpha - want_a) > 0.001:
+		_alpha = move_toward(_alpha, want_a, delta * 5.0)
+		for m in _materials:
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if _alpha < 0.999 else BaseMaterial3D.TRANSPARENCY_DISABLED
+			m.albedo_color.a = _alpha
 	# Hit flash: brief warm white on every part.
 	_flash = maxf(0.0, _flash - delta * 6.0)
 	for m in _materials:
