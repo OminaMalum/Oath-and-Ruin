@@ -47,7 +47,11 @@ func _ready() -> void:
 	camera.fov = 70.0
 	camera.near = 0.1
 	camera.far = 300.0
-	_arm.add_child(camera)
+	# The camera is not the arm's child: the arm snaps to its hit length both
+	# ways, which popped the view up to 6.5 m in one frame when a wall edge
+	# cleared (camera audit). The camera follows the arm's length, in at
+	# once (never through a wall), out at ARM_OUT_SPEED.
+	add_child(camera)
 	snap_to_target()
 
 
@@ -55,6 +59,7 @@ func snap_to_target() -> void:
 	if target and is_inside_tree():
 		yaw = target.aim_yaw
 		global_position = _pivot()
+		_cam_d = distance  # pulled in next frame if a wall is there
 
 
 func _pivot() -> Vector3:
@@ -83,6 +88,7 @@ func _process(delta: float) -> void:
 		return
 	if overview:
 		_arm.spring_length = 0.0
+		camera.position = Vector3.ZERO
 		yaw = 0.0
 		pitch = deg_to_rad(-52.0)
 		var goal_o := target.get_global_transform_interpolated().origin + OVERVIEW_OFFSET
@@ -101,6 +107,11 @@ func _process(delta: float) -> void:
 	global_position = global_position.lerp(goal, 1.0 - exp(-follow_sharpness * delta))
 	rotation = Vector3(pitch, yaw, 0.0)
 	_keep_body_visible(delta)
+	var want_d := _arm.get_hit_length()
+	_cam_d = want_d if want_d < _cam_d else minf(_cam_d + ARM_OUT_SPEED * delta, want_d)
+	camera.position = Vector3(0, 0, _cam_d)
+	if audit:
+		_audit_sample()
 
 
 ## The spring arm only tests the line to the head. A low wall edge between
@@ -108,6 +119,8 @@ func _process(delta: float) -> void:
 ## stayed long, so this also tests a ray to the hips and pulls the arm in
 ## until that line is clear. It eases back out when the view opens up.
 const HIP_HEIGHT := 0.9
+const ARM_OUT_SPEED := 6.0  # metres per second the view eases back out
+var _cam_d := 0.0
 const ARM_MIN := 1.6
 func _keep_body_visible(delta: float) -> void:
 	if not is_inside_tree():
@@ -147,3 +160,47 @@ func get_aim_point(unit: Unit) -> Vector3:
 	if flat.length() < 1.0 or flat.normalized().dot(fwd) < 0.5:
 		point = unit.global_position + fwd * 8.0
 	return point
+
+
+## Camera audit (--camaudit): per rendered frame, is the followed champion's
+## head and hips in clear view, how long is the arm, how far did the camera
+## jump. Printed as one CAMAUDIT line when the run ends.
+var audit := false
+var audit_stats := {"frames": 0, "head_blocked": 0, "hip_blocked": 0, "both_blocked": 0, "short_arm": 0, "jumps": 0, "max_jump": 0.0, "yaw_steps_over_10": 0, "jumps_arm_in": 0, "jumps_target_fast": 0}
+var _audit_last_pos := Vector3.INF
+var _audit_last_yaw := 0.0
+var _audit_last_d := 0.0
+func _audit_sample() -> void:
+	if camera == null or not target.alive:
+		_audit_last_pos = Vector3.INF
+		return
+	var space := get_world_3d().direct_space_state
+	var cam := camera.global_position
+	var base := target.get_global_transform_interpolated().origin
+	var mask := Unit.LAYER_WORLD | Unit.LAYER_STRUCTURE
+	var head := space.intersect_ray(PhysicsRayQueryParameters3D.create(cam, base + Vector3(0, target.def.height * 0.9, 0), mask))
+	var hip := space.intersect_ray(PhysicsRayQueryParameters3D.create(cam, base + Vector3(0, HIP_HEIGHT, 0), mask))
+	var st := audit_stats
+	st.frames += 1
+	if not head.is_empty():
+		st.head_blocked += 1
+	if not hip.is_empty():
+		st.hip_blocked += 1
+	if not head.is_empty() and not hip.is_empty():
+		st.both_blocked += 1
+	if _arm.get_hit_length() < 2.5:
+		st.short_arm += 1
+	if _audit_last_pos != Vector3.INF:
+		var j := cam.distance_to(_audit_last_pos)
+		st.max_jump = maxf(st.max_jump, j)
+		if j > 0.6:  # more than 0.6 m in one 60 Hz frame is a visible pop
+			st.jumps += 1
+			if _cam_d < _audit_last_d - 0.4:
+				st.jumps_arm_in += 1  # pulled in by a wall: by design, never through it
+			elif target.velocity.length() > target.def.move_speed * 1.5:
+				st.jumps_target_fast += 1  # dash or knockback
+		if absf(wrapf(yaw - _audit_last_yaw, -PI, PI)) > deg_to_rad(10.0):
+			st.yaw_steps_over_10 += 1
+	_audit_last_pos = cam
+	_audit_last_yaw = yaw
+	_audit_last_d = _cam_d

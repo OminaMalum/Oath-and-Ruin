@@ -409,4 +409,5 @@ func respawn() -> void:
 		cooldowns[i] = 0.0
 	hit_streak.clear()
 	collision_layer = LAYER_UNITS
+	reset_physics_interpolation()  # drawn position jumps to the spawn, no slide across the map
 	respawned.emit()

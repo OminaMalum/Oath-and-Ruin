@@ -16,6 +16,13 @@ var _flash: float = 0.0
 var _body: Node3D
 var _arm: Node3D
 var _skirt: MeshInstance3D
+## Oathwarden and Ashrunner: weapon pivots and leg pivots, same rules.
+enum Swing { NONE, STAFF, MAUL, BLADES }
+var _swing: Swing = Swing.NONE
+var _weapon_r: Node3D   # maul arm, or right blade
+var _weapon_l: Node3D   # shield arm, or left blade
+var _legs: Array[Node3D] = []
+var _weapon_r_home := Vector3.ZERO
 var _anim_t: float = 0.0
 var _death_t: float = -1.0   # seconds since death, -1 while alive
 var _recoil: float = 0.0
@@ -79,6 +86,22 @@ func _part(mesh: Mesh, m: StandardMaterial3D, pos: Vector3, rot_deg := Vector3.Z
 	if not _materials.has(m):
 		_materials.append(m)
 	return mi
+
+
+## A pivot node in body space; parts attached to it keep their body-space
+## placement and then turn about the pivot.
+func _pivot_at(pos: Vector3, nm: String) -> Node3D:
+	var p := Node3D.new()
+	p.name = nm
+	p.position = pos
+	_body.add_child(p)
+	return p
+
+
+func _attach(part: Node3D, pivot: Node3D) -> Node3D:
+	part.position -= pivot.position
+	part.reparent(pivot, false)
+	return part
 
 
 static func _cyl(top: float, bottom: float, h: float, sides := 12) -> CylinderMesh:
@@ -175,8 +198,10 @@ func _build_warden() -> void:
 	var brass := Palette.mat(Palette.BRASS, 0.45, 0.8)
 	var wood := Palette.mat(Palette.WOOD)
 	var team := _team_mat()
-	_part(_cyl(0.20, 0.24, 0.8), leather, Vector3(-0.17, 0.4, 0))       # legs
-	_part(_cyl(0.20, 0.24, 0.8), leather, Vector3(0.17, 0.4, 0))
+	for x: float in [-0.17, 0.17]:  # legs, hung from hip pivots so they stride
+		var hip := _pivot_at(Vector3(x, 0.8, 0), "Hip")
+		_attach(_part(_cyl(0.20, 0.24, 0.8), leather, Vector3(x, 0.4, 0)), hip)
+		_legs.append(hip)
 	_part(_cyl(0.34, 0.40, 0.42), team, Vector3(0, 0.95, 0))            # tabard skirt in team colour
 	_part(_box(Vector3(0.78, 0.62, 0.46)), plate, Vector3(0, 1.38, 0))  # breastplate
 	_part(_sphere(0.24), plate, Vector3(-0.48, 1.62, 0)).scale = Vector3(1.0, 0.7, 1.0)  # pauldrons
@@ -184,13 +209,17 @@ func _build_warden() -> void:
 	_part(_box(Vector3(0.80, 0.10, 0.48)), team, Vector3(0, 1.66, 0))   # team sash across the shoulders
 	_part(_sphere(0.19), plate, Vector3(0, 1.86, 0))                    # helm
 	_part(_box(Vector3(0.26, 0.05, 0.05)), Palette.mat(Color(0.08, 0.08, 0.08)), Vector3(0, 1.86, -0.18))  # visor slit
-	_part(_box(Vector3(0.10, 1.05, 0.72)), plate, Vector3(-0.62, 1.15, -0.12))  # tower shield
-	_part(_box(Vector3(0.12, 0.8, 0.10)), team, Vector3(-0.68, 1.15, -0.12))    # shield stripe
-	_part(_cyl(0.035, 0.04, 1.3), wood, Vector3(0.58, 1.0, -0.25), Vector3(-15, 0, 0))  # maul haft
-	_part(_box(Vector3(0.36, 0.26, 0.26)), Palette.mat(Palette.STONE_DARK), Vector3(0.58, 1.68, -0.43))  # maul head
+	_weapon_l = _pivot_at(Vector3(-0.48, 1.55, 0), "ShieldArm")
+	_attach(_part(_box(Vector3(0.10, 1.05, 0.72)), plate, Vector3(-0.62, 1.15, -0.12)), _weapon_l)  # tower shield
+	_attach(_part(_box(Vector3(0.12, 0.8, 0.10)), team, Vector3(-0.68, 1.15, -0.12)), _weapon_l)    # shield stripe
+	_weapon_r = _pivot_at(Vector3(0.58, 1.0, -0.25), "MaulGrip")  # the hand on the haft
+	_attach(_part(_cyl(0.035, 0.04, 1.3), wood, Vector3(0.58, 1.0, -0.25), Vector3(-15, 0, 0)), _weapon_r)  # maul haft
+	_attach(_part(_box(Vector3(0.36, 0.26, 0.26)), Palette.mat(Palette.STONE_DARK), Vector3(0.58, 1.68, -0.43)), _weapon_r)  # maul head
 	_focus_mat = Palette.glow(unit.def.accent_color, 1.0)
-	_focus = _part(_cyl(0.11, 0.11, 0.05, 16), _focus_mat, Vector3(-0.69, 1.4, -0.12), Vector3(0, 0, 90))  # shield boss
-	_part(_cyl(0.13, 0.13, 0.03, 16), brass, Vector3(-0.68, 1.4, -0.12), Vector3(0, 0, 90))
+	_focus = _attach(_part(_cyl(0.11, 0.11, 0.05, 16), _focus_mat, Vector3(-0.69, 1.4, -0.12), Vector3(0, 0, 90)), _weapon_l)  # shield boss
+	_attach(_part(_cyl(0.13, 0.13, 0.03, 16), brass, Vector3(-0.68, 1.4, -0.12), Vector3(0, 0, 90)), _weapon_l)
+	_swing = Swing.MAUL
+	_weapon_r_home = _weapon_r.position
 	_team_ring(0.72)
 
 
@@ -202,16 +231,21 @@ func _build_skirmisher() -> void:
 	var steel := Palette.mat(Palette.IRON, 0.35, 0.8)
 	var skin := Palette.mat(Color(0.70, 0.55, 0.44))
 	var team := _team_mat()
-	_part(_cyl(0.11, 0.13, 0.8), leather, Vector3(-0.12, 0.4, 0.05), Vector3(-10, 0, 0))  # legs, mid-stride
-	_part(_cyl(0.11, 0.13, 0.8), leather, Vector3(0.12, 0.4, -0.05), Vector3(10, 0, 0))
+	for x: float in [-0.12, 0.12]:  # legs on hip pivots
+		var hip := _pivot_at(Vector3(x, 0.8, 0), "Hip")
+		_attach(_part(_cyl(0.11, 0.13, 0.8), leather, Vector3(x, 0.4, 0)), hip)
+		_legs.append(hip)
 	_part(_cyl(0.18, 0.22, 0.6), cloth, Vector3(0, 1.1, 0.05), Vector3(15, 0, 0))     # torso, leaning in
 	_part(_box(Vector3(0.40, 0.07, 0.26)), leather, Vector3(0, 0.84, 0.02))          # belt
 	_part(_sphere(0.13), skin, Vector3(0, 1.5, -0.06))                                # face
 	_part(_sphere(0.17), cloth, Vector3(0, 1.53, 0.0))                                # hood
 	_part(_box(Vector3(0.36, 0.12, 0.30)), team, Vector3(0, 1.36, 0.04))             # scarf wrap
 	_part(_box(Vector3(0.14, 0.05, 0.75)), team, Vector3(0.05, 1.32, 0.48), Vector3(-15, 0, 0))  # scarf tail
-	_part(_box(Vector3(0.04, 0.03, 0.6)), steel, Vector3(-0.32, 0.95, -0.30))  # blades
-	_part(_box(Vector3(0.04, 0.03, 0.6)), steel, Vector3(0.32, 0.95, -0.30))
+	_weapon_l = _pivot_at(Vector3(-0.30, 1.0, 0), "BladeL")
+	_attach(_part(_box(Vector3(0.04, 0.03, 0.6)), steel, Vector3(-0.32, 0.95, -0.30)), _weapon_l)  # blades
+	_weapon_r = _pivot_at(Vector3(0.30, 1.0, 0), "BladeR")
+	_attach(_part(_box(Vector3(0.04, 0.03, 0.6)), steel, Vector3(0.32, 0.95, -0.30)), _weapon_r)
+	_swing = Swing.BLADES
 	_focus_mat = Palette.glow(unit.def.accent_color, 1.0)
 	_focus = _part(_sphere(0.05), _focus_mat, Vector3(0, 1.36, -0.13))  # clasp
 	_team_ring(0.55)
@@ -417,6 +451,11 @@ func _pose(delta: float, charge: float) -> void:
 	_body.position.y = bob
 	if _skirt:
 		_skirt.rotation.z = sin(_step_phase) * speed * deg_to_rad(4.0)
+	for i in _legs.size():
+		var side := 1.0 if i == 0 else -1.0
+		_legs[i].rotation.x = sin(_step_phase) * side * speed * deg_to_rad(28.0)
+	if _swing == Swing.MAUL or _swing == Swing.BLADES:
+		_weapon_pose(delta, charge, speed)
 	if _arm:
 		# Rest: staff upright, held out to the right. Windup: the arm swings
 		# the staff forward and down so the stone leads toward the target.
@@ -431,6 +470,38 @@ func _pose(delta: float, charge: float) -> void:
 		_arm.rotation.x = lerp_angle(_arm.rotation.x, pitch + sway, 1.0 - exp(-14.0 * delta))
 		_arm.rotation.y = lerp_angle(_arm.rotation.y, yaw, 1.0 - exp(-14.0 * delta))
 		_body.rotation.y = lerp_angle(_body.rotation.y, -cast * deg_to_rad(12.0), 1.0 - exp(-10.0 * delta))
+
+
+## Melee weapon poses. Windup draws the weapon back, release swings it
+## through, recovery holds the follow-through and eases home. All timing is
+## the sim's cast_phase and cast_timer.
+func _weapon_pose(delta: float, charge: float, speed: float) -> void:
+	_recoil = maxf(0.0, _recoil - delta * 4.0)
+	var follow := 0.0
+	if unit.cast_phase == Unit.CastPhase.RECOVERY:
+		var a := unit.cast_ability()
+		follow = clampf(unit.cast_timer / maxf(a.recovery, 0.01), 0.0, 1.0) if a else 0.0
+	var k := 1.0 - exp(-18.0 * delta)
+	var sway := sin(_step_phase) * speed * deg_to_rad(10.0)
+	if _swing == Swing.MAUL:
+		# Two handed overhead: the grip rises to the shoulder and the head
+		# tips back behind it, then the head comes down in front.
+		var pitch := charge * deg_to_rad(110.0) - follow * deg_to_rad(85.0) + sway
+		_weapon_r.rotation.x = lerp_angle(_weapon_r.rotation.x, pitch, k)
+		var lift := Vector3(-0.2, 0.5, 0.15) * charge + Vector3(-0.1, -0.1, -0.2) * follow
+		_weapon_r.position = _weapon_r.position.lerp(_weapon_r_home + lift, k)
+		# The shield comes forward while casting (Warding Stand, Shield Slam).
+		var guard := maxf(charge, follow) * deg_to_rad(-30.0) - sway * 0.5
+		_weapon_l.rotation.x = lerp_angle(_weapon_l.rotation.x, guard, k)
+		_body.rotation.y = lerp_angle(_body.rotation.y, (charge - follow) * deg_to_rad(14.0), 1.0 - exp(-10.0 * delta))
+	else:
+		# Blades: draw both back and out, then cross them in front.
+		var out := charge * deg_to_rad(80.0) - follow * deg_to_rad(80.0)
+		_weapon_r.rotation.y = lerp_angle(_weapon_r.rotation.y, -out, k)
+		_weapon_l.rotation.y = lerp_angle(_weapon_l.rotation.y, out, k)
+		var raise := charge * deg_to_rad(45.0) - sway
+		_weapon_r.rotation.x = lerp_angle(_weapon_r.rotation.x, raise, k)
+		_weapon_l.rotation.x = lerp_angle(_weapon_l.rotation.x, charge * deg_to_rad(45.0) + sway, k)
 
 
 ## Footsteps: four short original taps (tools/mksounds.py), one per half

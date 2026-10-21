@@ -15,6 +15,8 @@ extends Node3D
 ##   --champion=ID                      ruinscribe | oathwarden | ashrunner (match and court)
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
 ##   --warp=S                           run without drawing until S seconds (needs --fixed-fps 60)
+##   --follow=N                         spectate: follow champion N (0-2 Oath, 3-5 Ruin)
+##   --camaudit                         spectate: measure camera obstruction and pops, print CAMAUDIT at the end
 ##   --overview-at=S                    recordings: switch to the high spectator view at S seconds
 
 const SCRIBE := preload("res://data/champions/ruinscribe.tres")
@@ -96,6 +98,9 @@ func _start_match() -> void:
 	match_ctl.setup(authority, self)
 	match_ctl.start()
 	player = match_ctl.player()
+	if args.has("spectate") and args.has("follow"):
+		# Recordings: follow champion N (0-2 Oath, 3-5 Ruin) instead of the first.
+		player = match_ctl.champions[clampi(int(args.follow), 0, match_ctl.champions.size() - 1)]
 	if headless:
 		match_ctl.match_over.connect(func(_w: int) -> void: get_tree().quit())
 		return
@@ -104,6 +109,7 @@ func _start_match() -> void:
 		player.controller = HumanController.new(rig)
 	else:
 		rig.follow_unit_yaw = true
+	rig.audit = args.has("camaudit")
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	var mh := MatchHud.new()
@@ -224,6 +230,9 @@ func _setup_presentation(local_unit: Unit) -> void:
 		rig = CameraRig.new()
 		add_child(rig)
 	rig.target = local_unit
+	# Respawn moves the champion across the map: cut to it instead of the
+	# camera flying 90 m over the walls (seen in the camera audit).
+	local_unit.respawned.connect(func() -> void: rig.snap_to_target())
 	rig.snap_to_target()
 	rig.follow_unit_yaw = autoplay or args.has("netbot")
 	world_view = WorldView.new()
@@ -254,6 +263,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_elapsed += delta
+	if rig and rig.audit and match_ctl and match_ctl.over and _quit_after != 0.0:
+		print("CAMAUDIT ", JSON.stringify(rig.audit_stats))
+		_quit_after = 0.0
+		get_tree().quit()
+		return
 	if _quit_after > 0.0 and _elapsed >= _quit_after:
 		_quit_after = -1.0
 		if net:

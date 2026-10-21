@@ -33,7 +33,8 @@ func _ready() -> void:
 		_base(team_sign)
 	_camp_pocket()
 	_lane_dressing()
-	_art_section(1.0, 18.0, 36.0)  # first dressed stretch: the Oath tower approach
+	_art_section(1.0, 18.0, 36.0)   # Oath tower approach
+	_art_section(-1.0, 18.0, 36.0)  # Ruin tower approach, the same dressing mirrored
 
 
 ## A slightly warmer worn path down the lane so the route reads at a glance.
