@@ -19,6 +19,8 @@ var follow_unit_yaw: bool = false
 ## Spectator overview (recordings): a high view behind the followed unit
 ## looking down the lane, so both teams and the wave are in frame.
 var overview: bool = false
+const FOLLOW_DEADBAND_DEG := 2.0
+const FOLLOW_MAX_DEG := 240.0
 const OVERVIEW_OFFSET := Vector3(0, 24, 18)
 var yaw: float = 0.0
 var pitch: float = deg_to_rad(-16.0)
@@ -35,7 +37,8 @@ func _ready() -> void:
 	_arm = SpringArm3D.new()
 	_arm.spring_length = distance
 	_arm.margin = 0.2
-	_arm.collision_mask = Unit.LAYER_WORLD
+	# Walls and structures push the camera in; other units never do.
+	_arm.collision_mask = Unit.LAYER_WORLD | Unit.LAYER_STRUCTURE
 	var probe := SphereShape3D.new()
 	probe.radius = 0.25
 	_arm.shape = probe
@@ -87,7 +90,13 @@ func _process(delta: float) -> void:
 		rotation = Vector3(pitch, yaw, 0.0)
 		return
 	if follow_unit_yaw:
-		yaw = lerp_angle(yaw, target.aim_yaw, 1.0 - exp(-8.0 * delta))
+		# Bot follow policy: ease toward the unit's facing, ignore wobble under
+		# FOLLOW_DEADBAND, and never turn faster than FOLLOW_MAX_DEG a second.
+		var diff := wrapf(target.aim_yaw - yaw, -PI, PI)
+		if absf(diff) > deg_to_rad(FOLLOW_DEADBAND_DEG):
+			var want := diff * (1.0 - exp(-6.0 * delta))
+			var cap := deg_to_rad(FOLLOW_MAX_DEG) * delta
+			yaw = wrapf(yaw + clampf(want, -cap, cap), -PI, PI)
 	var goal := _pivot()
 	global_position = global_position.lerp(goal, 1.0 - exp(-follow_sharpness * delta))
 	rotation = Vector3(pitch, yaw, 0.0)

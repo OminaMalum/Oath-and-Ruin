@@ -11,7 +11,7 @@ var authority: CombatAuthority
 var player: Unit
 var rig: CameraRig
 var bot: SparringBot
-var show_help: bool = true
+var show_help: bool = false
 ## Connection message from the network session; empty when fine.
 var status: String = ""
 
@@ -49,6 +49,10 @@ func _ready() -> void:
 func _on_damaged(target: Unit, amount: float, source: Unit) -> void:
 	if target == player and source and is_instance_valid(source):
 		_hits_taken.append({"from": source.global_position, "t": 0.0})
+	# Hierarchy: numbers only for what the viewer did or took. Other fights keep
+	# their bars and tells but do not spray numbers over the scene.
+	if target != player and source != player:
+		return
 	_numbers.append({"pos": target.global_position + Vector3(0, target.def.height + 0.4, 0),
 		"text": str(roundi(amount)), "t": 0.0, "enemy": target.team != player.team})
 
@@ -96,7 +100,8 @@ func _draw() -> void:
 			continue
 		var p := cam.unproject_position(top)
 		var minion := u.def.kind == ChampionDef.Kind.MINION and u.def.look != ChampionDef.Look.BREAKER
-		var w := 56.0 if minion else 90.0
+		var champ := u.def.kind == ChampionDef.Kind.CHAMPION
+		var w := 48.0 if minion else (110.0 if champ else 90.0)
 		if not minion:
 			var box := Rect2(p - Vector2(w * 0.5, 22), Vector2(w, 34))
 			for _try in 4:
@@ -113,18 +118,20 @@ func _draw() -> void:
 		if u.is_stunned():
 			_text(p + Vector2(-100, 26), "stunned", SMALL, Color(1.0, 0.5, 0.4), HORIZONTAL_ALIGNMENT_CENTER, 200)
 		var col := Palette.ALLY if u.team == player.team else (Palette.NEUTRAL if u.team >= 2 else Palette.ENEMY)
-		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 8 if minion else 10)), u.health / u.max_health, col)
+		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 6 if minion else (12 if champ else 10))), u.health / u.max_health, col)
 		# Names only for champions, structures and big units, and only up close.
 		# Structures are named by the match HUD's next-target marker instead.
 		if not minion and u.def.kind != ChampionDef.Kind.STRUCTURE and u.def.look != ChampionDef.Look.TRAINING_DUMMY and dist < 30.0:
-			_text(p + Vector2(-100, -8), u.def.display_name, SMALL, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 200)
+			var nw := _font.get_string_size(u.def.display_name, HORIZONTAL_ALIGNMENT_CENTER, -1, SMALL).x + 12.0
+			draw_rect(Rect2(p + Vector2(-nw * 0.5, -24), Vector2(nw, 22)), Color(0.05, 0.04, 0.03, 0.7))
+			_text(p + Vector2(-100, -7), u.def.display_name, SMALL, col.lightened(0.35), HORIZONTAL_ALIGNMENT_CENTER, 200)
 	for n in _numbers:
 		if cam.is_position_behind(n.pos):
 			continue
 		var p := cam.unproject_position(n.pos)
 		var a: float = 1.0 - n.t / 0.9
 		var col := Color(1, 0.9, 0.55, a) if n.enemy else Color(1, 0.45, 0.35, a)
-		_text(p + Vector2(10, -14), n.text, 30, col, HORIZONTAL_ALIGNMENT_CENTER, 100)
+		_text(p + Vector2(10, -14), n.text, 26, col, HORIZONTAL_ALIGNMENT_CENTER, 100)
 
 	# Reticle: white normally, amber on an enemy in range, grey with a label
 	# when the enemy is out of range or a wall is in the way.
@@ -160,10 +167,12 @@ func _draw() -> void:
 		var base_pt := c + dir * 118.0
 		draw_colored_polygon(PackedVector2Array([tip, base_pt + side, base_pt - side]), Color(1.0, 0.35, 0.25, 0.8 * alpha))
 
-	# Own health, bottom centre.
+	# Own health, bottom centre, on one translucent panel with the ability slots.
+	var following := rig.follow_unit_yaw
 	var hb := Rect2(Vector2(c.x - 220, vs.y - 128), Vector2(440, 26))
+	draw_rect(Rect2(Vector2(c.x - 470, vs.y - 140), Vector2(940, 128)), Color(0.06, 0.05, 0.04, 0.55))
 	_bar(hb, player.health / player.max_health, Palette.SELF_HEALTH)
-	_text(Vector2(hb.position.x, hb.position.y + 21), "%d / %d" % [ceili(player.health), roundi(player.max_health)], FONT_SIZE, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	_text(Vector2(hb.position.x, hb.position.y + 22), "%d / %d" % [ceili(player.health), roundi(player.max_health)], 24, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	_text(Vector2(hb.position.x - 230, hb.position.y + 21), player.def.display_name, FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_RIGHT, 220)
 	if player.xp > 0.0 or player.level > 1:
 		# Level and progress to the next one, right of the health bar.
@@ -196,23 +205,36 @@ func _draw() -> void:
 		var r := Rect2(Vector2(x0 + i * (slot_w + 12), vs.y - 92), Vector2(slot_w, 70))
 		var cd := player.cooldowns[i] if player.alive else 0.0
 		var casting := player.cast_slot == i and player.is_casting()
-		draw_rect(r.grow(2), Palette.BRASS if casting else Color(0.08, 0.07, 0.06, 0.9))
-		draw_rect(r, Color(0.16, 0.14, 0.12, 0.92))
-		if cd > 0.0:
-			var f := player.cooldown_fraction(i)
-			draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * f)), Color(0, 0, 0, 0.55))
-		_text(r.position + Vector2(0, 26), a.display_name, SMALL, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
-		var label: String = keys[i] if i < keys.size() else ""
 		var locked := a.is_ultimate and not player.ultimate_ready_level()
+		var unavailable := not player.alive or player.is_stunned()
+		# Four states, each with its own look: ready (teal key, bright edge),
+		# cooling (dark fill rising, time in big digits), locked (dark, a lock
+		# mark and the level), unavailable (grey, dead or stunned).
+		var edge := Palette.BRASS if casting else (Palette.TEAL if cd <= 0.0 and not locked and not unavailable else Color(0.08, 0.07, 0.06, 0.9))
+		draw_rect(r.grow(2), edge)
+		draw_rect(r, Color(0.16, 0.14, 0.12, 0.96) if not locked else Color(0.09, 0.08, 0.07, 0.96))
+		if cd > 0.0 and not locked:
+			var f := player.cooldown_fraction(i)
+			draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * f)), Color(0, 0, 0, 0.6))
+		if unavailable:
+			draw_rect(r, Color(0.3, 0.3, 0.3, 0.5))
+		_text(r.position + Vector2(0, 24), a.display_name, SMALL, Color(0.95, 0.92, 0.85) if not locked else Color(0.6, 0.58, 0.55), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		var label: String = keys[i] if i < keys.size() else ""
+		var lcol := Palette.TEAL
 		if locked:
-			draw_rect(r, Color(0, 0, 0, 0.55))
-			label = "Level %d" % Unit.ULT_LEVEL
+			# A small padlock drawn in vector: a body and a shackle.
+			var lp := r.position + Vector2(r.size.x * 0.5 - 38, 40)
+			draw_rect(Rect2(lp + Vector2(0, 8), Vector2(14, 11)), Color(0.75, 0.72, 0.68))
+			draw_arc(lp + Vector2(7, 8), 5, PI, TAU, 10, Color(0.75, 0.72, 0.68), 2.5)
+			label = "Lv %d" % Unit.ULT_LEVEL
+			lcol = Color(0.75, 0.72, 0.68)
 		elif cd > 0.0 and a.cooldown >= 1.5:
 			label = "%.1f" % cd
-		_text(r.position + Vector2(0, 58), label, FONT_SIZE, Palette.TEAL if cd <= 0.0 and not locked else Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
-	if not player.def.passive_name.is_empty():
-		# The passive, one line above the health bar.
-		_text(Vector2(c.x - 420, hb.position.y - 36), "%s: %s" % [player.def.passive_name, player.def.passive_description], SMALL, Color(0.85, 0.82, 0.75), HORIZONTAL_ALIGNMENT_CENTER, 840)
+			lcol = Color(0.95, 0.9, 0.8)
+		elif unavailable:
+			lcol = Color(0.6, 0.6, 0.6)
+		_text(r.position + Vector2(0, 58), label, 26 if cd > 0.0 and not locked else FONT_SIZE, lcol, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+
 	if _notice_t > 0.0:
 		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if player.is_stunned():
@@ -220,16 +242,27 @@ func _draw() -> void:
 	elif player.slow_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Slowed", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 
-	if not player.alive:
+	if not player.alive and not following:
 		draw_rect(Rect2(Vector2.ZERO, vs), Color(0.05, 0.04, 0.04, 0.45))
 		_text(Vector2(0, vs.y * 0.42), "Defeated", 48, Color(0.95, 0.85, 0.7), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		_text(Vector2(0, vs.y * 0.42 + 46), "Respawning in %.1f" % maxf(player.respawn_timer, 0.0), 30, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	if following:
+		# Spectating a bot: a small line instead of the death overlay, so the
+		# match stays in view.
+		var fl := "Following %s (%s)" % [player.def.display_name, Palette.TEAM_NAMES[player.team]]
+		if not player.alive:
+			fl += ", respawning in %d s" % ceili(maxf(player.respawn_timer, 0.0))
+		draw_rect(Rect2(Vector2(16, vs.y - 182), Vector2(420, 30)), Color(0.06, 0.05, 0.04, 0.7))
+		_text(Vector2(24, vs.y - 160), fl, SMALL, Color(0.92, 0.9, 0.84), HORIZONTAL_ALIGNMENT_LEFT)
 
 	if not status.is_empty():
 		_text(Vector2(0, vs.y * 0.22), status, 30, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if not rig.mouse_captured() and not rig.follow_unit_yaw:
 		_text(Vector2(0, vs.y * 0.30), "Click to play", 36, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-	if show_help:
+	if not show_help:
+		draw_rect(Rect2(Vector2(16, 16), Vector2(150, 30)), Color(0.06, 0.05, 0.04, 0.6))
+		_text(Vector2(24, 38), "F2  controls", SMALL, Color(0.85, 0.82, 0.75), HORIZONTAL_ALIGNMENT_LEFT)
+	else:
 		var lines := [
 			"WASD  move     Mouse  aim and turn",
 			"Left mouse (hold)  %s" % player.get_slot(0).display_name,
@@ -240,10 +273,16 @@ func _draw() -> void:
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  free the mouse",
+			("%s: %s" % [player.def.passive_name, player.def.passive_description]) if not player.def.passive_name.is_empty() else "",
 		]
+		lines = lines.filter(func(l: String) -> bool: return not l.is_empty())
+		draw_rect(Rect2(Vector2(16, 16), Vector2(720, 14 + lines.size() * 30)), Color(0.06, 0.05, 0.04, 0.75))
 		for i in lines.size():
 			_text(Vector2(24, 40 + i * 30), lines[i], FONT_SIZE, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_LEFT)
-	_text(Vector2(vs.x - 260, 36), "%d fps" % Engine.get_frames_per_second(), SMALL, Color(0.8, 0.8, 0.8), HORIZONTAL_ALIGNMENT_RIGHT, 236)
+	# Frame rate: hidden in movie writer captures, where it would only measure
+	# how fast frames were written offline, not how the game runs.
+	if not OS.has_feature("movie"):
+		_text(Vector2(vs.x - 260, 36), "%d fps" % Engine.get_frames_per_second(), SMALL, Color(0.8, 0.8, 0.8), HORIZONTAL_ALIGNMENT_RIGHT, 236)
 
 
 ## "none", "in_range", "out_of_range" or "blocked" for the basic attack,

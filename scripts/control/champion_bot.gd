@@ -31,6 +31,22 @@ var _route_back: bool = false
 ## Which upgrade this bot takes at level 3 (1 or 2).
 var upgrade_pick: int = 1
 var _committed: bool = false  # fighting at the objective camp
+## Diagnosis log (OATH_CAMLOG=1): prints target switches and large facing
+## changes for the followed bot (team 0 slot 0) so camera work can be checked.
+var _camlog: bool = false
+var _last_yaw_logged: float = 0.0
+## Aim error is a slow drift, re-rolled a few times a second, not per tick
+## noise (per tick noise made a melee target's facing jitter 30 degrees).
+var _aim_off: Vector3 = Vector3.ZERO
+var _aim_off_timer: float = 0.0
+## A bot turns no faster than this (degrees per second), like a hand on a mouse.
+const MAX_TURN_DEG := 720.0
+var _last_yaw: float = 0.0
+var _has_yaw: bool = false
+## A champion target at the edge of reach is kept this long before it is
+## dropped, so the pick does not flicker between it and nothing.
+const LOSE_GRACE := 0.5
+var _lose_timer: float = 0.0
 
 
 func _init(a: CombatAuthority, info: MatchInfo, seed_value: int) -> void:
@@ -45,9 +61,27 @@ func _init(a: CombatAuthority, info: MatchInfo, seed_value: int) -> void:
 	var team := (seed_value / 10) % 10
 	var slot := seed_value % 10
 	upgrade_pick = 1 + (((match_seed >> slot) & 1) + team) % 2
+	_camlog = OS.get_environment("OATH_CAMLOG") == "1" and team == 0 and slot == 0
 
 
 func get_command(unit: Unit) -> UnitCommand:
+	var c := _decide(unit)
+	# Turn rate limit: the facing moves toward the wanted yaw, never snaps.
+	if _has_yaw:
+		var step := deg_to_rad(MAX_TURN_DEG) / Engine.physics_ticks_per_second
+		var diff := wrapf(c.aim_yaw - _last_yaw, -PI, PI)
+		c.aim_yaw = wrapf(_last_yaw + clampf(diff, -step, step), -PI, PI)
+	_last_yaw = c.aim_yaw
+	_has_yaw = true
+	if _camlog:
+		var d := rad_to_deg(absf(wrapf(c.aim_yaw - _last_yaw_logged, -PI, PI)))
+		if d > 20.0:
+			print("CAMLOG %.2f yaw jump %.0f deg (%.0f -> %.0f) state=%s target=%s" % [authority.time, d, rad_to_deg(_last_yaw_logged), rad_to_deg(c.aim_yaw), State.keys()[state], _target.name if _target else "none"])
+		_last_yaw_logged = c.aim_yaw
+	return c
+
+
+func _decide(unit: Unit) -> UnitCommand:
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	_t += dt
 	var c := UnitCommand.new()
@@ -146,7 +180,21 @@ func get_command(unit: Unit) -> UnitCommand:
 			var b := match_info.match_ctl.beast
 			if b and is_instance_valid(b) and b.alive and flat_distance(pos, b.global_position) <= maxf(basic.range, 9.0):
 				pick = b
+	# Hysteresis: keep hitting the same minion while it is alive and in reach,
+	# instead of flipping between two of them every tick they trade places.
+	if pick and _target and pick != _target and pick.def.kind == ChampionDef.Kind.MINION \
+			and _target.def.kind == ChampionDef.Kind.MINION and _target.alive \
+			and flat_distance(pos, _target.global_position) <= reach + _target.def.radius:
+		pick = _target
+	if pick == null and _target and _target.alive and _target.def.kind == ChampionDef.Kind.CHAMPION \
+			and _lose_timer < LOSE_GRACE and flat_distance(pos, _target.global_position) <= sight:
+		_lose_timer += dt
+		pick = _target
+	else:
+		_lose_timer = 0.0
 	if pick != _target:
+		if _camlog:
+			print("CAMLOG %.2f target %s -> %s state=%s" % [authority.time, _target.name if _target else "none", pick.name if pick else "none", State.keys()[state]])
 		_target = pick
 		_seen_for = 0.0
 	else:
@@ -156,9 +204,23 @@ func get_command(unit: Unit) -> UnitCommand:
 			goal = match_info.match_ctl.objective_position() + Vector3(1.5, 0, (match_info.slot_of(unit) - 1.5))
 	elif _route_idx > 0:
 		goal = _route_goal(unit, true)  # walk back out the way it came
-	if _target and _seen_for >= reaction:
+	_aim_off_timer -= dt
+	if _aim_off_timer <= 0.0:
+		_aim_off_timer = _rng.randf_range(0.3, 0.6)
+		_aim_off = Vector3(_rng.randf_range(-aim_error, aim_error), 0, _rng.randf_range(-aim_error, aim_error))
+	if _target and _seen_for < reaction:
+		# Reacting: face the new target already (a player looks before firing),
+		# keep walking, do not fire yet. Before this the bot faced its walk goal
+		# for the reaction window, which flipped its facing 180 degrees on every
+		# target change.
+		c.aim_yaw = yaw_towards(pos, _target.global_position)
+		c.aim_point = _target.global_position
+		if flat_distance(pos, goal) > 1.0:
+			c.move = world_to_move((goal - pos).normalized(), c.aim_yaw)
+		return c
+	if _target:
 		state = State.FIGHT
-		var aim := _target.global_position + Vector3(_rng.randf_range(-aim_error, aim_error), 0, _rng.randf_range(-aim_error, aim_error))
+		var aim := _target.global_position + _aim_off
 		c.aim_yaw = yaw_towards(pos, aim)
 		c.aim_point = aim
 		c.buttons = UnitCommand.BTN_ATTACK

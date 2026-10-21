@@ -18,6 +18,8 @@ const GRAVITY := 20.0
 const INPUT_BUFFER := 0.25
 const LAYER_WORLD := 1
 const LAYER_UNITS := 2
+## Structures also sit on this layer so the camera arm can avoid them.
+const LAYER_STRUCTURE := 4
 
 @export var def: ChampionDef
 @export var team: int = 0
@@ -87,7 +89,7 @@ var last_attacked_at: float = -100.0
 
 
 func _ready() -> void:
-	collision_layer = LAYER_UNITS
+	collision_layer = LAYER_UNITS | (LAYER_STRUCTURE if def.kind == ChampionDef.Kind.STRUCTURE else 0)
 	# Units do not body-block each other for now. Overlapping CharacterBody3D
 	# capsules were pushed apart faster than run speed (29 m/s measured), and
 	# a MOBA needs a deliberate rule for champion and minion blocking anyway.

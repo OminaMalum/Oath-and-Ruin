@@ -122,13 +122,17 @@ func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
 	var n := Node3D.new()
 	var col := _team_color(ar.source)
 	var r := ar.ability.area_radius
-	var edge := _ring(r, 0.12, Palette.ground_decal(col, 0.95))
-	var base := _disc(r, Palette.ground_decal(col, 0.12))
+	# Harmful circle: a thick edge plus a thin inner ring (two rings read as
+	# danger even in greyscale); a ward is a single ring under a dome.
+	var edge := _ring(r, 0.14, Palette.ground_decal(col, 0.95))
+	var inner := _ring(r * 0.78, 0.05, Palette.ground_decal(col, 0.8))
+	var base := _disc(r, Palette.ground_decal(col, 0.10))
 	var fill := _disc(r, Palette.ground_decal(col, 0.30), 0.03)
 	fill.name = "Fill"
 	n.add_child(base)
 	n.add_child(fill)
 	n.add_child(edge)
+	n.add_child(inner)
 	add_child(n)
 	n.global_position = ar.center + Vector3(0, 0.03, 0)
 	fill.scale = Vector3(0.01, 1, 0.01)
@@ -171,8 +175,11 @@ func _on_area_detonated(ar: CombatAuthority.SimArea) -> void:
 	_spawn_burst(ar.center + Vector3(0, 0.3, 0), ar.source.def.accent_color, ar.ability.area_radius, 0.3)
 
 
-func _on_unit_damaged(target: Unit, _amount: float, _source: Unit) -> void:
-	_spawn_burst(target.global_position + Vector3(0, target.def.height * 0.6, 0), Color(1, 0.95, 0.8), 0.45, 0.12)
+func _on_unit_damaged(target: Unit, _amount: float, source: Unit) -> void:
+	# Impact mark: small, warm, short. Bigger for hits the viewer deals or
+	# takes; a faint one for everyone else, so fights read without going white.
+	var mine := viewer != null and (target == viewer or source == viewer)
+	_spawn_burst(target.global_position + Vector3(0, target.def.height * 0.6, 0), Color(1, 0.9, 0.7), 0.3 if mine else 0.18, 0.1)
 
 
 func _spawn_burst(at: Vector3, col: Color, size: float, life: float) -> void:

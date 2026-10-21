@@ -336,7 +336,7 @@ func _process(delta: float) -> void:
 			continue
 		m.emission_enabled = _flash > 0.0
 		m.emission = Color(1.0, 0.95, 0.85)
-		m.emission_energy_multiplier = _flash * 1.5
+		m.emission_energy_multiplier = _flash * 0.7  # was 1.5: the body went white and lost its silhouette
 	# Windup tell: the focus swells and brightens until release.
 	var charge := 0.0
 	if unit.cast_phase == Unit.CastPhase.WINDUP:

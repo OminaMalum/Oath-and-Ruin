@@ -148,4 +148,4 @@ func _results(vs: Vector2) -> void:
 		lines.append("You: %d kills, %d deaths, %d damage to champions" % [me.kills, me.deaths, roundi(me.damage_to_champions)])
 	for i in lines.size():
 		_text(Vector2(x, y + 120 + i * 40), lines[i], 24, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, w)
-	_text(Vector2(x, y + 445), "R  play again      M  menu", 24, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, w)
+	_text(Vector2(x, y + 445), "F5  play again      M  menu", 24, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, w)
