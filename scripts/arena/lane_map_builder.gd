@@ -33,6 +33,7 @@ func _ready() -> void:
 		_base(team_sign)
 	_camp_pocket()
 	_lane_dressing()
+	_art_section(1.0, 18.0, 36.0)  # first dressed stretch: the Oath tower approach
 
 
 ## A slightly warmer worn path down the lane so the route reads at a glance.
@@ -159,3 +160,102 @@ func _lane_dressing() -> void:
 		crown.radius = 1.8
 		crown.height = 2.6
 		_deco(crown, Palette.mat(Palette.AUTUMN if p.z > 0 else Palette.AUTUMN_DEEP), p + Vector3(0, 5.2, 0))
+
+
+## Art pass for one short lane stretch (decoration only, no collision, the
+## fighting space stays clear): flagstones with worn joints, a capped wall
+## course with buttresses and moss at the feet, team banners either side of
+## the tower, two braziers for warm light, grass tufts and a broken column
+## drum against the wall. Original code built shapes. `s` is the team sign.
+func _art_section(s: float, z0: float, z1: float) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 33
+	var dark := _stone(Palette.STONE_DARK.darkened(0.25))
+	var joint := _stone(Palette.STONE_DARK.darkened(0.45))
+	var moss := Palette.mat(Palette.MOSS)
+	var grass := Palette.mat(Palette.MOSS.lightened(0.12))
+	var team := 0 if s > 0.0 else 1
+	var cloth := Palette.mat(Palette.team_color(team).darkened(0.3))
+	var brass := Palette.mat(Palette.BRASS, 0.45, 0.8)
+	# Flagstones: a grid of slightly uneven slabs, three stone tones, with a
+	# darker joint plane under them so the gaps read as cracks.
+	var tile := 1.5
+	var cols := int((LANE_HALF * 2.0 - 1.0) / tile)
+	var rows := int((z1 - z0) / tile)
+	_deco(BoxMesh.new(), joint, Vector3(0, 0.015, s * (z0 + z1) * 0.5), Vector3(cols * tile, 0.01, rows * tile))
+	for i in cols:
+		for j in rows:
+			if rng.randf() < 0.08:
+				continue  # a missing slab now and then
+			var x := -cols * tile * 0.5 + (i + 0.5) * tile
+			var z := z0 + (j + 0.5) * tile
+			var gap := rng.randf_range(0.06, 0.14)
+			var h := rng.randf_range(0.02, 0.05)
+			var m: Material = _stone_mats[rng.randi() % 3]
+			if rng.randf() < 0.12:
+				m = dark  # a scorched or wet slab
+			_deco(BoxMesh.new(), m, Vector3(x, h * 0.5 + 0.02, s * z), Vector3(tile - gap, h, tile - gap),
+				Vector3(0, rng.randf_range(-1.5, 1.5), 0))
+	# A worn ring round the tower foot and a cracked line across the lane.
+	var ring := TorusMesh.new()
+	ring.inner_radius = 3.2
+	ring.outer_radius = 3.5
+	ring.rings = 48
+	_deco(ring, dark, Vector3(0, 0.07, s * TOWER_Z), Vector3(1, 0.08, 1))
+	for k in 5:
+		var zc := z0 + rng.randf_range(1.0, z1 - z0 - 1.0)
+		_deco(BoxMesh.new(), joint, Vector3(rng.randf_range(-3.0, 3.0), 0.075, s * zc), Vector3(rng.randf_range(2.0, 5.0), 0.01, 0.06),
+			Vector3(0, rng.randf_range(-25.0, 25.0), 0))
+	for side: float in [-1.0, 1.0]:
+		var xw: float = side * (LANE_HALF + 0.5)  # lane wall face is at 7.0; cap sits on the wall top
+		# Cap course and buttresses along the wall top and face.
+		var z := z0
+		while z < z1:
+			var len := minf(rng.randf_range(2.0, 3.5), z1 - z)
+			if not _in_gap(z + len * 0.5):
+				_deco(BoxMesh.new(), _stone_mats[2], Vector3(side * (LANE_HALF + WALL_IN) * 0.5, 3.7, s * (z + len * 0.5)),
+					Vector3(WALL_IN - LANE_HALF + 0.3, 0.25, len - 0.12))
+				_deco(BoxMesh.new(), dark, Vector3(xw - side * 0.3, 1.4, s * (z + len)), Vector3(0.5, 2.8, 0.35))  # buttress rib
+			z += len
+		# Moss and grass at the wall foot, kept against the wall.
+		for k in 10:
+			var zm := z0 + rng.randf_range(0.5, z1 - z0 - 0.5)
+			if _in_gap(zm):
+				continue
+			var w := rng.randf_range(0.6, 1.6)
+			var mossb := SphereMesh.new()
+			mossb.radius = 0.5
+			mossb.height = 1.0
+			_deco(mossb, moss, Vector3(side * (LANE_HALF - 0.1), 0.05, s * zm), Vector3(w * 0.5, 0.12, w))
+			var tuft := SphereMesh.new()
+			tuft.radius = 0.25
+			tuft.height = 0.5
+			_deco(tuft, grass, Vector3(side * (LANE_HALF - 0.35), 0.1, s * (zm + 0.6)), Vector3(0.5, 0.45, 0.5))
+		# Team banner on a pole beside the tower, and a brazier on a plinth.
+		var bx: float = side * (LANE_HALF - 0.6)
+		_deco(CylinderMesh.new(), Palette.mat(Palette.WOOD), Vector3(bx, 2.6, s * (TOWER_Z - 2.5)), Vector3(0.08, 5.2, 0.08))
+		_deco(BoxMesh.new(), cloth, Vector3(bx - side * 0.6, 3.9, s * (TOWER_Z - 2.5)), Vector3(1.1, 2.4, 0.06))
+		_deco(BoxMesh.new(), brass, Vector3(bx - side * 0.6, 5.12, s * (TOWER_Z - 2.5)), Vector3(1.3, 0.08, 0.1))
+		var pz := s * (TOWER_Z + 4.5)
+		_deco(BoxMesh.new(), _stone_mats[1], Vector3(bx, 0.45, pz), Vector3(0.9, 0.9, 0.9))
+		var bowl := CylinderMesh.new()
+		bowl.top_radius = 0.42
+		bowl.bottom_radius = 0.25
+		bowl.height = 0.35
+		_deco(bowl, Palette.mat(Palette.IRON, 0.5, 0.7), Vector3(bx, 1.07, pz))
+		var flame := SphereMesh.new()
+		flame.radius = 0.22
+		flame.height = 0.6
+		_deco(flame, Palette.glow(Palette.AMBER, 4.0), Vector3(bx, 1.4, pz))
+		var light := OmniLight3D.new()
+		light.light_color = Color(1.0, 0.7, 0.4)
+		light.light_energy = 1.6
+		light.omni_range = 7.0
+		light.position = Vector3(bx, 1.9, pz)
+		add_child(light)
+	# A broken column drum against the east wall, out of the lane proper.
+	var drum := CylinderMesh.new()
+	drum.top_radius = 0.55
+	drum.bottom_radius = 0.55
+	drum.height = 1.8
+	_deco(drum, _stone_mats[2], Vector3(LANE_HALF - 0.7, 0.55, s * (z0 + 3.0)), Vector3.ONE, Vector3(0, 20, 90))

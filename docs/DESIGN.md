@@ -97,6 +97,16 @@ States: PUSH (follow their wave), FIGHT, RETREAT (below 25% with an enemy champi
 after 0.3 s, aim with 0.7 m of error and use the same commands, cooldowns and ranges as a player. With more
 champions up than the enemy (public: deaths are announced) they walk level with their wave and hit structures.
 
+Spacing (review batch 2, 2026-10-21): units do not collide with each other physically, so the bot steers off any
+unit it overlaps (allied champions keep about 2 m). Ranged bots back away from an enemy champion inside 6 m unless
+that steps into tower range. The lane formation and the fighting sidestep are mirror images per team, because the
+map is a mirror across the lane. Match stats carry `spacing_pair_s`, `spacing_overlap_s` and
+`spacing_ranged_close_s` (seconds, sampled once a second). Over 24 seeds per match minute: allied pairs on one
+spot 1.3 s (was 8.9), champions overlapping a unit 7.7 s (was 25.9), ranged within 4 m of an enemy champion
+3.7 s (was 7.9). Oath 12, Ruin 12, every match ended, 6.2 to 13.0 min. `OATH_NOSEP=1`, `OATH_NOKITE=1` and
+`OATH_STRAFE0/1=-1|1` switch the pieces off or force a side, for diagnosis only. `OATH_CAMLOG=1` logs the
+followed bot's target switches and facing jumps.
+
 ### Measured (headless soak, 8 seeds, `tools/soak.sh 8`)
 
 All 8 ended by a core falling: 8.5, 10.5, 11.8, 11.8, 13.1, 16.5, 19.3 and 23.0 min (median about 12.5).
@@ -215,6 +225,19 @@ alternating who acts first each tick), but 12 matches cannot tell. Upgrades: opt
 champion, option 2 won 5 of 12. That is no real difference in 12 matches. Role spread across the 12 matches:
 Ashrunner 113 kills, Ruinscribe 44, Oathwarden 28. Ruinscribe dealt the most champion damage and nearly all the
 structure damage. Deaths were 62 to 86 per champion. Zero script errors.
+
+## Presentation and sound (review batches 1 to 3)
+
+Everything here is view only and reads public sim state; timing stays in the sim.
+- Champions lean with movement, bob at a step rhythm and fall over on death. The Ruinscribe's staff hangs from a
+  shoulder pivot: it swings forward through a cast windup and recoils on release. Bolts are drawn from the focus
+  stone and blend onto the sim path over 0.25 s.
+- The Oath tower stretch (z 18 to 36) is the first dressed lane section: flagstones, wall caps and buttresses,
+  moss and grass at the wall feet, team banners and two braziers. Decoration only, no collision.
+- Sounds are original, synthesised by `tools/mksounds.py` (sine waves and filtered noise): bolt cast and hit,
+  melee hit, ground area, ward, tower shot, champion and minion death, four footsteps. Played in 3D at the event.
+- Camera: walls and structures shorten the arm, and a second ray to the hips pulls it in when a low wall would
+  hide the body (never below 1.6 m).
 
 ## Not in this build (on purpose)
 

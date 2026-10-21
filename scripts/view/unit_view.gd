@@ -407,7 +407,10 @@ func _pose(delta: float, charge: float) -> void:
 	var right := Vector3(cos(unit.aim_yaw), 0.0, -sin(unit.aim_yaw))
 	var want := Vector2(v.dot(right), v.dot(fwd)) / top
 	_lean = _lean.lerp(want, 1.0 - exp(-10.0 * delta))
+	var prev_phase := _step_phase
 	_step_phase += delta * (1.0 + speed * 9.0)
+	if speed > 0.3 and unit.def.kind == ChampionDef.Kind.CHAMPION and floori(prev_phase / PI) != floori(_step_phase / PI):
+		_footstep()
 	var bob := sin(_step_phase) * (0.012 + speed * 0.03) if speed > 0.05 else sin(_anim_t * 2.0) * 0.012
 	_body.rotation.x = -_lean.y * deg_to_rad(9.0)
 	_body.rotation.z = _lean.x * deg_to_rad(7.0)
@@ -428,3 +431,24 @@ func _pose(delta: float, charge: float) -> void:
 		_arm.rotation.x = lerp_angle(_arm.rotation.x, pitch + sway, 1.0 - exp(-14.0 * delta))
 		_arm.rotation.y = lerp_angle(_arm.rotation.y, yaw, 1.0 - exp(-14.0 * delta))
 		_body.rotation.y = lerp_angle(_body.rotation.y, -cast * deg_to_rad(12.0), 1.0 - exp(-10.0 * delta))
+
+
+## Footsteps: four short original taps (tools/mksounds.py), one per half
+## stride, quiet and local so a fight is never drowned by walking.
+const STEPS := [
+	preload("res://assets/sounds/step_0.wav"), preload("res://assets/sounds/step_1.wav"),
+	preload("res://assets/sounds/step_2.wav"), preload("res://assets/sounds/step_3.wav"),
+]
+var _step_player: AudioStreamPlayer3D
+var _step_i := 0
+func _footstep() -> void:
+	if _step_player == null:
+		_step_player = AudioStreamPlayer3D.new()
+		_step_player.max_distance = 18.0
+		_step_player.unit_size = 3.0
+		_step_player.volume_db = -10.0
+		add_child(_step_player)
+	_step_i = (_step_i + 1 + (randi() % 3)) % STEPS.size()
+	_step_player.stream = STEPS[_step_i]
+	_step_player.pitch_scale = randf_range(0.9, 1.1)
+	_step_player.play()

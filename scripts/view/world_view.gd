@@ -28,6 +28,7 @@ func setup(a: CombatAuthority, local_unit: Unit) -> void:
 	a.area_detonated.connect(_on_area_detonated)
 	a.unit_damaged.connect(_on_unit_damaged)
 	a.melee_swung.connect(_on_melee_swung)
+	a.unit_died.connect(_on_unit_died_sfx)
 	a.unit_removed.connect(func(u: Unit) -> void:
 		var t: Node3D = _tells.get(u)
 		if t:
@@ -115,6 +116,10 @@ func _on_projectile_spawned(p: CombatAuthority.SimProjectile) -> void:
 			off = (child as UnitView).launch_point() - p.position
 			break
 	_launch_offsets[p] = {"off": off, "t": 0.0}
+	if p.source.def.kind == ChampionDef.Kind.STRUCTURE:
+		sfx("tower_shot", p.position, -2.0)
+	else:
+		sfx("cast_bolt", p.position, 0.0 if p.source.def.kind == ChampionDef.Kind.CHAMPION else -9.0)
 
 
 func _on_projectile_ended(p: CombatAuthority.SimProjectile, at: Vector3) -> void:
@@ -124,9 +129,12 @@ func _on_projectile_ended(p: CombatAuthority.SimProjectile, at: Vector3) -> void
 		_projectiles.erase(p)
 		_launch_offsets.erase(p)
 	_spawn_burst(at, p.source.def.accent_color, 0.6, 0.18)
+	sfx("hit_bolt", at, 0.0 if p.source.def.kind == ChampionDef.Kind.CHAMPION else -8.0)
 
 
 func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
+	if ar.ability.delivery == AbilityDef.Delivery.WARD:
+		sfx("ward_rise", ar.center, 0.0)
 	if ar.ability.delivery == AbilityDef.Delivery.WARD:
 		_spawn_ward(ar)
 		return
@@ -184,6 +192,7 @@ func _on_area_detonated(ar: CombatAuthority.SimArea) -> void:
 	if ar.ability.delivery == AbilityDef.Delivery.WARD:
 		return
 	_spawn_burst(ar.center + Vector3(0, 0.3, 0), ar.source.def.accent_color, ar.ability.area_radius, 0.3)
+	sfx("area_land", ar.center, 2.0)
 
 
 func _on_unit_damaged(target: Unit, _amount: float, source: Unit) -> void:
@@ -191,6 +200,9 @@ func _on_unit_damaged(target: Unit, _amount: float, source: Unit) -> void:
 	# takes; a faint one for everyone else, so fights read without going white.
 	var mine := viewer != null and (target == viewer or source == viewer)
 	_spawn_burst(target.global_position + Vector3(0, target.def.height * 0.6, 0), Color(1, 0.9, 0.7), 0.3 if mine else 0.18, 0.1)
+	if source and is_instance_valid(source) and source.def.kind != ChampionDef.Kind.STRUCTURE \
+			and source.def.basic_attack and source.def.basic_attack.range < 5.0:
+		sfx("hit_melee", target.global_position + Vector3(0, 1.0, 0), 0.0 if source.def.kind == ChampionDef.Kind.CHAMPION else -8.0)
 
 
 func _spawn_burst(at: Vector3, col: Color, size: float, life: float) -> void:
@@ -392,3 +404,42 @@ func _make_tell(u: Unit, a: AbilityDef) -> Node3D:
 		n.add_child(_disc(a.area_radius, Palette.ground_decal(col, 0.1)))
 	add_child(n)
 	return n
+
+
+## Sound effects: short original synthesised clips (tools/mksounds.py),
+## played in 3D at the event's position. Readers of sim state only.
+const SFX := {
+	"cast_bolt": preload("res://assets/sounds/cast_bolt.wav"),
+	"hit_bolt": preload("res://assets/sounds/hit_bolt.wav"),
+	"hit_melee": preload("res://assets/sounds/hit_melee.wav"),
+	"area_land": preload("res://assets/sounds/area_land.wav"),
+	"ward_rise": preload("res://assets/sounds/ward_rise.wav"),
+	"tower_shot": preload("res://assets/sounds/tower_shot.wav"),
+	"death_champion": preload("res://assets/sounds/death_champion.wav"),
+	"death_minion": preload("res://assets/sounds/death_minion.wav"),
+}
+var _sfx_rng := RandomNumberGenerator.new()
+
+
+func sfx(name: String, at: Vector3, volume_db: float = 0.0) -> void:
+	if not SFX.has(name):
+		return
+	var sp := AudioStreamPlayer3D.new()
+	sp.stream = SFX[name]
+	sp.volume_db = volume_db
+	sp.pitch_scale = _sfx_rng.randf_range(0.94, 1.06)
+	sp.max_distance = 45.0
+	sp.unit_size = 6.0
+	sp.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+	add_child(sp)
+	sp.global_position = at
+	sp.finished.connect(sp.queue_free)
+	sp.play()
+
+
+func _on_unit_died_sfx(target: Unit, _killer: Unit) -> void:
+	match target.def.kind:
+		ChampionDef.Kind.CHAMPION:
+			sfx("death_champion", target.global_position + Vector3(0, 1.0, 0), 1.0)
+		ChampionDef.Kind.MINION:
+			sfx("death_minion", target.global_position + Vector3(0, 0.6, 0), -4.0)
