@@ -1,4 +1,4 @@
-# Roster plan: the first 20 champions
+# PactFall roster plan: the first 20 champions
 
 Working names only. Every name gets a screening pass (stores, marks, other games) before it is final, the same
 way the game name is being screened. Three champions exist in the build; the other 17 are planned.
@@ -16,6 +16,65 @@ way the game name is being screened. Three champions exist in the build; the oth
 - **Crowd control budget**: one hard CC per kit at most (stun, root, knock, pull). Slows are soft and free.
 - **No hidden information** the bots cannot also respect: stealth is "harder to see" (range), never invisible.
 - **Art**: placeholder primitives first, then original models. No generative AI art.
+
+## Lore brief
+
+The shape of this section follows the Spires of Ruin lore handoff (hard rules, factions, one colour and one
+silhouette hook per hero, open questions). The content is PactFall's own. Nothing here is shared with Spires of
+Ruin: no place, faction or character name crosses over, and the two worlds are not connected.
+
+**The world in one paragraph.** PactFall is set on the Causeway, a ruined stone road between two shrines where
+five Houses once swore a single pact that bound the land's magic to its keepers. The pact broke in one night (the
+Pactfall) and the Houses have fought over the shrine stones since. A match is two companies of three, Oath and
+Ruin, each trying to break the other's shrine core. Minions are the Houses' bound levies; the Shrinebearer is a
+stone warden that still walks the old route and can be claimed by whoever puts it down. Tone: grounded heroic
+fantasy, weathered stone, worn leather, painted metal, restrained jewel colours. No modern slang, no archaic
+"thee and thou", combat barks under eight words. Teen rating: blood, no dismemberment of humanoids.
+
+**Hard rules**
+- Original only. No gods or figures from real mythology (this is not a SMITE style roster), no Tolkien names or
+  phrasing, no champion that reads as another MOBA's champion in name, colour and silhouette together. Check every
+  new name against Middle-earth, SMITE, League and Dota before it is used.
+- The D&D seats in the role grid are internal shorthand. No "Dungeons & Dragons" wording in the product, no
+  product identity monsters, and the roster never shows a class name to the player.
+- No name shared with Spires of Ruin. Cindermaw was that game's dragon, so champion 14 is Brindlemaw. Lanternkeeper
+  and Thornwright stand (Spires has a Lantern King and a Thornwood, which are places, not characters), but if either
+  world ships first the other renames.
+- Names: every working name gets one screening pass (stores, marks, other games) before it is final, like the game
+  name was. Plain compound words (Bellwether, Saltwarden) are preferred over coined ones.
+- Readability over lore. A champion owns one colour that reads at 12 m and one silhouette hook that reads at
+  48 m. Team colour (teal for Oath, orange for Ruin) always wins over the champion colour on rings, bars and
+  tells. Never red directly beside blue.
+- No generative AI art. Lore art is hand made or licensed, and reference boards are reference only.
+
+**The five Houses** (one per synergy tag, so a draft tells a story)
+| House | Tag | What it kept | How it fights | Mark |
+|---|---|---|---|---|
+| Wardens | Oath | The pact itself: shields, wards, vows | Stand, protect, commit | Round shield with a broken seal |
+| Scribes | Line | The pact's words: glyphs, chains, lines | Set up, then punish | An open scroll with one burnt line |
+| Unbound | Ember | Nothing. They burnt their copy | Kill, reset, go again | A snapped chain link |
+| Causeway | Tide | The road and the levies that march it | Push, buff the wave, break walls | A milestone with a tally |
+| Reeves | Hunt | The hunt for the forsworn | Find, mark, chase | A hound's head in profile |
+
+A champion with two tags belongs to one House and has a tie to the other (Lanternkeeper is a Warden who keeps a
+Reeve's raven).
+
+**Colour and silhouette hooks** for the three in the build, as the model for the rest:
+| Champion | House | Colour | Silhouette hook | Voice in one line |
+|---|---|---|---|---|
+| Ruinscribe | Scribes | Oxblood | A tall staff with a hanging scroll case, a hooded cowl | Dry, precise, counts aloud |
+| Oathwarden | Wardens | Slate and brass | A round shield wider than the shoulders, a squared helm | Few words, all of them "hold" |
+| Ashrunner | Unbound | Soot brown with a green ember | Twin short blades and a long loose scarf | Quick, mocking, never finishes a sentence |
+
+Each of the other seventeen gets this table row when its batch starts, and the row is written before any model.
+
+**Open questions**
+1. Why did the pact fall? A betrayal by one House (the Unbound) is the obvious default. The Scribes' version and
+   the Wardens' version should disagree, so the story has two tellings.
+2. Who holds the shrines between matches? Suggest: nobody. The match is one night of a war that has lasted a
+   generation.
+3. Does the Shrinebearer have a name? Suggest not yet; it earns one when a player community gives it one.
+4. Does PactFall share a world with any other game of Anthony's? Default: no.
 
 ## Role grid
 
@@ -53,7 +112,7 @@ way the game name is being screened. Three champions exist in the build; the oth
 | 11 | Ironvow | Frontline | paladin | melee / high / low | Vow with one ally: both take less damage while within 6 m; Smite on a stunned target | Oath | split the pair, stun it first | Batch D |
 | 12 | Bellwether | Support | commander | mid / medium / low | Rally: nearby minions push faster and hit harder; horn that calls the next wave early | Tide | kill the wave, catch it alone | Batch D |
 | 13 | Mirewalker | Controller | druid | mid / medium / medium | Pools that slow and leave a trail; a root on anyone who stays in a pool 1.5 s | Line | walk round, not through | Batch D |
-| 14 | Cindermaw | Skirmisher | beast | melee / medium / high | Pounce; a bite that heals it on a kill | Ember, Hunt | ward the carry, no free kills | Batch D |
+| 14 | Brindlemaw | Skirmisher | beast | melee / medium / high | Pounce; a bite that heals it on a kill | Ember, Hunt | ward the carry, no free kills | Batch D |
 | 15 | Hearthmother | Support | tank cleric | short / high / low | Shield on an ally that bursts when it breaks; a stone wall for 3 s | Oath | break the shield on a minion first | Batch E |
 | 16 | Riftcaller | Spellcaster | conjurer | long / low / high | Short blink; a gate that lets allies walk through once (counters the objective route) | Hunt | hold a stun for the blink | Batch E |
 | 17 | Saltwarden | Controller | trapper | mid / low / low | Visible salt lines that slow; a snare that roots after a 1 s arm time | Line, Tide | see the lines, step over them | Batch E |

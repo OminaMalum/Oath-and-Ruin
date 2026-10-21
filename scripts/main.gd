@@ -15,6 +15,7 @@ extends Node3D
 ##   --champion=ID                      ruinscribe | oathwarden | ashrunner (match and court)
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
 ##   --warp=S                           run without drawing until S seconds (needs --fixed-fps 60)
+##   --overview-at=S                    recordings: switch to the high spectator view at S seconds
 
 const SCRIBE := preload("res://data/champions/ruinscribe.tres")
 const DUMMY := preload("res://data/champions/training_dummy.tres")
@@ -37,6 +38,7 @@ var _warp_until := -1.0
 var _frames := 0
 var _quit_after := -1.0
 var _elapsed := 0.0
+var _overview_at := -1.0
 
 
 func _ready() -> void:
@@ -122,6 +124,7 @@ func _parse_args() -> void:
 		# physics step (32x made each tick 0.53 s) and changed match outcomes.
 		RenderingServer.render_loop_enabled = false
 	_quit_after = float(args.get("quit-after-secs", "-1"))
+	_overview_at = float(args.get("overview-at", "-1"))
 
 
 func _spawn_dummies() -> void:
@@ -258,6 +261,9 @@ func _process(delta: float) -> void:
 			await get_tree().create_timer(0.3).timeout  # let the disconnect go out
 		get_tree().quit()
 		return
+	if _overview_at > 0.0 and rig and authority.time >= _overview_at:
+		_overview_at = -1.0
+		rig.overview = true
 	if _warp_until > 0.0 and (authority.time >= _warp_until or (match_ctl and match_ctl.over)):
 		_warp_until = -1.0
 		RenderingServer.render_loop_enabled = true

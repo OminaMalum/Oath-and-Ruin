@@ -16,6 +16,10 @@ extends Node3D
 var target: Unit
 ## Captures and spectating: copy the unit's facing instead of the mouse.
 var follow_unit_yaw: bool = false
+## Spectator overview (recordings): a high view behind the followed unit
+## looking down the lane, so both teams and the wave are in frame.
+var overview: bool = false
+const OVERVIEW_OFFSET := Vector3(0, 24, 18)
 var yaw: float = 0.0
 var pitch: float = deg_to_rad(-16.0)
 
@@ -73,6 +77,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if target == null:
+		return
+	if overview:
+		_arm.spring_length = 0.0
+		yaw = 0.0
+		pitch = deg_to_rad(-52.0)
+		var goal_o := target.get_global_transform_interpolated().origin + OVERVIEW_OFFSET
+		global_position = global_position.lerp(goal_o, 1.0 - exp(-4.0 * delta))
+		rotation = Vector3(pitch, yaw, 0.0)
 		return
 	if follow_unit_yaw:
 		yaw = lerp_angle(yaw, target.aim_yaw, 1.0 - exp(-8.0 * delta))
