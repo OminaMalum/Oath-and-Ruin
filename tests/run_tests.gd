@@ -40,7 +40,7 @@ func _run() -> void:
 		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
 		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember", "test_last_hit_xp",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
-		"test_net_command_queue",
+		"test_net_command_queue", "test_asset_contract",
 	]
 	for t: String in tests:
 		_make_world()
@@ -998,4 +998,46 @@ func test_net_command_queue() -> void:
 		ctl.receive(t, mk.call(1.0, 0))
 	ctl.get_command(u)
 	check(ctl.applied_tick >= 30 - NetInputController.MAX_QUEUE, "a burst is trimmed so the player does not stay behind (applied %d)" % ctl.applied_tick)
+
+
+# --- Asset contract ------------------------------------------------------------
+
+## Fixtures are Blender 5.2 exports of the template rig (tools/blender/
+## make_fixtures.sh): one that follows the contract and four with the usual
+## mistakes. Each mistake must be caught with a message that says what to fix.
+func test_asset_contract() -> void:
+	var dir := ProjectSettings.globalize_path("res://tests/fixtures/assets/")
+	var cases := {
+		"ok": [],
+		"big": ["height 4.05", "Muzzle at"],
+		"back": ["faces +Z"],
+		"slide": ["feet would slide"],
+		"late": ["'attack' releases", "'ability_2' releases"],
+	}
+	for k: String in cases:
+		var path := dir + "ruinscribe_v%s.glb" % k
+		var scene := AssetContract.load_gltf(path)
+		check(scene != null, "%s: fixture loads through GLTFDocument" % k)
+		if scene == null:
+			continue
+		world.add_child(scene)
+		await ticks(1)
+		var timing: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path.get_basename() + ".timing.json")).release
+		var r := AssetContract.check(scene, SCRIBE, timing)
+		var want: Array = cases[k]
+		if want.is_empty():
+			check(r.errors.is_empty(), "the template rig passes (%s)" % [r.errors])
+			check(absf(r.measured.run_natural_speed_mps - SCRIBE.move_speed) < 0.2, "run stride measured at %.2f m/s" % r.measured.run_natural_speed_mps)
+		for w: String in want:
+			var found := false
+			for e: String in r.errors:
+				found = found or e.contains(w)
+			check(found, "%s: an error mentions '%s' (%s)" % [k, w, r.errors])
+		scene.queue_free()
+	var bare := Node3D.new()
+	var r2 := AssetContract.check(bare, SCRIBE)
+	check(r2.errors.size() >= 3, "an empty scene fails (no mesh, sockets, AnimationPlayer)")
+	bare.free()
+	check(is_equal_approx(AssetContract.windup_speed(0.3, 0.3), 1.0) and AssetContract.windup_speed(0.6, 0.3) > AssetContract.MAX_SPEED,
+		"windup speed is clip release over sim cast time")
 

@@ -35,6 +35,7 @@ godot --headless --path . -- --server                 dedicated server on UDP 24
 godot --path . -- --connect=127.0.0.1                 a client (repeat for a second player)
 godot --path . -- --connect=HOST:24680 --lag=50 --jitter=10 --loss=0.02   with simulated conditions
 tools/net_test.sh                                     automated multi-process test
+godot --path . -- --connect=127.0.0.1 --no-predict    a client without own-champion prediction (comparison)
 ```
 
 See `docs/NETWORK.md` for what is proven and what is not.
@@ -55,6 +56,9 @@ can fight back, in a small ruined courtyard built from primitives. See `docs/DES
 | `scripts/data/` + `data/` | `ChampionDef` and `AbilityDef` resources; tuning lives in the `.tres` files. |
 | `scripts/arena/` | Proving Court and the lane map, built from primitives. |
 | `scripts/match/` | `MatchController` (waves, structures, objective, respawns, victory, telemetry) and `MatchInfo` (what bots may know). |
+| `scripts/net/` | `NetSession` (server and client), `SnapshotCodec` (compact snapshots). |
+| `scripts/assets/` | `AssetContract`: what a champion model must match (see `docs/ASSET_CONTRACT.md`). |
+| `assets/` | `specs/` (numbers per champion), `templates/` (Blender template rigs), `champions/` (real models, later). |
 | `tests/` | Headless gameplay tests. |
 | `tools/` | Test, export and data bootstrap scripts. |
 
@@ -64,6 +68,8 @@ can fight back, in a small ruined courtyard built from primitives. See `docs/DES
 tools/run_tests.sh          headless gameplay tests (exit code = failures)
 tools/export_windows.sh     Windows x86_64 export to build/windows/OathAndRuin.exe
 tools/net_test.sh           multi-process network test (server plus four clients)
+godot --headless --path . -s tools/check_assets.gd    check champion models in assets/champions/ (docs/ASSET_CONTRACT.md)
+tools/blender/make_fixtures.sh [python]               rebuild template rigs and test fixtures (needs pip install bpy)
 godot --path . -- --autoplay --bot --shot=out.png --shot-frames=200   self-playing capture
 godot --fixed-fps 60 --path . -- --mode=match --spectate --warp=190 --shot=out.png --shot-frames=20   capture mid match
 ```
