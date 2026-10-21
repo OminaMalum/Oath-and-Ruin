@@ -208,7 +208,13 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 	_advance_cast(dt, authority)
 	if not is_casting() and buffered_slot >= 0:
 		_try_start_cast(buffered_slot, cmd, authority)
+	step_motion(cmd, dt, authority)
 
+
+## Movement for one tick: walk (or dash), gravity, collide, speed guard.
+## The server runs it inside sim_step; a networked client runs the same code
+## to predict its own champion (authority null: no dash hits).
+func step_motion(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 	var dir := Vector3(cmd.move.x, 0.0, -cmd.move.y).limit_length(1.0).rotated(Vector3.UP, aim_yaw)
 	move_dir = dir
 	var speed := current_move_speed()
@@ -223,7 +229,7 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 	velocity.y = 0.0 if is_on_floor() else velocity.y - GRAVITY * dt
 	var before := global_position
 	move_and_slide()
-	if dash_timer > 0.0 or dash_ability != null:
+	if authority and (dash_timer > 0.0 or dash_ability != null):
 		authority.dash_contact(self, before)
 		if dash_timer <= 0.0:
 			dash_ability = null
@@ -233,6 +239,56 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 	if moved.length() > limit:
 		var fixed := moved.limit_length(limit)
 		global_position = Vector3(before.x + fixed.x, global_position.y, before.z + fixed.y)
+
+
+## Client-side prediction of one tick for the local champion. Mirrors the
+## parts of sim_step that decide where the unit ends up (timers, stun, cast
+## start and its move slow, dash, walking) and nothing that decides results:
+## releases, hits, damage and real cooldowns stay with the server, and the
+## next snapshot overwrites everything predicted here.
+func predict_step(cmd: UnitCommand, dt: float) -> void:
+	if not alive:
+		return
+	for i in cooldowns.size():
+		cooldowns[i] = maxf(0.0, cooldowns[i] - dt)
+	if slow_timer > 0.0:
+		slow_timer -= dt
+		if slow_timer <= 0.0:
+			slow_amount = 0.0
+	if stun_timer > 0.0:
+		stun_timer -= dt
+		velocity.x = 0.0
+		velocity.z = 0.0
+		velocity.y = 0.0 if is_on_floor() else velocity.y - GRAVITY * dt
+		move_and_slide()
+		return
+	aim_yaw = cmd.aim_yaw
+	aim_point = cmd.aim_point
+	rotation.y = aim_yaw
+	_update_buffer(cmd, dt)
+	if cast_phase != CastPhase.NONE:
+		var a := cast_ability()
+		cast_timer -= dt
+		if cast_phase == CastPhase.WINDUP and cast_timer <= 0.0:
+			if a and a.delivery == AbilityDef.Delivery.DASH:
+				start_dash(a, clamp_target(a, aim_point))
+			cast_phase = CastPhase.RECOVERY
+			cast_timer += a.recovery if a else 0.0
+		if cast_phase == CastPhase.RECOVERY and cast_timer <= 0.0:
+			cast_phase = CastPhase.NONE
+			cast_slot = -1
+	if cast_phase == CastPhase.NONE and buffered_slot >= 0:
+		var a := get_slot(buffered_slot)
+		if a != null and cooldowns[buffered_slot] <= 0.0 and not a.homing \
+				and not (a.is_ultimate and not ultimate_ready_level()):
+			cast_slot = buffered_slot
+			cast_phase = CastPhase.WINDUP
+			cast_timer = a.cast_time
+			cooldowns[buffered_slot] = a.cooldown
+			buffered_slot = -1
+		elif a == null or cooldowns[buffered_slot] > buffer_timer:
+			buffered_slot = -1
+	step_motion(cmd, dt, null)
 
 
 func _update_buffer(cmd: UnitCommand, dt: float) -> void:

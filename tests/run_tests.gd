@@ -39,6 +39,8 @@ func _run() -> void:
 		"test_second_slot_and_pierce", "test_stun", "test_knife_slow",
 		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
 		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember", "test_last_hit_xp",
+		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
+		"test_net_command_queue", "test_asset_contract",
 	]
 	for t: String in tests:
 		_make_world()
@@ -860,3 +862,182 @@ func test_last_hit_xp() -> void:
 	check(is_equal_approx(ally.xp - a0, share), "a nearby ally gets its share of the minion (%.1f)" % (ally.xp - a0))
 	check(is_equal_approx(killer.xp - k0, share + MatchController.XP_LAST_HIT), "the last hit pays %.0f on top (%.1f)" % [MatchController.XP_LAST_HIT, killer.xp - k0])
 	authority.auto_step = true
+
+
+# --- Networking: prediction, snapshots, command queue ------------------------
+
+## The client's prediction (Unit.predict_step) must land exactly where the
+## server's sim_step does for the same commands: walking, a held attack, a
+## ground ability, a dash and a stun. Any drift here would show online as
+## constant small corrections.
+func test_prediction_matches_authority() -> void:
+	authority.auto_step = false
+	for def: ChampionDef in [SCRIBE, RUNNER]:
+		var srv := spawn(def, 0, Vector3(0, 0, 0))
+		var twin := Unit.new()
+		twin.def = def
+		twin.position = Vector3(0, 0, 0)
+		world.add_child(twin)
+		twin.collision_layer = 0
+		var worst := 0.0
+		for t in 240:
+			await physics_frame
+			var c := cmd(srv)
+			c.move = Vector2(1.0 if (t / 40) % 2 == 0 else -1.0, 1.0)
+			c.aim_yaw = 0.3 + t * 0.004
+			c.aim_point = srv.global_position + Vector3(0, 0, -9)
+			c.buttons = UnitCommand.BTN_ATTACK if t > 20 else 0
+			if t == 90:
+				c.buttons |= UnitCommand.BTN_ABILITY_1
+			if t == 150:
+				srv.apply_stun(0.3)
+				twin.apply_stun(0.3)  # online this arrives in the snapshot
+			authority.step(DT)
+			twin.predict_step(c, DT)
+			worst = maxf(worst, srv.global_position.distance_to(twin.global_position))
+		check(worst < 0.001, "%s: prediction matches the server tick for tick (worst %.4f m)" % [def.id, worst])
+		check(srv.global_position.distance_to(Vector3.ZERO) > 5.0, "%s: the test actually moved (%.1f m)" % [def.id, srv.global_position.length()])
+		authority.remove_unit(srv)
+		twin.queue_free()
+	authority.auto_step = true
+
+
+func test_snapshot_codec_roundtrip() -> void:
+	var u := spawn(RUNNER, 1, Vector3(12.345, 0.0, -61.237))
+	await ticks(2)
+	u.aim_yaw = -2.5
+	u.health = 431.6
+	u.cast_phase = Unit.CastPhase.WINDUP
+	u.cast_slot = 1
+	u.cast_timer = 0.0833
+	u.cast_target = Vector3(3.0, 0.0, -50.0)
+	u.cooldowns[1] = 69.99
+	u.apply_slow(0.3, 1.25)
+	u.stun_timer = 0.4
+	u.dash_timer = 0.2
+	u.dash_velocity = Vector3(-21.0, 0.0, 7.5)
+	_level_up(u, 4)
+	var bytes := SnapshotCodec.encode(777, 1234, 1, SnapshotCodec.encode_units([u]))
+	var snap := SnapshotCodec.decode(bytes)
+	check(snap.tick == 777 and snap.ack == 1234 and snap.units.has(u.net_id), "header survives (tick, ack, id)")
+	var s: Array = snap.units[u.net_id]
+	check((s[SnapshotCodec.POS] as Vector3).distance_to(u.global_position) < 0.01, "position within 1 cm")
+	check(absf(angle_difference(s[SnapshotCodec.YAW], u.aim_yaw)) < 0.001, "yaw within 0.001 rad")
+	check(absf(s[SnapshotCodec.HEALTH] - u.health) <= 0.5 and s[SnapshotCodec.ALIVE], "health within 0.5")
+	check(s[SnapshotCodec.PHASE] == Unit.CastPhase.WINDUP and s[SnapshotCodec.SLOT] == 1, "cast phase and slot")
+	var ct: float = s[SnapshotCodec.CAST_TIMER]
+	check(ct >= u.cast_timer and ct - u.cast_timer < 1.0 / 600.0 + 0.0001, "cast timer rounds up by under 1/600 s (%.4f)" % ct)
+	check(absf((s[SnapshotCodec.COOLDOWNS] as PackedFloat32Array)[1] - 69.99) < 0.002, "a 70 s cooldown fits")
+	check(absf(s[SnapshotCodec.SLOW] - 0.3) < 0.005 and absf(s[SnapshotCodec.SLOW_TIMER] - 1.25) < 0.002, "slow amount and timer")
+	check(absf(s[SnapshotCodec.STUN] - 0.4) < 0.002 and absf(s[SnapshotCodec.DASH_TIMER] - 0.2) < 0.002, "stun and dash timers")
+	check((s[SnapshotCodec.DASH_VEL] as Vector3).distance_to(u.dash_velocity) < 0.01, "dash velocity")
+	check(s[SnapshotCodec.LEVEL] == 4 and absf(s[SnapshotCodec.MAX_HEALTH] - u.max_health) <= 0.5, "level and max health")
+	u.health = 0.3
+	s = SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([u]))).units[u.net_id]
+	check(s[SnapshotCodec.HEALTH] >= 1.0, "a living unit never reads as 0 health")
+	check(SnapshotCodec.decode(PackedByteArray([9, 9, 9])).is_empty(), "garbage is rejected, not half read")
+	for n in [11, 20, bytes.size() - 6, bytes.size() - 1]:
+		check(SnapshotCodec.decode(bytes.slice(0, n)).is_empty(), "a packet cut to %d bytes is rejected" % n)
+
+
+## Worst case for a full 3v3 match: more units than the bot match peak (26),
+## all of them casting, slowed and stunned at once, must still fit one packet.
+func test_snapshot_fits_packet() -> void:
+	var units: Array[Unit] = []
+	for i in 6:
+		units.append(spawn([SCRIBE, WARDEN, RUNNER][i % 3], i % 2, Vector3(i * 3.0 - 60.0, 0, 40.0)))
+	for i in 4:
+		units.append(spawn(TOWER if i < 2 else CORE, i % 2, Vector3(i * 5.0, 0, -50.0)))
+	for i in 22:
+		units.append(spawn(MELEE, i % 2, Vector3(i * 1.5 - 20.0, 0, 0)))
+	await ticks(2)
+	for u in units:
+		u.cast_phase = Unit.CastPhase.WINDUP
+		u.cast_slot = 0
+		u.cast_timer = 0.2
+		u.apply_slow(0.4, 2.0)
+		u.stun_timer = 0.5
+		u.dash_timer = 0.1
+	var bytes := SnapshotCodec.encode(1, 1, units.size(), SnapshotCodec.encode_units(units))
+	var old := {}
+	for u in units:
+		old[u.net_id] = [u.global_position, u.aim_yaw, u.health, u.alive, u.cast_phase, u.cast_slot,
+			u.cast_timer, u.cast_target, u.cooldowns, u.slow_amount, u.slow_timer, u.respawn_timer, u.stun_timer]
+	var old_size := var_to_bytes(old).size()
+	print("  snapshot for %d units, everything active: %d bytes (old format %d, packet limit %d)" % [units.size(), bytes.size(), old_size, SnapshotCodec.MTU])
+	check(bytes.size() <= SnapshotCodec.MTU, "32 busy units fit one %d byte packet (%d bytes)" % [SnapshotCodec.MTU, bytes.size()])
+	check(old_size > SnapshotCodec.MTU, "the old format would not have (%d bytes)" % old_size)
+	check(SnapshotCodec.decode(bytes).units.size() == units.size(), "every unit decodes")
+
+
+func test_net_command_queue() -> void:
+	var ctl := NetInputController.new()
+	var u := spawn(SCRIBE, 0, Vector3.ZERO)
+	var mk := func(x: float, b: int) -> UnitCommand:
+		var c := UnitCommand.new()
+		c.move = Vector2(x, 0)
+		c.buttons = b
+		return c
+	# Packet for tick 3 arrives first, carrying 1..3; then a late repeat.
+	ctl.receive(1, mk.call(0.1, 0))
+	ctl.receive(3, mk.call(0.3, UnitCommand.BTN_ABILITY_1))
+	ctl.receive(2, mk.call(0.2, 0))
+	ctl.receive(2, mk.call(9.0, 0))
+	var got: Array[float] = []
+	for i in 3:
+		got.append(snappedf(ctl.get_command(u).move.x, 0.01))
+	check(got == [0.1, 0.2, 0.3] and ctl.applied_tick == 3, "commands apply one per tick in client order (%s)" % [got])
+	ctl.receive(2, mk.call(0.2, 0))
+	var again := ctl.get_command(u)
+	check(is_equal_approx(again.move.x, 0.3) and not again.pressed(UnitCommand.BTN_ABILITY_1) and ctl.starved_ticks == 1,
+		"a starved tick repeats movement but never an ability press")
+	for i in 40:
+		ctl.get_command(u)
+	check(ctl.get_command(u).move == Vector2.ZERO, "silence for over 0.5 s stops the champion")
+	for t in range(10, 30):
+		ctl.receive(t, mk.call(1.0, 0))
+	ctl.get_command(u)
+	check(ctl.applied_tick >= 30 - NetInputController.MAX_QUEUE, "a burst is trimmed so the player does not stay behind (applied %d)" % ctl.applied_tick)
+
+
+# --- Asset contract ------------------------------------------------------------
+
+## Fixtures are Blender 5.2 exports of the template rig (tools/blender/
+## make_fixtures.sh): one that follows the contract and four with the usual
+## mistakes. Each mistake must be caught with a message that says what to fix.
+func test_asset_contract() -> void:
+	var dir := ProjectSettings.globalize_path("res://tests/fixtures/assets/")
+	var cases := {
+		"ok": [],
+		"big": ["height 4.05", "Muzzle at"],
+		"back": ["faces +Z"],
+		"slide": ["feet would slide"],
+		"late": ["'attack' releases", "'ability_2' releases"],
+	}
+	for k: String in cases:
+		var path := dir + "ruinscribe_v%s.glb" % k
+		var scene := AssetContract.load_gltf(path)
+		check(scene != null, "%s: fixture loads through GLTFDocument" % k)
+		if scene == null:
+			continue
+		world.add_child(scene)
+		await ticks(1)
+		var timing: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path.get_basename() + ".timing.json")).release
+		var r := AssetContract.check(scene, SCRIBE, timing)
+		var want: Array = cases[k]
+		if want.is_empty():
+			check(r.errors.is_empty(), "the template rig passes (%s)" % [r.errors])
+			check(absf(r.measured.run_natural_speed_mps - SCRIBE.move_speed) < 0.2, "run stride measured at %.2f m/s" % r.measured.run_natural_speed_mps)
+		for w: String in want:
+			var found := false
+			for e: String in r.errors:
+				found = found or e.contains(w)
+			check(found, "%s: an error mentions '%s' (%s)" % [k, w, r.errors])
+		scene.queue_free()
+	var bare := Node3D.new()
+	var r2 := AssetContract.check(bare, SCRIBE)
+	check(r2.errors.size() >= 3, "an empty scene fails (no mesh, sockets, AnimationPlayer)")
+	bare.free()
+	check(is_equal_approx(AssetContract.windup_speed(0.3, 0.3), 1.0) and AssetContract.windup_speed(0.6, 0.3) > AssetContract.MAX_SPEED,
+		"windup speed is clip release over sim cast time")
+

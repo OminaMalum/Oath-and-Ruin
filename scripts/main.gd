@@ -9,6 +9,7 @@ extends Node3D
 ##   --lag=MS --jitter=MS --loss=0..1   simulated network conditions (this process's sends)
 ##   --netlog                           print NETLOG lines (tests)
 ##   --autoplay                         the local champion plays itself
+##   --no-predict                       client: turn off own-champion prediction
 ##   --netbot=MODE                      client test driver: attack | strafe | idle | cheat
 ##   --bot                              dummies fight back from the start
 ##   --quit-after-secs=S                exit after S seconds
@@ -172,6 +173,7 @@ func _make_net() -> NetSession:
 	net.jitter_ms = float(args.get("jitter", "0"))
 	net.loss = float(args.get("loss", "0"))
 	net.log_enabled = args.has("netlog")
+	net.prediction_enabled = not args.has("no-predict")
 	return net
 
 

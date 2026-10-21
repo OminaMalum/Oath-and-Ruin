@@ -20,9 +20,10 @@ ap.add_argument("--jitter", type=float, default=10)
 ap.add_argument("--loss", type=float, default=0.02)
 ap.add_argument("--port", type=int, default=24790)
 ap.add_argument("--out", default="/tmp/oath_net")
+ap.add_argument("--no-predict", action="store_true", help="clients do not predict their own champion (A/B baseline)")
 a = ap.parse_args()
 os.makedirs(a.out, exist_ok=True)
-net = [f"--lag={a.lag}", f"--jitter={a.jitter}", f"--loss={a.loss}", "--netlog"]
+net = [f"--lag={a.lag}", f"--jitter={a.jitter}", f"--loss={a.loss}", "--netlog"] + (["--no-predict"] if a.no_predict else [])
 
 
 def launch(name, extra, secs):
@@ -142,7 +143,7 @@ if srv_lines and a_lines:
         check(dc < 1.0, f"A sees C where the server has C ({dc:.2f} m; C may still be moving)")
 
 # Input sanitising: C sent move vectors of length 70 and aim points 7 km away.
-speeds = re.findall(r"maxspeed=(\{.*\})", S)
+speeds = re.findall(r"maxspeed=(\{.*?\})", S)
 if speeds:
     ms = json.loads(speeds[-1])
     check(ms.get(str(uC), 99) <= 6.2 * 1.01, f"C never moved faster than run speed ({ms.get(str(uC))} m/s)")
@@ -156,11 +157,31 @@ check("welcome unit=%d" % uB in logs["B2"], "rejoined client controls the same u
 n_spawn = len(re.findall(r"saw spawn unit=%d\b" % uB, logs["A"]))
 check(n_spawn == 1 and "saw despawn unit=%d" % uB not in logs["A"], f"A saw B spawn once and never despawn ({n_spawn} spawns)")
 
-# Latency evidence.
+# Latency and prediction evidence.
 lat = [int(x) for n in ["A", "B", "C", "B2"] for x in re.findall(r"input_to_visible_ms=(\d+)", logs[n])]
-snap = re.findall(r"snapshot_bytes=(\d+)", S)
-print(f"\ninput to visible movement (own champion, no prediction): {lat} ms")
-print(f"snapshot size: {snap[-1] if snap else '?'} bytes at 20 Hz")
+snap = [int(x) for x in re.findall(r"snapshot_bytes=(\d+)", S)]
+errs, worst, big = [], 0.0, 0
+for n in ["A", "B", "C", "B2"]:
+    for cnt, mean, mx, b in re.findall(r"pred_corrections=(\d+) pred_err_mean=([\d.]+) pred_err_max=([\d.]+) pred_big=(\d+)", logs[n]):
+        errs += [float(mean)] * int(cnt)
+        worst = max(worst, float(mx))
+        big += int(b)
+check(bool(snap) and max(snap) <= 1392, f"snapshots fit one packet (largest {max(snap) if snap else '?'} of 1392 bytes)")
+if not a.no_predict:
+    lat_sorted = sorted(lat)
+    med = lat_sorted[len(lat) // 2] if lat else 999
+    check(med <= 50, f"own movement shows within 50 ms of input with prediction (median {med} ms)")
+    mean_err = sum(errs) / len(errs) if errs else 0.0
+    check(errs and mean_err < 0.05, f"prediction agrees with the server (mean correction {mean_err:.3f} m over {len(errs)} snapshots)")
+    # A command lost in every redundant packet, or a tick the server had to
+    # repeat, shows up as a rare correction of a tick or a few of movement.
+    check(big <= max(2, len(errs) // 100), f"corrections over 0.25 m are rare ({big} of {len(errs)})")
+    check(worst < 1.0, f"no prediction correction over 1 m (largest {worst:.3f} m)")
+mode = "no prediction" if a.no_predict else "with prediction"
+print(f"\ninput to visible movement (own champion, {mode}): {lat} ms")
+if errs:
+    print(f"prediction corrections: mean {sum(errs) / len(errs):.3f} m, largest {worst:.3f} m, over 0.25 m {big} of {len(errs)} snapshots")
+print(f"snapshot size: {snap[-1] if snap else '?'} bytes at 20 Hz (largest {max(snap) if snap else '?'})")
 print(f"conditions: lag {a.lag} ms +/- {a.jitter} ms each way, loss {a.loss:.0%} on unreliable sends")
 print(f"\n{checks} checks, {len(failures)} failures")
 sys.exit(1 if failures else 0)

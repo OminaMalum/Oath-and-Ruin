@@ -3,13 +3,20 @@ extends Node
 ## Gate 1 network proof. A dedicated server owns the CombatAuthority; clients
 ## only send UnitCommands and draw what the server tells them.
 ##
-## Server -> client: snapshots of every unit at 20 Hz (unreliable, ordered)
-## plus reliable events (spawn, despawn, projectiles, areas, damage, deaths).
-## Client -> server: one command per physics tick (unreliable, ordered).
+## Server -> client: compact snapshots of every unit at 20 Hz (unreliable,
+## ordered, SnapshotCodec) carrying the receiver's ack, plus reliable events
+## (spawn, despawn, projectiles, areas, damage, deaths).
+## Client -> server: one packet per physics tick holding the last few
+## commands (unreliable, ordered); the server applies one per tick in order.
 ##
-## Not done yet (see docs/NETWORK.md): client-side prediction and
-## reconciliation for the local champion, lag compensation for hits,
-## bandwidth work, security beyond input sanitising.
+## The client predicts its own champion's movement (Unit.predict_step) and
+## reconciles on every snapshot: back to the server's state at the ack, then
+## replay the commands the server has not applied yet. A remaining visual
+## error is blended out instead of snapping. Other units are interpolated.
+##
+## Not done yet (see docs/NETWORK.md): lag compensation for hits, predicted
+## projectiles, delta snapshots and interest management, security beyond
+## input sanitising.
 
 signal local_unit_ready(u: Unit)
 signal status_changed(text: String)
@@ -21,6 +28,14 @@ const SNAPSHOT_EVERY := 3        # physics ticks per snapshot (20 Hz)
 const INTERP_DELAY := 0.1        # seconds the client renders behind the server
 const RECONNECT_GRACE := 20.0    # seconds a dropped player's champion is held
 const RETRY_EVERY := 2.0
+## Commands repeated in each client packet (covers this many lost packets).
+const COMMAND_REDUNDANCY := 4
+## Client commands kept for replay (2 s at 60 Hz).
+const HISTORY := 120
+## A prediction error larger than this is a teleport (respawn): snap.
+const SNAP_DISTANCE := 2.5
+## How fast a visual prediction error is blended out (1/s).
+const ERROR_DECAY := 12.0
 
 var mode: Mode = Mode.CLIENT
 var authority: CombatAuthority
@@ -58,6 +73,16 @@ var _offset: float = 0.0                 # server time - local clock
 var _have_offset: bool = false
 var _fx := {}                            # fx id -> SimProjectile / SimArea
 var bytes_last_snapshot: int = 0
+## Client prediction (local champion only).
+var prediction_enabled: bool = true
+var _history := {}                       # client tick -> UnitCommand
+var _pred_pos := Vector3.ZERO            # predicted position after the last tick
+var _pred_prev := Vector3.ZERO           # ... and before it (render blend)
+var _visual_error := Vector3.ZERO        # shown offset, decays to zero
+var _have_pred: bool = false
+var _last_ack: int = 0
+var _pending: Array = []                 # [state, ack] waiting for the next physics tick
+var corrections: PackedFloat32Array = PackedFloat32Array()  # metres, per snapshot
 
 
 func _ready() -> void:
@@ -221,15 +246,21 @@ func _spawn_unit(def: ChampionDef, team: int, xf: Transform3D, net_id: int) -> U
 	return u
 
 
+## The newest command is for last_tick; the ones before it are repeats of
+## earlier ticks, oldest first.
 @rpc("any_peer", "call_remote", "unreliable_ordered")
-func client_command(client_tick: int, data: Dictionary) -> void:
-	if mode != Mode.SERVER:
+func client_commands(last_tick: int, cmds: Array) -> void:
+	if mode != Mode.SERVER or not (last_tick is int):
 		return
 	var id := multiplayer.get_remote_sender_id()
 	if not _peer_token.has(id):
 		return
-	var u: Unit = _seats[_peer_token[id]].unit
-	(u.controller as NetInputController).receive(client_tick, UnitCommand.from_dict(data))
+	var ctl := _seats[_peer_token[id]].unit.controller as NetInputController
+	var n := mini(cmds.size(), COMMAND_REDUNDANCY)
+	for i in n:
+		var d: Variant = cmds[cmds.size() - n + i]
+		if d is Dictionary:
+			ctl.receive(last_tick - (n - 1 - i), UnitCommand.from_dict(d))
 
 
 func _server_tick(dt: float) -> void:
@@ -243,12 +274,12 @@ func _server_tick(dt: float) -> void:
 			_broadcast(despawn_unit.bind(u.net_id))
 			authority.remove_unit(u)
 	if authority.tick % SNAPSHOT_EVERY == 0 and not _peer_token.is_empty():
-		var data := {}
-		for u in authority.units:
-			data[u.net_id] = [u.global_position, u.aim_yaw, u.health, u.alive, u.cast_phase, u.cast_slot,
-				u.cast_timer, u.cast_target, u.cooldowns, u.slow_amount, u.slow_timer, u.respawn_timer, u.stun_timer]
-		bytes_last_snapshot = var_to_bytes(data).size()
-		_broadcast(snapshot.bind(authority.tick, data), true)
+		var body := SnapshotCodec.encode_units(authority.units)
+		for peer_id: int in _peer_token:
+			var ctl := _seats[_peer_token[peer_id]].unit.controller as NetInputController
+			var bytes := SnapshotCodec.encode(authority.tick, ctl.applied_tick, authority.units.size(), body)
+			bytes_last_snapshot = bytes.size()
+			_send(_bound_rpc_id(snapshot.bind(bytes), peer_id), true)
 
 
 # ---------------------------------------------------------------- client
@@ -310,6 +341,10 @@ func welcome(my_unit: int, units: Array) -> void:
 	local_unit = authority.find_unit(my_unit)
 	local_unit.controller = local_controller
 	_client_tick = 0
+	_history.clear()
+	_have_pred = false
+	_last_ack = 0
+	_pending = []
 	log_line("welcome unit=%d units=%d" % [my_unit, authority.units.size()])
 	local_unit_ready.emit(local_unit)
 
@@ -335,8 +370,12 @@ func despawn_unit(id: int) -> void:
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func snapshot(server_tick: int, data: Dictionary) -> void:
-	var t := server_tick / float(Engine.physics_ticks_per_second)
+func snapshot(bytes: PackedByteArray) -> void:
+	var snap := SnapshotCodec.decode(bytes)
+	if snap.is_empty():
+		return
+	var data: Dictionary = snap.units
+	var t: float = snap.tick / float(Engine.physics_ticks_per_second)
 	var est := t - _clock
 	# Smoothed clock offset so jitter does not shake the render time.
 	_offset = est if not _have_offset else lerpf(_offset, est, 0.1)
@@ -350,23 +389,50 @@ func snapshot(server_tick: int, data: Dictionary) -> void:
 			continue
 		var s: Array = data[id]
 		var was_alive := u.alive
-		u.health = s[2]
-		u.alive = s[3]
-		u.cast_phase = s[4]
-		u.cast_slot = s[5]
-		u.cast_timer = s[6]
-		u.cast_target = s[7]
-		u.cooldowns = s[8]
-		u.slow_amount = s[9]
-		u.slow_timer = s[10]
-		u.respawn_timer = s[11]
-		u.stun_timer = s[12] if s.size() > 12 else 0.0
+		SnapshotCodec.apply(u, s)
 		u.collision_layer = Unit.LAYER_UNITS if u.alive else 0
 		if was_alive != u.alive:
 			if u.alive:
 				u.respawned.emit()
 			else:
 				u.died.emit(null)
+	if local_unit and is_instance_valid(local_unit) and data.has(local_unit.net_id):
+		# Replayed on the next physics tick: move_and_slide() outside a physics
+		# frame uses the render delta instead (character_body_3d.cpp), which
+		# made every replay come up short.
+		_pending = [data[local_unit.net_id], snap.ack]
+
+
+## Back to the server's state at the acknowledged command, then replay every
+## newer command. Whatever the replay ends up disagreeing with the old
+## prediction becomes a visual offset that fades out.
+func _reconcile(s: Array, ack: int) -> void:
+	_last_ack = ack
+	for t: int in _history.keys():
+		if t <= ack:
+			_history.erase(t)
+	if not prediction_enabled or not local_unit.alive:
+		_have_pred = false
+		return
+	var server_pos: Vector3 = s[SnapshotCodec.POS]
+	if not _have_pred:
+		_pred_pos = server_pos
+		_pred_prev = server_pos
+		_visual_error = Vector3.ZERO
+		_have_pred = true
+	var shown := _pred_pos + _visual_error
+	local_unit.global_position = server_pos
+	local_unit.buffered_slot = -1
+	var dt := 1.0 / Engine.physics_ticks_per_second
+	var ticks: Array = _history.keys()
+	ticks.sort()
+	for t: int in ticks:
+		local_unit.predict_step(_history[t], dt)
+	var error := _pred_pos.distance_to(local_unit.global_position)
+	corrections.append(error)
+	_pred_pos = local_unit.global_position
+	_pred_prev = _pred_pos
+	_visual_error = Vector3.ZERO if error > SNAP_DISTANCE else shown - _pred_pos
 
 
 func _client_physics(dt: float) -> void:
@@ -376,6 +442,9 @@ func _client_physics(dt: float) -> void:
 			_dial()
 	if not connected or local_unit == null or not is_instance_valid(local_unit):
 		return
+	if not _pending.is_empty():
+		_reconcile(_pending[0], _pending[1])
+		_pending = []
 	_client_tick += 1
 	var cmd := local_controller.get_command(local_unit)
 	if _move_sent_at < 0.0 and cmd.move.length() > 0.1:
@@ -384,9 +453,21 @@ func _client_physics(dt: float) -> void:
 	elif _move_sent_at >= 0.0 and _start_pos != Vector3.INF and local_unit.global_position.distance_to(_start_pos) > 0.05:
 		log_line("input_to_visible_ms=%.0f" % ((_clock - _move_sent_at) * 1000.0))
 		_start_pos = Vector3.INF
-	var data := cmd.to_dict()
+	_history[_client_tick] = cmd
+	if _history.size() > HISTORY:
+		_history.erase(_history.keys().min())
+	var batch: Array = []
+	for t in range(maxi(_client_tick - COMMAND_REDUNDANCY + 1, 1), _client_tick + 1):
+		if _history.has(t):
+			batch.append((_history[t] as UnitCommand).to_dict())
 	var tick := _client_tick
-	_send(func() -> void: client_command.rpc_id(1, tick, data), true)
+	_send(func() -> void: client_commands.rpc_id(1, tick, batch), true)
+	if prediction_enabled and _have_pred and local_unit.alive:
+		local_unit.global_position = _pred_pos
+		local_unit.predict_step(cmd, dt)
+		_pred_prev = _pred_pos
+		_pred_pos = local_unit.global_position
+		_visual_error *= exp(-ERROR_DECAY * dt)
 	# Visual-only projectile motion between events.
 	for id: int in _fx:
 		var fx: Variant = _fx[id]
@@ -413,6 +494,10 @@ func _client_render() -> void:
 		a = b  # starved: hold the newest instead of extrapolating
 	var k := 0.0 if b.t <= a.t else clampf((rt - a.t) / (b.t - a.t), 0.0, 1.0)
 	for u in authority.units:
+		if u == local_unit and prediction_enabled and _have_pred and u.alive:
+			var f := Engine.get_physics_interpolation_fraction()
+			u.global_position = _pred_prev.lerp(_pred_pos, f) + _visual_error
+			continue
 		if not (a.units.has(u.net_id) and b.units.has(u.net_id)):
 			continue
 		var sa: Array = a.units[u.net_id]
@@ -527,7 +612,22 @@ func _log_states() -> void:
 			parts.append("%d:%.2f,%.2f,%.0f,%s" % [u.net_id, u.global_position.x, u.global_position.z, u.health, "A" if u.alive else "D"])
 	var extra := ""
 	if mode == Mode.SERVER:
-		extra = " snapshot_bytes=%d maxspeed=%s" % [bytes_last_snapshot, JSON.stringify(max_speed_seen)]
+		var starved := {}
+		for tok: String in _seats:
+			var ctl := _seats[tok].unit.controller as NetInputController
+			starved[_seats[tok].unit.net_id] = [ctl.starved_ticks, ctl.skipped_ticks]
+		extra = " snapshot_bytes=%d maxspeed=%s starved=%s" % [bytes_last_snapshot, JSON.stringify(max_speed_seen), JSON.stringify(starved)]
+	elif not corrections.is_empty():
+		# Prediction error found at each reconcile since the last line (metres).
+		var mx := 0.0
+		var sum := 0.0
+		var big := 0
+		for c in corrections:
+			mx = maxf(mx, c)
+			sum += c
+			big += 1 if c > 0.25 else 0
+		extra = " pred_corrections=%d pred_err_mean=%.3f pred_err_max=%.3f pred_big=%d ack=%d" % [corrections.size(), sum / corrections.size(), mx, big, _last_ack]
+		corrections.clear()
 	log_line("state tick=%d %s%s" % [authority.tick, " ".join(parts), extra])
 
 
