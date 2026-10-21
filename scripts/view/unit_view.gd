@@ -8,6 +8,23 @@ var _materials: Array[StandardMaterial3D] = []
 var _focus: MeshInstance3D  # the part that glows during windups
 var _focus_mat: StandardMaterial3D
 var _flash: float = 0.0
+## Presentation (view only, the sim never reads it): every part sits under
+## `_body`, which leans with movement, bobs at a walking rhythm and falls over
+## on death. The Ruinscribe's staff hangs from `_arm`, a pivot at the
+## shoulder, so a cast swings the staff forward and the focus stone ends up
+## where the sim fires the bolt from.
+var _body: Node3D
+var _arm: Node3D
+var _skirt: MeshInstance3D
+var _anim_t: float = 0.0
+var _death_t: float = -1.0   # seconds since death, -1 while alive
+var _recoil: float = 0.0
+var _step_phase: float = 0.0
+var _lean := Vector2.ZERO    # smoothed (side, forward) lean
+
+
+func launch_point() -> Vector3:
+	return _focus.global_position if _focus and is_instance_valid(_focus) and visible else unit.muzzle_position()
 
 
 func _init(u: Unit) -> void:
@@ -15,6 +32,9 @@ func _init(u: Unit) -> void:
 
 
 func _ready() -> void:
+	_body = Node3D.new()
+	_body.name = "Body"
+	add_child(_body)
 	match unit.def.look:
 		ChampionDef.Look.SPELLCASTER:
 			_build_spellcaster()
@@ -37,11 +57,16 @@ func _ready() -> void:
 		ChampionDef.Look.SHRINEBEARER:
 			_build_shrinebearer()
 	unit.damaged.connect(func(_a: float, _s: Unit) -> void: _flash = 1.0)
+	unit.cast_released.connect(func(_slot: int, _a: AbilityDef, _t: Vector3) -> void: _recoil = 1.0)
 	if unit.def.kind == ChampionDef.Kind.STRUCTURE:
 		unit.died.connect(func(_k: Unit) -> void: _ruin())
 	else:
-		unit.died.connect(func(_k: Unit) -> void: visible = false)
-		unit.respawned.connect(func() -> void: visible = true)
+		unit.died.connect(func(_k: Unit) -> void: _death_t = 0.0)
+		unit.respawned.connect(func() -> void:
+			_death_t = -1.0
+			visible = true
+			_body.rotation = Vector3.ZERO
+			_body.position = Vector3.ZERO)
 
 
 func _part(mesh: Mesh, m: StandardMaterial3D, pos: Vector3, rot_deg := Vector3.ZERO) -> MeshInstance3D:
@@ -50,7 +75,7 @@ func _part(mesh: Mesh, m: StandardMaterial3D, pos: Vector3, rot_deg := Vector3.Z
 	mi.material_override = m
 	mi.position = pos
 	mi.rotation_degrees = rot_deg
-	add_child(mi)
+	(_body if _body else self).add_child(mi)
 	if not _materials.has(m):
 		_materials.append(m)
 	return mi
@@ -90,7 +115,7 @@ func _build_spellcaster() -> void:
 	var wood := Palette.mat(Palette.WOOD)
 	var brass := Palette.mat(Palette.BRASS, 0.45, 0.8)
 	var skin := Palette.mat(Color(0.78, 0.62, 0.50))
-	_part(_cyl(0.24, 0.46, 1.05), robe, Vector3(0, 0.53, 0))           # skirt of the robe
+	_skirt = _part(_cyl(0.24, 0.46, 1.05), robe, Vector3(0, 0.53, 0))  # skirt of the robe
 	_part(_cyl(0.20, 0.25, 0.55), robe, Vector3(0, 1.3, 0))            # torso
 	_part(_box(Vector3(0.52, 0.08, 0.30)), leather, Vector3(0, 1.08, 0))  # belt
 	var team_cloth := Palette.mat(Palette.team_color(unit.team).darkened(0.15)) if unit.team < 2 else cloth
@@ -102,13 +127,23 @@ func _build_spellcaster() -> void:
 	_part(_cyl(0.0, 0.12, 0.28), robe, Vector3(0, 1.9, 0.16), Vector3(-40, 0, 0))  # hood point
 	_part(_box(Vector3(0.22, 0.28, 0.12)), leather, Vector3(-0.32, 1.0, 0.08))     # satchel
 	_part(_box(Vector3(0.16, 0.20, 0.03)), Palette.mat(Color(0.86, 0.80, 0.66)), Vector3(-0.32, 1.12, 0.0))  # folio
-	_part(_cyl(0.07, 0.08, 0.5), robe, Vector3(0.30, 1.28, -0.12), Vector3(60, 0, -10))   # staff arm
-	_part(_cyl(0.025, 0.03, 2.0), wood, Vector3(0.42, 1.0, -0.30))                     # staff
-	_part(_cyl(0.05, 0.05, 0.08), brass, Vector3(0.42, 1.98, -0.30))                   # setting
+	# The staff arm: a pivot at the right shoulder. Children are placed
+	# relative to it (shoulder at 0.26, 1.50, 0.0 in body space).
+	_arm = Node3D.new()
+	_arm.name = "Arm"
+	_arm.position = Vector3(0.26, 1.50, 0.0)
+	_body.add_child(_arm)
+	var hold := _part(_cyl(0.07, 0.08, 0.5), robe, Vector3(0.04, -0.22, -0.12), Vector3(60, 0, -10))  # upper arm
+	hold.reparent(_arm, false)
+	var staff := _part(_cyl(0.025, 0.03, 2.0), wood, Vector3(0.16, -0.50, -0.30))   # staff, hand at the pivot height
+	staff.reparent(_arm, false)
+	var setting := _part(_cyl(0.05, 0.05, 0.08), brass, Vector3(0.16, 0.48, -0.30))
+	setting.reparent(_arm, false)
 	_focus_mat = Palette.glow(unit.def.accent_color, 1.2)
 	var stone := PrismMesh.new()
 	stone.size = Vector3(0.14, 0.24, 0.14)
-	_focus = _part(stone, _focus_mat, Vector3(0.42, 2.14, -0.30))
+	_focus = _part(stone, _focus_mat, Vector3(0.16, 0.64, -0.30))
+	_focus.reparent(_arm, false)
 
 
 ## Team ring on the ground under a champion, readable from the camera.
@@ -319,7 +354,7 @@ func _build_shrinebearer() -> void:
 
 ## Destroyed structures stay as a dark broken stump, so the map remembers.
 func _ruin() -> void:
-	for c in get_children():
+	for c in _body.get_children():
 		if c is MeshInstance3D and c != _focus and c.name != "RangeRing":
 			(c as MeshInstance3D).scale.y *= 0.5
 			(c as MeshInstance3D).position.y *= 0.5
@@ -345,3 +380,51 @@ func _process(delta: float) -> void:
 	if _focus:
 		_focus_mat.emission_energy_multiplier = 1.2 + charge * 6.0
 		_focus.scale = Vector3.ONE * (1.0 + charge * 0.9)
+	if unit.def.kind != ChampionDef.Kind.STRUCTURE:
+		_pose(delta, charge)
+
+
+## Locomotion, cast and death poses from public unit state. Timing comes from
+## the sim (cast_phase, cast_timer, velocity, alive); this only draws it.
+func _pose(delta: float, charge: float) -> void:
+	_anim_t += delta
+	if _death_t >= 0.0:
+		# Fall: tip over backwards and sink, then hide until the respawn.
+		_death_t += delta
+		var k := clampf(_death_t / 0.55, 0.0, 1.0)
+		var e := 1.0 - (1.0 - k) * (1.0 - k)
+		_body.rotation.x = e * deg_to_rad(80.0)
+		_body.position.y = -e * 0.25
+		if _death_t > 1.4:
+			visible = false
+		return
+	var v := Vector3(unit.velocity.x, 0.0, unit.velocity.z)
+	var top := maxf(unit.def.move_speed, 0.1)
+	var speed := clampf(v.length() / top, 0.0, 1.5)
+	# Movement relative to the facing: forward lean when walking forward,
+	# side lean when strafing, a slight lean back when backpedalling.
+	var fwd := unit.forward()
+	var right := Vector3(cos(unit.aim_yaw), 0.0, -sin(unit.aim_yaw))
+	var want := Vector2(v.dot(right), v.dot(fwd)) / top
+	_lean = _lean.lerp(want, 1.0 - exp(-10.0 * delta))
+	_step_phase += delta * (1.0 + speed * 9.0)
+	var bob := sin(_step_phase) * (0.012 + speed * 0.03) if speed > 0.05 else sin(_anim_t * 2.0) * 0.012
+	_body.rotation.x = -_lean.y * deg_to_rad(9.0)
+	_body.rotation.z = _lean.x * deg_to_rad(7.0)
+	_body.position.y = bob
+	if _skirt:
+		_skirt.rotation.z = sin(_step_phase) * speed * deg_to_rad(4.0)
+	if _arm:
+		# Rest: staff upright, held out to the right. Windup: the arm swings
+		# the staff forward and down so the stone leads toward the target.
+		# Release: a short recoil back, then settle.
+		_recoil = maxf(0.0, _recoil - delta * 5.0)
+		var cast := charge
+		if unit.cast_phase == Unit.CastPhase.RECOVERY:
+			cast = 0.6
+		var pitch := -cast * deg_to_rad(62.0) + _recoil * deg_to_rad(18.0)
+		var yaw := -cast * deg_to_rad(20.0)
+		var sway := sin(_anim_t * 1.7) * deg_to_rad(2.0) + sin(_step_phase) * speed * deg_to_rad(5.0)
+		_arm.rotation.x = lerp_angle(_arm.rotation.x, pitch + sway, 1.0 - exp(-14.0 * delta))
+		_arm.rotation.y = lerp_angle(_arm.rotation.y, yaw, 1.0 - exp(-14.0 * delta))
+		_body.rotation.y = lerp_angle(_body.rotation.y, -cast * deg_to_rad(12.0), 1.0 - exp(-10.0 * delta))

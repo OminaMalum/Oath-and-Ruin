@@ -8,6 +8,7 @@ var authority: CombatAuthority
 var viewer: Unit
 
 var _projectiles := {}  # SimProjectile -> Node3D
+var _launch_offsets := {}  # SimProjectile -> {off, t}: drawn start blends from the weapon to the sim path
 var _areas := {}        # SimArea -> Node3D
 var _tells := {}        # Unit -> Node3D
 var _effects: Array[Dictionary] = []
@@ -105,6 +106,15 @@ func _on_projectile_spawned(p: CombatAuthority.SimProjectile) -> void:
 	n.global_position = p.position
 	n.look_at(p.position + p.direction, Vector3.UP)
 	_projectiles[p] = n
+	# Attachment: the bolt leaves the caster's focus stone (or weapon) and
+	# blends onto the sim path over the first quarter second. The sim path
+	# and hit timing are untouched; only the drawn start point moves.
+	var off := Vector3.ZERO
+	for child in p.source.get_children():
+		if child is UnitView:
+			off = (child as UnitView).launch_point() - p.position
+			break
+	_launch_offsets[p] = {"off": off, "t": 0.0}
 
 
 func _on_projectile_ended(p: CombatAuthority.SimProjectile, at: Vector3) -> void:
@@ -112,6 +122,7 @@ func _on_projectile_ended(p: CombatAuthority.SimProjectile, at: Vector3) -> void
 	if n:
 		n.queue_free()
 		_projectiles.erase(p)
+		_launch_offsets.erase(p)
 	_spawn_burst(at, p.source.def.accent_color, 0.6, 0.18)
 
 
@@ -206,6 +217,13 @@ func _process(delta: float) -> void:
 	for p: CombatAuthority.SimProjectile in _projectiles:
 		var n: Node3D = _projectiles[p]
 		n.global_position = p.position + p.direction * p.ability.projectile_speed * dt * frac
+		if _launch_offsets.has(p):
+			var lo: Dictionary = _launch_offsets[p]
+			lo.t += delta
+			var k := clampf(lo.t / 0.25, 0.0, 1.0)
+			n.global_position += lo.off * (1.0 - k)
+			if k >= 1.0:
+				_launch_offsets.erase(p)
 	for ar: CombatAuthority.SimArea in _areas:
 		var fill: Node3D = _areas[ar].get_node("Fill")
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)

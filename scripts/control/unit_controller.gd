@@ -15,6 +15,13 @@ static func world_to_move(dir: Vector3, yaw: float) -> Vector2:
 	return Vector2(flat.dot(right), flat.dot(fwd))
 
 
+## Inverse of world_to_move: a local move (right, forward) back to a world direction.
+static func move_to_world(move: Vector2, yaw: float) -> Vector3:
+	var fwd := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	return (right * move.x + fwd * move.y).limit_length(1.0)
+
+
 static func yaw_towards(from: Vector3, to: Vector3) -> float:
 	var d := to - from
 	return atan2(-d.x, -d.z)

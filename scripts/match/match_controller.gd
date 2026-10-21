@@ -175,8 +175,40 @@ func _physics_process(dt: float) -> void:
 		if u.alive and UnitController.flat_distance(u.global_position, info.fountain(u.team)) <= FOUNTAIN_RADIUS:
 			authority.heal(u, u.def.fountain_heal * dt)
 	_objective(dt)
+	_spacing_sample(dt)
 	if authority.time >= TIME_LIMIT:
 		_finish(-1, "time limit")
+
+
+## Spacing telemetry, sampled once a second: how long allied champions stand
+## on top of each other, how long any champion's capsule overlaps another
+## unit, and how long a ranged champion fights closer than 4 m to an enemy
+## champion. Public positions only; used to diagnose bot clustering.
+var _spacing_timer := 0.0
+func _spacing_sample(dt: float) -> void:
+	_spacing_timer += dt
+	if _spacing_timer < 1.0:
+		return
+	_spacing_timer -= 1.0
+	var champs := champions.filter(func(u: Unit) -> bool: return u.alive)
+	for i in champs.size():
+		var a: Unit = champs[i]
+		var ranged := a.def.basic_attack and a.def.basic_attack.range >= 5.0
+		for j in range(i + 1, champs.size()):
+			var b: Unit = champs[j]
+			var d := UnitController.flat_distance(a.global_position, b.global_position)
+			if a.team == b.team and d < 1.5:
+				stats.spacing_pair_s += 1.0
+			if a.team != b.team and d < 4.0:
+				if ranged:
+					stats.spacing_ranged_close_s += 1.0
+				if b.def.basic_attack and b.def.basic_attack.range >= 5.0:
+					stats.spacing_ranged_close_s += 1.0
+		for u in authority.units:
+			if u != a and u.alive and u.def.kind != ChampionDef.Kind.STRUCTURE \
+					and UnitController.flat_distance(a.global_position, u.global_position) < a.def.radius + u.def.radius:
+				stats.spacing_overlap_s += 1.0
+				break
 
 
 func objective_position() -> Vector3:
@@ -416,5 +448,6 @@ func _reset_stats() -> void:
 		"kills": [0, 0], "minions_killed": [0, 0], "structures_left": [2, 2],
 		"first_champion_fight": -1.0, "objective_captures": [0, 0], "longest_gap_without_structure_damage": 0.0,
 		"damage": {}, "champions": {}, "events": [],
+		"spacing_pair_s": 0.0, "spacing_overlap_s": 0.0, "spacing_ranged_close_s": 0.0,
 		"_last_structure_hit": 0.0, "_file": "",
 	}

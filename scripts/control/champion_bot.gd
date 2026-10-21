@@ -47,6 +47,15 @@ var _has_yaw: bool = false
 ## dropped, so the pick does not flicker between it and nothing.
 const LOSE_GRACE := 0.5
 var _lose_timer: float = 0.0
+## Separation: a bot steps off any unit it is standing on (allies most of
+## all), the way a player would not stack on a teammate. Units do not collide
+## with each other physically, so this is the only thing keeping them apart.
+const SEP_MARGIN := 0.6
+const SEP_MARGIN_ALLY := 1.4   # allied champions keep about two metres apart
+## A ranged bot backs away while an enemy champion is closer than this.
+const KITE_DISTANCE := 6.0
+var kite_enabled := OS.get_environment("OATH_NOKITE") != "1"
+var sep_enabled := OS.get_environment("OATH_NOSEP") != "1"
 
 
 func _init(a: CombatAuthority, info: MatchInfo, seed_value: int) -> void:
@@ -62,15 +71,29 @@ func _init(a: CombatAuthority, info: MatchInfo, seed_value: int) -> void:
 	var slot := seed_value % 10
 	upgrade_pick = 1 + (((match_seed >> slot) & 1) + team) % 2
 	_camlog = OS.get_environment("OATH_CAMLOG") == "1" and team == 0 and slot == 0
+	# The map is mirrored across the lane, so the sidestep direction must be
+	# too: "right" for one team is the other team's "left". With the same
+	# world side for both, one team drifted toward the jungle mouth while
+	# kiting and the other toward the wall, which showed up as a side bias.
+	_strafe_dir = 1.0 if team == 0 else -1.0
+	var env_dir := OS.get_environment("OATH_STRAFE%d" % team)  # diagnosis only: force a side per team
+	if env_dir != "":
+		_strafe_dir = float(env_dir)
 
 
 func get_command(unit: Unit) -> UnitCommand:
 	var c := _decide(unit)
+	# The move was decided relative to the wanted facing; keep it in world
+	# terms while the facing is rate limited, so the walk direction holds.
+	var world_move := move_to_world(c.move, c.aim_yaw)
+	if sep_enabled:
+		world_move = (world_move + _separation(unit)).limit_length(1.0)
 	# Turn rate limit: the facing moves toward the wanted yaw, never snaps.
 	if _has_yaw:
 		var step := deg_to_rad(MAX_TURN_DEG) / Engine.physics_ticks_per_second
 		var diff := wrapf(c.aim_yaw - _last_yaw, -PI, PI)
 		c.aim_yaw = wrapf(_last_yaw + clampf(diff, -step, step), -PI, PI)
+	c.move = world_to_move(world_move, c.aim_yaw)
 	_last_yaw = c.aim_yaw
 	_has_yaw = true
 	if _camlog:
@@ -237,6 +260,9 @@ func _decide(unit: Unit) -> UnitCommand:
 		var move := Vector2(_strafe_dir, 0.0) if _target.def.kind == ChampionDef.Kind.CHAMPION and not melee else Vector2.ZERO
 		if dist > (basic.range * 0.7 if melee else basic.range - 2.0):
 			move = Vector2(0.0 if melee else _strafe_dir * 0.3, 1.0)  # close in
+		elif not melee and kite_enabled and _enemy_champion_within(unit, KITE_DISTANCE) \
+				and _safe_from_tower(unit, pos - move_to_world(Vector2(0, 1), c.aim_yaw) * 2.0):
+			move = Vector2(_strafe_dir * 0.4, -1.0)  # ranged: back away from a close champion
 		if objective and _target.def.kind == ChampionDef.Kind.NEUTRAL and not melee:
 			move = Vector2.ZERO
 		# Team play: a ranged ally fights from inside a friendly ward when one is near.
@@ -433,7 +459,10 @@ func _push_position(unit: Unit, press: bool) -> Vector3:
 				best = progress
 				front = u
 	var slot := float(match_info.slot_of(unit))
-	var side := Vector3(lane.z, 0, -lane.x) * (slot - 1.0) * 2.5  # spread bots across the lane
+	# Spread bots across the lane. World x for both teams (not lane relative),
+	# so the formation is a mirror image across the lane like the map is:
+	# slot 0 stands on the camp side for both teams.
+	var side := Vector3(1, 0, 0) * (slot - 1.0) * 2.5
 	if front:
 		return front.global_position - lane * (1.0 if press else 5.0) + side
 	return match_info.hold_point(unit.team) + side
@@ -454,6 +483,29 @@ func _safe_from_tower(unit: Unit, spot: Vector3) -> bool:
 				and u.def.basic_attack and flat_distance(spot, u.global_position) <= u.def.basic_attack.range + 1.5:
 			return _wave_tanks(unit, u)
 	return true
+
+
+## Push away from every unit this one overlaps (capsule plus a margin).
+## Allied champions push hardest: two bots in one spot read as a clump.
+func _separation(unit: Unit) -> Vector3:
+	var out := Vector3.ZERO
+	var pos := unit.global_position
+	for u in authority.units:
+		if u == unit or not u.alive or u.def.kind == ChampionDef.Kind.STRUCTURE or u.def.kind == ChampionDef.Kind.DUMMY:
+			continue
+		var ally_champ := u.team == unit.team and u.def.kind == ChampionDef.Kind.CHAMPION
+		var r := unit.def.radius + u.def.radius + (SEP_MARGIN_ALLY if ally_champ else SEP_MARGIN)
+		var away := pos - u.global_position
+		away.y = 0.0
+		var d := away.length()
+		if d >= r:
+			continue
+		if d < 0.05:
+			away = Vector3(cos(_t * 7.0 + match_info.slot_of(unit)), 0, sin(_t * 7.0 + match_info.slot_of(unit)))
+			d = 0.05
+		var w := 1.2 if ally_champ else 0.8
+		out += away / d * (1.0 - d / r) * w
+	return out
 
 
 func _clump(unit: Unit, at: Vector3, radius: float) -> int:
