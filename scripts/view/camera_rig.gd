@@ -100,6 +100,29 @@ func _process(delta: float) -> void:
 	var goal := _pivot()
 	global_position = global_position.lerp(goal, 1.0 - exp(-follow_sharpness * delta))
 	rotation = Vector3(pitch, yaw, 0.0)
+	_keep_body_visible(delta)
+
+
+## The spring arm only tests the line to the head. A low wall edge between
+## the camera and the champion's hips left the body hidden while the arm
+## stayed long, so this also tests a ray to the hips and pulls the arm in
+## until that line is clear. It eases back out when the view opens up.
+const HIP_HEIGHT := 0.9
+const ARM_MIN := 1.6
+func _keep_body_visible(delta: float) -> void:
+	if not is_inside_tree():
+		return
+	var space := get_world_3d().direct_space_state
+	var hip := target.get_global_transform_interpolated().origin + Vector3(0, HIP_HEIGHT, 0)
+	var back := -global_transform.basis.z * -1.0  # arm extends along local +Z (SpringArm3D convention)
+	var length := minf(_arm.spring_length + 3.0 * delta, distance)
+	while length > ARM_MIN:
+		var cam := global_position + back * length
+		var q := PhysicsRayQueryParameters3D.create(cam, hip, Unit.LAYER_WORLD | Unit.LAYER_STRUCTURE)
+		if space.intersect_ray(q).is_empty():
+			break
+		length -= 0.3
+	_arm.spring_length = maxf(length, ARM_MIN)
 
 
 ## What the reticle is over: first world or unit surface along the camera
