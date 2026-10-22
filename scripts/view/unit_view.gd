@@ -36,9 +36,21 @@ var _recoil: float = 0.0
 var _step_phase: float = 0.0
 var _lean := Vector2.ZERO    # smoothed (side, forward) lean
 var _spin: Node3D            # towers and cores: the rune ring that turns slowly
+## Imported champion model (assets/champions/<id>.glb, see ChampionModel):
+## its clips are played from the same unit state the placeholders read.
+var _model: Node3D
+var _anim: AnimationPlayer
+var _muzzle: Node3D
+var _focus_light: OmniLight3D
+var _release := {}           # clip -> release seconds (from the exporter's timing file)
+var _cast_clip := ""
+var _run_pos := 0.0
+var _gather: CPUParticles3D  # motes drawn into the casting hand during a windup
 
 
 func launch_point() -> Vector3:
+	if _muzzle and is_instance_valid(_muzzle) and visible:
+		return _muzzle.global_position
 	return _focus.global_position if _focus and is_instance_valid(_focus) and visible else unit.muzzle_position()
 
 
@@ -50,6 +62,15 @@ func _ready() -> void:
 	_body = Node3D.new()
 	_body.name = "Body"
 	add_child(_body)
+	var glb := ChampionModel.path_for(unit.def.id) if unit.def.kind == ChampionDef.Kind.CHAMPION else ""
+	if not glb.is_empty():
+		_build_imported(glb)
+	else:
+		_build_placeholder()
+	_connect_signals()
+
+
+func _build_placeholder() -> void:
 	match unit.def.look:
 		ChampionDef.Look.SPELLCASTER:
 			_build_spellcaster()
@@ -71,6 +92,9 @@ func _ready() -> void:
 			_build_core()
 		ChampionDef.Look.SHRINEBEARER:
 			_build_shrinebearer()
+
+
+func _connect_signals() -> void:
 	unit.damaged.connect(func(_a: float, _s: Unit) -> void:
 		_flash = 1.0
 		if visible and unit.def.kind != ChampionDef.Kind.STRUCTURE:
@@ -90,7 +114,10 @@ func _ready() -> void:
 			_death_t = -1.0
 			visible = true
 			_body.rotation = Vector3.ZERO
-			_body.position = Vector3.ZERO)
+			_body.position = Vector3.ZERO
+			if _anim:
+				_cast_clip = ""
+				_anim.play("idle", 0.0))
 
 
 func _part(mesh: Mesh, m: StandardMaterial3D, pos: Vector3, rot_deg := Vector3.ZERO) -> MeshInstance3D:
@@ -184,6 +211,119 @@ func _build_spellcaster() -> void:
 	stone.size = Vector3(0.14, 0.24, 0.14)
 	_focus = _part(stone, _focus_mat, Vector3(0.16, 0.64, -0.30))
 	_focus.reparent(_arm, false)
+
+
+## A modelled champion: the imported scene in game materials, its sockets,
+## a soft light at the staff's crystal, and its clips.
+func _build_imported(path: String) -> void:
+	_model = (load(path) as PackedScene).instantiate()
+	_model.name = "Model"
+	_body.add_child(_model)
+	var d := ChampionModel.dress(_model, unit.team, unit.def.accent_color)
+	for m: StandardMaterial3D in d.materials:
+		_materials.append(m)
+	_focus_mat = d.glow
+	_anim = _model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	_muzzle = _model.find_child("Muzzle", true, false) as Node3D
+	var focus := _model.find_child("Focus", true, false) as Node3D
+	if focus:
+		_focus_light = OmniLight3D.new()
+		_focus_light.light_color = unit.def.accent_color
+		_focus_light.light_energy = 0.5
+		_focus_light.omni_range = 2.6
+		_focus_light.shadow_enabled = false
+		focus.add_child(_focus_light)
+	var tj := path.get_basename() + ".timing.json"
+	if FileAccess.file_exists(tj):
+		var j: Variant = JSON.parse_string(FileAccess.get_file_as_string(tj))
+		if j is Dictionary:
+			_release = (j as Dictionary).get("release", {})
+	_team_ring(0.62)
+	if _muzzle:
+		_gather = _gather_motes(unit.def.accent_color)
+		_muzzle.add_child(_gather)
+	_anim.play("idle")
+	unit.cast_started.connect(func(slot: int, a: AbilityDef, _t: Vector3) -> void:
+		if slot < 0 or slot >= AssetContract.SLOT_CLIPS.size():
+			return
+		var clip: String = AssetContract.SLOT_CLIPS[slot]
+		if not _anim.has_animation(clip):
+			return
+		var rel := float(_release.get(clip, a.cast_time))
+		# The release frame lands exactly on the sim's release.
+		_anim.play(clip, 0.06, AssetContract.windup_speed(rel, a.cast_time))
+		_anim.seek(0.0, true)
+		_cast_clip = clip)
+
+
+static func _gather_motes(col: Color) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.emitting = false
+	p.amount = 24
+	p.lifetime = 0.3
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
+	p.emission_sphere_radius = 0.38
+	p.gravity = Vector3.ZERO
+	p.radial_accel_min = -14.0
+	p.radial_accel_max = -10.0
+	p.tangential_accel_min = 4.0
+	p.tangential_accel_max = 6.0
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.3))
+	curve.add_point(Vector2(0.6, 1.0))
+	curve.add_point(Vector2(1.0, 0.0))
+	p.scale_amount_curve = curve
+	var g := Gradient.new()
+	g.set_color(0, Color(col, 0.0))
+	g.set_color(1, Color(col.lightened(0.5), 1.0))
+	p.color_ramp = g
+	var q := QuadMesh.new()
+	q.size = Vector2(0.09, 0.09)
+	q.material = SpellFx._dot_mat()
+	p.mesh = q
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return p
+
+
+## Clip choice for an imported model: death, the cast clip until it has
+## played out, else run (at the unit's speed, turned toward a strafe) or idle.
+func _pose_model(delta: float) -> void:
+	_anim_t += delta
+	if _death_t >= 0.0:
+		_death_t += delta
+		if _anim.current_animation != "death":
+			_anim.play("death", 0.08, 1.0)
+		if _death_t > 1.7:
+			visible = false
+		return
+	var k := 1.0 - exp(-10.0 * delta)
+	if not _cast_clip.is_empty():
+		var playing := _anim.current_animation == _cast_clip and _anim.is_playing()
+		if playing or unit.cast_phase != Unit.CastPhase.NONE:
+			_model.rotation.y = lerp_angle(_model.rotation.y, 0.0, k)
+			return
+		_cast_clip = ""
+	var v := Vector3(unit.velocity.x, 0.0, unit.velocity.z)
+	var top := maxf(unit.def.move_speed, 0.1)
+	if v.length() > top * 0.12:
+		var fwd := unit.forward()
+		var right := Vector3(cos(unit.aim_yaw), 0.0, -sin(unit.aim_yaw))
+		var ang := atan2(v.dot(right), v.dot(fwd))
+		var back := absf(ang) > 2.0
+		var rate := clampf(v.length() / top, 0.5, 1.5)
+		_anim.play("run", 0.15, -rate if back else rate)  # same clip: keeps going, new rate
+		# Strafing: the body turns toward the way it runs (up to 50 degrees),
+		# backpedalling plays the cycle in reverse facing forward.
+		var want := 0.0 if back else -clampf(ang, -0.87, 0.87)
+		_model.rotation.y = lerp_angle(_model.rotation.y, want, k)
+		var pos := _anim.current_animation_position / maxf(_anim.current_animation_length, 0.01)
+		if unit.def.kind == ChampionDef.Kind.CHAMPION and (floori((pos - 0.05) * 2.0) != floori((_run_pos - 0.05) * 2.0)):
+			_footstep()
+		_run_pos = pos
+	else:
+		if _anim.current_animation != "idle":
+			_anim.play("idle", 0.2, 1.0)
+		_model.rotation.y = lerp_angle(_model.rotation.y, 0.0, k)
 
 
 ## Team ring on the ground under a champion, readable from the camera.
@@ -659,6 +799,12 @@ func _process(delta: float) -> void:
 	if _focus:
 		_focus_mat.emission_energy_multiplier = 1.2 + charge * 6.0
 		_focus.scale = Vector3.ONE * (1.0 + charge * 0.9)
+	elif _model and _focus_mat:
+		_focus_mat.emission_energy_multiplier = 1.4 + charge * 4.0
+		if _focus_light:
+			_focus_light.light_energy = 0.5 + charge * 2.5
+		if _gather:
+			_gather.emitting = unit.cast_phase == Unit.CastPhase.WINDUP and visible
 	if unit.def.kind != ChampionDef.Kind.STRUCTURE:
 		_pose(delta, charge)
 	elif _spin and _spin.visible:
@@ -668,6 +814,9 @@ func _process(delta: float) -> void:
 ## Locomotion, cast and death poses from public unit state. Timing comes from
 ## the sim (cast_phase, cast_timer, velocity, alive); this only draws it.
 func _pose(delta: float, charge: float) -> void:
+	if _anim:
+		_pose_model(delta)
+		return
 	_anim_t += delta
 	if _death_t >= 0.0:
 		# Fall: tip over backwards and sink, then hide until the respawn.

@@ -29,6 +29,10 @@ func setup(a: CombatAuthority, local_unit: Unit) -> void:
 	a.unit_damaged.connect(_on_unit_damaged)
 	a.melee_swung.connect(_on_melee_swung)
 	a.unit_died.connect(_on_unit_died_sfx)
+	# Spell effects (graphics thread) layer over these visuals.
+	var spell_fx := SpellFx.new()
+	add_child(spell_fx)
+	spell_fx.setup(a, self)
 	a.unit_removed.connect(func(u: Unit) -> void:
 		var t: Node3D = _tells.get(u)
 		if t:

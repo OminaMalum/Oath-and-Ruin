@@ -15,6 +15,7 @@ const VIEWS := {
 	"lane_low": [Vector3(4.0, 2.4, 7.0), Vector3(0, 0.8, -1.0)],
 	"camp_close": [Vector3(-21.5, 3.2, 5.0), Vector3(-28.0, 1.2, 0.0)],
 	"overview": [Vector3(32.0, 48.0, 50.0), Vector3(0, 0, 8.0)],
+	"champ_1": [], "champ_2": [], "champ_3": [], "champ_4": [], "champ_5": [], "champ_6": [],
 }
 
 var _main: Node
@@ -69,7 +70,23 @@ func _process(_delta: float) -> bool:
 
 
 func _next() -> void:
-	var v: Array = VIEWS[_queue[0]]
+	var k: String = _queue[0]
+	if k.begins_with("champ"):
+		# Behind and above a living Ruinscribe, the way a player sees it.
+		var best: Unit = null
+		for u: Unit in root.find_children("*", "Unit", true, false):
+			if u.def.id == &"ruinscribe" and u.alive and (best == null or absf(u.global_position.x) < absf(best.global_position.x)):
+				best = u
+		if best:
+			var f := best.forward()
+			var at := best.global_position + Vector3(0, 1.0, 0)
+			_cam.global_position = at - f * 4.0 + Vector3(0, 4.5, 0)
+			_cam.look_at(at + f * 1.0)
+			print("champ view on ", best.name, " at ", best.global_position)
+		_cam.make_current()
+		_wait = 4
+		return
+	var v: Array = VIEWS[k]
 	_cam.global_position = v[0]
 	_cam.look_at(v[1])
 	_cam.make_current()

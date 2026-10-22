@@ -7,7 +7,7 @@ No attribution is required. We credit the authors anyway. They are photo scans a
 generated. Each asset, its author, source page and download date is listed in `ASSET_MANIFEST.csv`.
 
 Authors: Rob Tuytel, Amal Kumar, Rico Cilliers, Greg Zaal, Jarod Guest, Kless Gyzen, James Ray Cock,
-Sebastian Platen.
+Sebastian Platen, colormass, Charlotte Baglioni.
 
 Downloaded 2026-10-22 from the Poly Haven API at 1k resolution (sky at 2k). Files are unmodified except that
 Godot's importer settings (`*.import`) turn on mipmaps, VRAM compression and the normal map flag.
