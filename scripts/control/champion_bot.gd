@@ -319,9 +319,19 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 	var champ := target.def.kind == ChampionDef.Kind.CHAMPION
 	if a.is_ultimate:
 		return _use_ultimate(unit, a, target, dist, hp)
-	if a.delivery == AbilityDef.Delivery.PROJECTILE and (a.root_duration > 0.0 or a.mark_duration > 0.0):
-		# Chains and marks are for champions in reach.
+	if a.delivery == AbilityDef.Delivery.PROJECTILE and (a.root_duration > 0.0 or a.mark_duration > 0.0 or a.charm_duration > 0.0):
+		# Chains, marks and lures are for champions in reach.
 		return champ and dist <= a.range
+	if a.taunt_duration > 0.0:
+		# A roar around itself: only when a champion is close enough to catch.
+		return champ and dist <= a.area_radius
+	if a.delivery == AbilityDef.Delivery.WALL:
+		# A storm wall against a ranged champion's shots, when it is losing the trade.
+		return champ and target.def.basic_attack and target.def.basic_attack.range > 5.0 \
+				and dist > 6.0 and dist <= target.def.basic_attack.range + 2.0 and hp < 0.7
+	if a.delivery == AbilityDef.Delivery.WARD and (a.ally_haste > 0.0 or a.ally_quick > 0.0):
+		# A song: sing as soon as a champion fight starts close by.
+		return champ and dist <= 12.0
 	if a.stun_duration > 0.0:
 		# A stun is for champions: when they are casting, fleeing, or about to die.
 		return champ and dist <= a.range + target.def.radius and (target.is_casting() \
@@ -359,6 +369,8 @@ func _use_ultimate(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: flo
 		AbilityDef.Delivery.GROUND_AREA:
 			return dist <= a.range and (pair or t_hp < 0.6)
 		AbilityDef.Delivery.WARD:
+			if a.ally_haste > 0.0:
+				return dist <= 10.0 and (pair or t_hp < 0.6 or hp < 0.6)
 			return dist <= 8.0 and (hp < 0.6 or _hurt_ally_within(unit, a.area_radius + 2.0))
 		AbilityDef.Delivery.DASH:
 			return dist > unit.def.basic_attack.range + 0.5 and dist <= a.dash_distance + 1.0 \

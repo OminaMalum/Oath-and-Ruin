@@ -275,6 +275,40 @@ Thornwright 42%, Gravebinder 34%, Lanternkeeper 19%, Oathwarden 11% (the two sup
 won 15 of 24, the same count both passes; with mirror lineups that is side or seed noise, still worth watching.
 Zero script errors.
 
+### Batch C: Barrowking, Veilsinger, Stormscald (added 2026-10-22)
+
+Nine champions now; each match still draws three, the same three on both teams.
+
+| | Barrowking | Veilsinger | Stormscald |
+|---|---|---|---|
+| Role | Frontline (barbarian) | Support (bard) | Spellcaster (evoker) |
+| Health, speed | 860, 5.85 | 540, 6.4 | 530, 6.1 |
+| Basic | Barrow Axe, 3 m arc, 46 | Lute Note, 14 m, 38 | Spark Bolt, 17 m, 42 |
+| Q | Grave Roar: enemies within 4.5 m take 30 and are taunted 1.25 s | War Song: 5 m circle for 5 s, allies attack 35% faster | Called Lightning: 2.2 m circle, strikes after 1.2 s for 140 |
+| E | Barrow Charge: 7 m dash, 55 and a 30% slow | Lure: slow note, 30 and a 1 s charm | Storm Wall: 7 m wall for 3 s that stops enemy shots |
+| R | King's Wrath: 4.5 m all round after 0.55 s, 190 and a 0.8 s stun | Rally Chorus: 6.5 m circle for 5 s, allies attack 40% and move 25% faster, take 15% less | Tempest: 4 m storm strikes three times 0.6 s apart, 90 and a slow each |
+| Passive | Barrow Blood: below half health regains 14 a second | Encore: allies within 8 m move 8% faster | Eye of the Storm: ground strikes deal 20% more near their centre |
+
+New rules, in the one combat authority and carried in snapshots (protocol version 5):
+- **Taunt**: the unit's own command is replaced: it faces the caster, walks into basic attack reach and holds the
+  basic attack. **Charm**: it walks straight away from the caster and cannot act. Both end at once if the caster
+  dies, interrupt the current cast, and hit champions and minions only (never structures or the neutral camp).
+  The client predicts the same walk from the caster position sent in the snapshot.
+- **Haste** (basic attacks come sooner; abilities are not sped up) and **quick** (move speed), from wards and the
+  Encore aura.
+- **Wall**: a new delivery. A line across the aim at a ground point; projectiles from the caster's enemies stop at
+  it (homing tower shots do not). Anyone can walk through.
+- A ground area can chain into another (`leaves`), which is how the Tempest strikes three times.
+- A melee arc of 360 degrees hits all round (King's Wrath).
+
+Bots roar when a champion is in reach, lure champions in range, sing as a champion fight starts within 12 m, and
+raise the storm wall when a ranged champion is out-trading them.
+
+Measured (24 seeds, 18 to 41, random mirror lineups from nine): all 24 ended by a core falling, median 11.3 min,
+range 6.1 to 16.5. Oath 12, Ruin 12. Team kill share: Gravebinder 46%, Ruinscribe 41%, Thornwright 40%,
+Barrowking 38%, Ashrunner 35%, Stormscald 32%, Veilsinger 20%, Lanternkeeper 19%, Oathwarden 17% (supports and
+the warden are meant to sit low). No tuning needed this pass. Zero script errors.
+
 ### Measured (headless soak, 48 seeds, after ultimates and passives)
 
 Two runs of 24 seeds. All 48 ended by a core falling, 6.5 to 14.3 min (median about 11). The objective was
@@ -315,4 +349,4 @@ Everything here is view only and reads public sim state; timing stays in the sim
 
 ## Not in this build (on purpose)
 
-Third regular abilities, champions 7 to 20, item recipes or actives. See `docs/ROADMAP.md`.
+Third regular abilities, champions 10 to 20, item recipes or actives. See `docs/ROADMAP.md`.

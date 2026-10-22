@@ -105,9 +105,9 @@ Each of the other seventeen gets this table row when its batch starts, and the r
 | 4 | Lanternkeeper | Support | cleric | short / medium / low | Lantern light heals allies who stand in it; a raven that reveals a flank for 4 s | Oath, Hunt | kill it first, fight outside the light | In build |
 | 5 | Thornwright | Marksman | ranger | long / low / medium | Longbow with a charged shot; a bramble that slows a path | Line | flank it, close the distance | In build |
 | 6 | Gravebinder | Controller | warlock | mid / medium / low | Chains that root the first enemy hit; a grasping ground that pulls to its centre | Line | bait the chain, hold your dash | In build |
-| 7 | Barrowking | Frontline | barbarian | melee / high / low | Taunting roar (enemies near must attack it for 1.5 s); grows tougher while below half health | Oath | ignore it, burn it from range | Batch C |
-| 8 | Veilsinger | Support | bard | mid / low / medium | Song that speeds allied attacks; a charm that turns an enemy to walk away for 1 s | Ember | silence the song by stunning it | Batch C |
-| 9 | Stormscald | Spellcaster | evoker | long / low / low | Called lightning on a point after 1.2 s; a storm wall that blocks shots for 3 s | Line | move early, wait out the wall | Batch C |
+| 7 | Barrowking | Frontline | barbarian | melee / high / low | Taunting roar (enemies near must attack it for 1.5 s); grows tougher while below half health | Oath | ignore it, burn it from range | In build |
+| 8 | Veilsinger | Support | bard | mid / low / medium | Song that speeds allied attacks; a charm that turns an enemy to walk away for 1 s | Ember | silence the song by stunning it | In build |
+| 9 | Stormscald | Spellcaster | evoker | long / low / low | Called lightning on a point after 1.2 s; a storm wall that blocks shots for 3 s | Line | move early, wait out the wall | In build |
 | 10 | Quillhand | Skirmisher | assassin | melee / medium / high | Fade: harder to see beyond 6 m for 3 s; backstab bonus from behind | Hunt, Ember | stay in a group, face it | Batch C |
 | 11 | Ironvow | Frontline | paladin | melee / high / low | Vow with one ally: both take less damage while within 6 m; Smite on a stunned target | Oath | split the pair, stun it first | Batch D |
 | 12 | Bellwether | Support | commander | mid / medium / low | Rally: nearby minions push faster and hit harder; horn that calls the next wave early | Tide | kill the wave, catch it alone | Batch D |

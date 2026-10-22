@@ -84,6 +84,12 @@ func _build_placeholder() -> void:
 			_build_ranger()
 		ChampionDef.Look.WARLOCK:
 			_build_warlock()
+		ChampionDef.Look.BARBARIAN:
+			_build_barbarian()
+		ChampionDef.Look.BARD:
+			_build_bard()
+		ChampionDef.Look.EVOKER:
+			_build_evoker()
 		ChampionDef.Look.TRAINING_DUMMY:
 			_build_dummy()
 		ChampionDef.Look.MINION_MELEE:
@@ -523,6 +529,103 @@ func _build_warlock() -> void:
 	_focus_mat = Palette.glow(unit.def.accent_color, 1.6)
 	_focus = _attach(_part(_sphere(0.09), _focus_mat, Vector3(0.30, 1.80, -0.40)), _arm)
 	_team_ring(0.56)
+
+
+## Barrowking: the biggest body on the field. Bare scarred arms, a fur
+## mantle, an iron crown of grave spikes and a two handed axe; the crown and
+## the axe blade are the silhouette.
+func _build_barbarian() -> void:
+	var hide := Palette.mat(unit.def.primary_color)
+	var fur := Palette.mat(Color(0.30, 0.25, 0.20))
+	var leather := Palette.mat(Palette.LEATHER_DARK)
+	var skin := Palette.mat(Color(0.66, 0.52, 0.42))
+	var iron := Palette.mat(Palette.IRON, 0.4, 0.8)
+	var wood := Palette.mat(Palette.WOOD)
+	var team := _team_mat()
+	for x: float in [-0.19, 0.19]:
+		var hip := _pivot_at(Vector3(x, 0.82, 0), "Hip")
+		_attach(_part(_cyl(0.20, 0.25, 0.82), leather, Vector3(x, 0.41, 0)), hip)
+		_legs.append(hip)
+	_part(_cyl(0.36, 0.42, 0.40), team, Vector3(0, 0.98, 0))                    # war kilt in team colour
+	_part(_cyl(0.40, 0.34, 0.66), hide, Vector3(0, 1.42, 0))                    # barrel chest
+	_part(_cyl(0.52, 0.56, 0.22), fur, Vector3(0, 1.74, 0.02))                  # fur mantle
+	for x: float in [-0.50, 0.50]:
+		_part(_cyl(0.11, 0.13, 0.62), skin, Vector3(x, 1.38, -0.04))             # bare arms
+		_part(_cyl(0.13, 0.13, 0.16), iron, Vector3(x, 1.14, -0.04))             # bracers
+	_part(_sphere(0.17), skin, Vector3(0, 1.98, -0.03))                         # head
+	_part(_box(Vector3(0.22, 0.16, 0.10)), fur, Vector3(0, 1.86, -0.15))        # beard
+	_part(_cyl(0.19, 0.19, 0.08, 12), iron, Vector3(0, 2.12, 0))                # crown band
+	for k in 5:  # crown spikes
+		var a := -0.9 + k * 0.45
+		_part(_cyl(0.0, 0.04, 0.26, 5), iron, Vector3(sin(a) * 0.17, 2.27, -cos(a) * 0.17))
+	_weapon_l = _pivot_at(Vector3(-0.50, 1.6, 0), "FistL")
+	_attach(_part(_sphere(0.10), skin, Vector3(-0.52, 1.04, -0.06)), _weapon_l)
+	_weapon_r = _pivot_at(Vector3(0.56, 1.0, -0.22), "AxeGrip")
+	_attach(_part(_cyl(0.04, 0.045, 1.5), wood, Vector3(0.56, 1.1, -0.22), Vector3(-15, 0, 0)), _weapon_r)  # haft
+	_attach(_part(_box(Vector3(0.08, 0.46, 0.40)), iron, Vector3(0.56, 1.80, -0.56)), _weapon_r)          # axe blade
+	_focus_mat = Palette.glow(unit.def.accent_color, 0.8)
+	_focus = _attach(_part(_box(Vector3(0.09, 0.40, 0.04)), _focus_mat, Vector3(0.56, 1.80, -0.77)), _weapon_r)  # bright edge
+	_swing = Swing.MAUL
+	_weapon_r_home = _weapon_r.position
+	_team_ring(0.78)
+
+
+## Veilsinger: light on its feet in a long split coat, a wide feathered
+## hat and a round lute held out in front. The hat brim and the lute body
+## are the silhouette.
+func _build_bard() -> void:
+	var coat := Palette.mat(unit.def.primary_color)
+	var leather := Palette.mat(Palette.LEATHER_DARK)
+	var wood := Palette.mat(Palette.WOOD.lightened(0.15))
+	var skin := Palette.mat(Color(0.72, 0.56, 0.46))
+	var team := _team_mat()
+	for x: float in [-0.11, 0.11]:
+		var hip := _pivot_at(Vector3(x, 0.84, 0), "Hip")
+		_attach(_part(_cyl(0.10, 0.12, 0.84), leather, Vector3(x, 0.42, 0)), hip)
+		_legs.append(hip)
+	_skirt = _part(_cyl(0.22, 0.36, 0.62), coat, Vector3(0, 0.78, 0.02))       # coat tails
+	_part(_cyl(0.19, 0.23, 0.58), coat, Vector3(0, 1.30, 0))                    # torso
+	_part(_box(Vector3(0.12, 0.56, 0.05)), team, Vector3(0, 1.30, -0.22))       # team placket
+	_part(_box(Vector3(0.42, 0.07, 0.28)), leather, Vector3(0, 1.04, 0))        # belt
+	_part(_sphere(0.13), skin, Vector3(0, 1.72, -0.03))                         # face
+	_part(_cyl(0.40, 0.40, 0.03, 18), coat, Vector3(0, 1.84, 0))                # wide brim
+	_part(_cyl(0.13, 0.17, 0.18), coat, Vector3(0, 1.94, 0))                    # crown
+	_part(_box(Vector3(0.04, 0.42, 0.10)), Palette.mat(unit.def.accent_color), Vector3(0.16, 2.06, 0.12), Vector3(-30, 0, -20))  # feather
+	_shoulder_arm(Vector3(0.24, 1.50, 0.0), coat)
+	var body := _attach(_part(_sphere(0.20), wood, Vector3(0.10, 1.18, -0.40)), _arm)    # lute body
+	body.scale = Vector3(1.0, 1.0, 0.45)
+	_attach(_part(_box(Vector3(0.05, 0.05, 0.50)), wood, Vector3(0.34, 1.36, -0.50), Vector3(0, 60, 25)), _arm)  # neck
+	_focus_mat = Palette.glow(unit.def.accent_color, 1.4)
+	_focus = _attach(_part(_cyl(0.06, 0.06, 0.03, 12), _focus_mat, Vector3(0.10, 1.18, -0.50), Vector3(90, 0, 0)), _arm)  # sound hole
+	_team_ring(0.52)
+
+
+## Stormscald: a tall caster in a slate long coat with a high storm mantle
+## and a forked iron rod. Three small sparks hover over the shoulders; the
+## fork and the sparks are the silhouette.
+func _build_evoker() -> void:
+	var coat := Palette.mat(unit.def.primary_color)
+	var leather := Palette.mat(Palette.LEATHER_DARK)
+	var iron := Palette.mat(Palette.IRON, 0.35, 0.8)
+	var skin := Palette.mat(Color(0.70, 0.56, 0.46))
+	var team := _team_mat()
+	_skirt = _part(_cyl(0.22, 0.42, 1.08), coat, Vector3(0, 0.54, 0))
+	_part(_cyl(0.19, 0.23, 0.58), coat, Vector3(0, 1.36, 0))                    # torso
+	_part(_cyl(0.24, 0.42, 0.10), team, Vector3(0, 0.08, 0))                    # hem band
+	_part(_box(Vector3(0.46, 0.08, 0.30)), leather, Vector3(0, 1.10, 0))        # belt
+	_part(_cyl(0.34, 0.26, 0.24), team, Vector3(0, 1.70, 0.02))                 # storm mantle
+	_part(_sphere(0.13), skin, Vector3(0, 1.84, -0.03))                         # face
+	_part(_box(Vector3(0.30, 0.12, 0.26)), Palette.mat(Color(0.82, 0.82, 0.80)), Vector3(0, 1.98, 0.02))  # wind-blown white hair
+	_focus_mat = Palette.glow(unit.def.accent_color, 2.0)
+	for k in 3:  # hovering sparks
+		var a := k * TAU / 3.0
+		_part(_sphere(0.05), _focus_mat, Vector3(cos(a) * 0.42, 2.12, sin(a) * 0.42))
+	_shoulder_arm(Vector3(0.25, 1.56, 0.0), coat)
+	_attach(_part(_cyl(0.022, 0.028, 1.3), iron, Vector3(0.32, 1.28, -0.42)), _arm)  # rod
+	for x: float in [-0.08, 0.08]:  # the fork
+		_attach(_part(_cyl(0.012, 0.02, 0.32), iron, Vector3(0.32 + x, 2.04, -0.42), Vector3(0, 0, -x * 220.0)), _arm)
+	_focus = _attach(_part(_sphere(0.07), _focus_mat, Vector3(0.32, 2.02, -0.42)), _arm)
+	_team_ring(0.55)
 
 
 ## Training dummy: straw body on a post with a painted target shield.

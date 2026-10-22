@@ -142,6 +142,10 @@ func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
 	if ar.ability.delivery == AbilityDef.Delivery.WARD:
 		_spawn_ward(ar)
 		return
+	if ar.ability.delivery == AbilityDef.Delivery.WALL:
+		sfx("ward_rise", ar.center, 0.0)
+		_spawn_wall(ar)
+		return
 	var n := Node3D.new()
 	var col := _team_color(ar.source)
 	var r := ar.ability.area_radius
@@ -212,12 +216,50 @@ func _spawn_ward(ar: CombatAuthority.SimArea) -> void:
 	_areas[ar] = n
 
 
+## A storm wall: a tall translucent sheet in the caster's team colour along
+## the sim's wall line, a ground stripe under it and a glowing post at each end.
+func _spawn_wall(ar: CombatAuthority.SimArea) -> void:
+	var n := Node3D.new()
+	var col := _team_color(ar.source)
+	var length := ar.ability.wall_length
+	var sheet := MeshInstance3D.new()
+	sheet.mesh = BoxMesh.new()
+	(sheet.mesh as BoxMesh).size = Vector3(length, 2.6, 0.12)
+	var m := Palette.ground_decal(col, 0.35)
+	sheet.material_override = m
+	sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sheet.position = Vector3(0, 1.3, 0)
+	n.add_child(sheet)
+	var stripe := MeshInstance3D.new()
+	stripe.mesh = BoxMesh.new()
+	(stripe.mesh as BoxMesh).size = Vector3(length, 0.02, 0.5)
+	stripe.material_override = Palette.ground_decal(col, 0.9)
+	stripe.name = "Fill"  # shrinks as the wall's time runs out
+	n.add_child(stripe)
+	var glow := Palette.glow(ar.source.def.accent_color, 2.0)
+	for x: float in [-length * 0.5, length * 0.5]:
+		var post := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.08
+		cm.bottom_radius = 0.12
+		cm.height = 2.8
+		post.mesh = cm
+		post.material_override = glow
+		post.position = Vector3(x, 1.4, 0)
+		n.add_child(post)
+	add_child(n)
+	n.global_position = ar.center + Vector3(0, 0.03 + Palette.DECAL_LIFT, 0)
+	# Local +X runs along the wall: across the caster's aim.
+	n.rotation.y = atan2(-ar.dir.z, ar.dir.x) + PI * 0.5
+	_areas[ar] = n
+
+
 func _on_area_detonated(ar: CombatAuthority.SimArea) -> void:
 	var n: Node3D = _areas.get(ar)
 	if n:
 		n.queue_free()
 		_areas.erase(ar)
-	if ar.ability.delivery == AbilityDef.Delivery.WARD:
+	if CombatAuthority._stands(ar.ability):
 		return
 	_spawn_burst(ar.center + Vector3(0, 0.3, 0), ar.source.def.accent_color, ar.ability.area_radius, 0.3)
 	sfx("area_land", ar.center, 2.0)
@@ -267,7 +309,7 @@ func _process(delta: float) -> void:
 	for ar: CombatAuthority.SimArea in _areas:
 		var fill: Node3D = _areas[ar].get_node("Fill")
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)
-		if ar.ability.delivery == AbilityDef.Delivery.WARD:
+		if CombatAuthority._stands(ar.ability):
 			k = clampf(ar.timer / maxf(ar.ability.ward_duration, 0.01), 0.0, 1.0)  # time left
 		fill.scale = Vector3(maxf(k, 0.01), 1, maxf(k, 0.01))
 	_update_tells()
