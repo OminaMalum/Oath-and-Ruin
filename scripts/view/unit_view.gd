@@ -35,6 +35,7 @@ var _death_t: float = -1.0   # seconds since death, -1 while alive
 var _recoil: float = 0.0
 var _step_phase: float = 0.0
 var _lean := Vector2.ZERO    # smoothed (side, forward) lean
+var _spin: Node3D            # towers and cores: the rune ring that turns slowly
 
 
 func launch_point() -> Vector3:
@@ -313,35 +314,78 @@ func _build_breaker() -> void:
 	_focus = _part(_sphere(0.08), _focus_mat, Vector3(0, 1.2, -0.32))
 
 
-## Warden Tower: stepped stone base, a tall shaft and a team-coloured crystal
-## with its own light, visible from down the lane. A faint ring on the ground
-## shows exactly how far it shoots.
+## Warden Tower: a crystal shrine. A stepped flagstone base, four corner
+## posts, a masonry shaft bound with brass, and a cradle of brass prongs
+## holding the team crystal, with a slow rune ring round it and team banners
+## on the lane faces. Footprint 4.4 m, crystal at 7 m so it reads from down
+## the lane. A faint ring on the ground shows exactly how far it shoots.
 func _build_tower() -> void:
 	var col := Palette.team_color(unit.team)
-	var stone := Palette.mat(Palette.STONE_WARM)
-	var dark := Palette.mat(Palette.STONE_DARK)
-	_part(_box(Vector3(4.0, 0.8, 4.0)), dark, Vector3(0, 0.4, 0))
-	_part(_box(Vector3(3.0, 0.8, 3.0)), stone, Vector3(0, 1.2, 0))
-	_part(_cyl(0.9, 1.2, 4.2, 8), stone, Vector3(0, 3.7, 0))
-	_part(_cyl(1.3, 1.0, 0.5, 8), dark, Vector3(0, 6.0, 0))
-	_focus_mat = Palette.glow(col, 2.5)
-	var crystal := PrismMesh.new()
-	crystal.size = Vector3(0.9, 1.6, 0.9)
-	_focus = _part(crystal, _focus_mat, Vector3(0, 7.1, 0))
+	var plaza := Art.stone("plaza", Color(0.92, 0.9, 0.86)).duplicate() as StandardMaterial3D
+	var wall := Art.stone("wall", Color(1.02, 0.96, 0.88)).duplicate() as StandardMaterial3D
+	var slate := Art.stone("slate", Color(0.8, 0.78, 0.74)).duplicate() as StandardMaterial3D
+	var brass := Palette.mat(Palette.BRASS, 0.38, 0.85)
+	var cloth := Palette.mat(col.darkened(0.35), 0.95)
+	_part(_box(Vector3(4.4, 0.45, 4.4)), slate, Vector3(0, 0.22, 0))
+	_part(_box(Vector3(3.7, 0.5, 3.7)), plaza, Vector3(0, 0.7, 0))
+	_part(_box(Vector3(2.9, 0.35, 2.9)), slate, Vector3(0, 1.12, 0))
+	for cx in [-1.55, 1.55]:
+		for cz in [-1.55, 1.55]:
+			_part(_cyl(0.2, 0.24, 1.9, 10), wall, Vector3(cx, 1.9, cz))
+			_part(_cyl(0.3, 0.26, 0.14, 10), brass, Vector3(cx, 2.9, cz))
+			_part(_sphere(0.13), brass, Vector3(cx, 3.05, cz))
+	_part(_cyl(0.78, 1.02, 4.2, 10), wall, Vector3(0, 3.4, 0))
+	for y in [1.7, 3.3, 5.35]:
+		_part(_cyl(0.9 if y < 3.0 else 0.84, 0.92 if y < 3.0 else 0.86, 0.14, 12), brass, Vector3(0, y, 0))
+	_part(_cyl(1.25, 0.85, 0.45, 10), slate, Vector3(0, 5.72, 0))
+	for i in 4:
+		var a := TAU * i / 4.0 + PI * 0.25
+		var d := Vector3(cos(a), 0, sin(a))
+		var prong := _part(_box(Vector3(0.1, 1.5, 0.16)), brass, d * 0.95 + Vector3(0, 6.55, 0))
+		prong.rotation = Vector3(0, -a, deg_to_rad(18.0))
+	# Banners on the two lane faces (the axis the tower is approached along).
+	for fz in [-1.0, 1.0]:
+		_part(_box(Vector3(1.2, 0.06, 0.06)), brass, Vector3(0, 5.2, fz * 0.98))
+		_part(_box(Vector3(1.0, 2.3, 0.04)), cloth, Vector3(0, 4.0, fz * 0.97))
+		var tail := PrismMesh.new()
+		tail.size = Vector3(1.0, 0.45, 0.04)
+		_part(tail, cloth, Vector3(0, 2.63, fz * 0.97), Vector3(0, 0, 180))
+		_part(_cyl(0.24, 0.24, 0.02, 16), brass, Vector3(0, 4.3, fz * 1.0), Vector3(90, 0, 0))
+	_focus_mat = _crystal_mat(col, 2.5)
+	_focus = _part(_octahedron(0.6, 1.0, 0.9), _focus_mat, Vector3(0, 7.15, 0))
+	_spin = _pivot_at(Vector3(0, 7.15, 0), "RuneRing")
+	var rune := MeshInstance3D.new()
+	var t := TorusMesh.new()
+	t.inner_radius = 1.05
+	t.outer_radius = 1.12
+	t.rings = 48
+	t.ring_segments = 6
+	rune.mesh = t
+	rune.material_override = Palette.glow(col, 2.2)
+	rune.rotation_degrees = Vector3(14, 0, 0)
+	rune.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_spin.add_child(rune)
+	for i in 3:
+		var a := TAU * i / 3.0
+		var mote := MeshInstance3D.new()
+		mote.mesh = _octahedron(0.09, 0.16, 0.12)
+		mote.material_override = rune.material_override
+		mote.position = Vector3(cos(a) * 1.08, 0, sin(a) * 1.08)
+		rune.add_child(mote)
 	var light := OmniLight3D.new()
 	light.light_color = col
-	light.light_energy = 2.0
-	light.omni_range = 9.0
+	light.light_energy = 2.2
+	light.omni_range = 10.0
 	light.position = Vector3(0, 7.0, 0)
-	add_child(light)
+	_body.add_child(light)
 	var ring := MeshInstance3D.new()
-	var t := TorusMesh.new()
+	var rt := TorusMesh.new()
 	var r := unit.def.basic_attack.range
-	t.inner_radius = r - 0.15
-	t.outer_radius = r
-	t.rings = 64
-	t.ring_segments = 4
-	ring.mesh = t
+	rt.inner_radius = r - 0.15
+	rt.outer_radius = r
+	rt.rings = 64
+	rt.ring_segments = 4
+	ring.mesh = rt
 	ring.scale = Vector3(1, 0.05, 1)
 	ring.position.y = 0.03 + Palette.DECAL_LIFT
 	ring.material_override = Palette.ground_decal(col, 0.35)
@@ -350,21 +394,81 @@ func _build_tower() -> void:
 	add_child(ring)
 
 
-## Oathstone: a large crystal on a dais. The end goal of the lane.
+## Oathstone: the end goal of the lane. A round dais of flagstones, a ring of
+## six standing stones, and the great team crystal floating above a brass
+## cradle with two rune rings.
 func _build_core() -> void:
 	var col := Palette.team_color(unit.team)
-	_part(_cyl(3.0, 3.4, 0.8, 10), Palette.mat(Palette.STONE_DARK), Vector3(0, 0.4, 0))
-	_part(_cyl(2.4, 2.8, 0.6, 10), Palette.mat(Palette.STONE_WARM), Vector3(0, 1.1, 0))
-	_focus_mat = Palette.glow(col, 1.8)
-	var crystal := PrismMesh.new()
-	crystal.size = Vector3(2.0, 3.6, 2.0)
-	_focus = _part(crystal, _focus_mat, Vector3(0, 3.2, 0))
+	var plaza := Art.stone("plaza", Color(0.92, 0.9, 0.86)).duplicate() as StandardMaterial3D
+	var wall := Art.stone("wall", Color(1.0, 0.95, 0.88)).duplicate() as StandardMaterial3D
+	var slate := Art.stone("slate", Color(0.8, 0.78, 0.74)).duplicate() as StandardMaterial3D
+	var brass := Palette.mat(Palette.BRASS, 0.38, 0.85)
+	_part(_cyl(3.1, 3.45, 0.5, 16), slate, Vector3(0, 0.25, 0))
+	_part(_cyl(2.55, 2.85, 0.5, 16), plaza, Vector3(0, 0.75, 0))
+	_part(_cyl(1.3, 1.5, 0.5, 12), slate, Vector3(0, 1.25, 0))
+	_part(_cyl(1.0, 1.25, 0.12, 12), brass, Vector3(0, 1.56, 0))
+	for i in 6:
+		var a := TAU * i / 6.0 + 0.3
+		var h := 2.3 + 0.35 * float(i % 2)
+		var st := _part(_box(Vector3(0.55, h, 0.4)), wall, Vector3(cos(a) * 2.75, 1.0 + h * 0.5, sin(a) * 2.75))
+		st.rotation = Vector3(0, -a, deg_to_rad(4.0 if i % 2 == 0 else -3.0))
+		_part(_box(Vector3(0.62, 0.12, 0.47)), slate, Vector3(cos(a) * 2.75, 1.06 + h, sin(a) * 2.75)).rotation.y = -a
+	_focus_mat = _crystal_mat(col, 1.8)
+	_focus = _part(_octahedron(1.05, 1.9, 1.5), _focus_mat, Vector3(0, 3.6, 0))
+	_spin = _pivot_at(Vector3(0, 3.6, 0), "RuneRing")
+	for k in 2:
+		var rune := MeshInstance3D.new()
+		var t := TorusMesh.new()
+		t.inner_radius = 1.75 + k * 0.45
+		t.outer_radius = 1.83 + k * 0.45
+		t.rings = 64
+		t.ring_segments = 6
+		rune.mesh = t
+		rune.material_override = Palette.glow(col, 2.0)
+		rune.rotation_degrees = Vector3(10 - 22 * k, 0, 8 * k)
+		rune.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_spin.add_child(rune)
 	var light := OmniLight3D.new()
 	light.light_color = col
-	light.light_energy = 2.5
+	light.light_energy = 2.6
 	light.omni_range = 12.0
 	light.position = Vector3(0, 4.0, 0)
-	add_child(light)
+	_body.add_child(light)
+
+
+## A glassy, self lit crystal: the team colour glows from inside, the faces
+## stay sharp and catch the sky.
+static func _crystal_mat(col: Color, energy: float) -> StandardMaterial3D:
+	var m := Palette.glow(col, energy * 0.7)
+	m.albedo_color = col
+	m.roughness = 0.08
+	m.metallic = 0.3
+	m.rim_enabled = true
+	m.rim = 0.6
+	m.rim_tint = 0.2
+	return m
+
+
+## A double pyramid with flat faces: `w` half width, `up` and `down` the
+## heights of the top and bottom points. Built here, faces -Z like the rest.
+static func _octahedron(w: float, up: float, down: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var top := Vector3(0, up, 0)
+	var bot := Vector3(0, -down, 0)
+	var ring: Array[Vector3] = []
+	for i in 6:
+		var a := TAU * i / 6.0
+		ring.append(Vector3(cos(a) * w, 0, sin(a) * w))
+	for i in 6:
+		var a := ring[i]
+		var b := ring[(i + 1) % 6]
+		for tri: Array in [[top, b, a], [bot, a, b]]:
+			var n: Vector3 = ((tri[1] as Vector3) - tri[0]).cross((tri[2] as Vector3) - tri[0]).normalized()
+			for v: Vector3 in tri:
+				st.set_normal(n)
+				st.add_vertex(v)
+	return st.commit()
 
 
 ## Shrinebearer: a huge shelled beast carrying a small ruined shrine on its
@@ -430,6 +534,8 @@ func _process(delta: float) -> void:
 		_focus.scale = Vector3.ONE * (1.0 + charge * 0.9)
 	if unit.def.kind != ChampionDef.Kind.STRUCTURE:
 		_pose(delta, charge)
+	elif _spin and _spin.visible:
+		_spin.rotation.y += delta * (0.5 + charge * 3.0)
 
 
 ## Locomotion, cast and death poses from public unit state. Timing comes from
