@@ -6,6 +6,12 @@ func get_command(_unit: Unit) -> UnitCommand:
 	return UnitCommand.new()
 
 
+## True: the authority also asks this controller while its champion is dead,
+## so a player can shop while waiting to respawn. Bots shop when alive only.
+func commands_while_dead() -> bool:
+	return false
+
+
 ## World direction (flat) to the move vector a command expects for a unit
 ## facing yaw: x = strafe right, y = forward.
 static func world_to_move(dir: Vector3, yaw: float) -> Vector2:

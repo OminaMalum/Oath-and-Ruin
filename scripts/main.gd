@@ -15,6 +15,7 @@ extends Node3D
 ##   --quit-after-secs=S                exit after S seconds
 ##   --champion=ID                      ruinscribe | oathwarden | ashrunner (match and court)
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
+##   --shop                             open the shop panel (screenshots)
 ##   --warp=S                           run without drawing until S seconds (needs --fixed-fps 60)
 ##   --follow=N                         spectate: follow champion N (0-2 Oath, 3-5 Ruin)
 ##   --camaudit                         spectate: measure camera obstruction and pops, print CAMAUDIT at the end
@@ -111,6 +112,7 @@ func _start_match() -> void:
 	else:
 		rig.follow_unit_yaw = true
 	rig.audit = args.has("camaudit")
+	HumanController.shop_open = args.has("shop")
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	var mh := MatchHud.new()

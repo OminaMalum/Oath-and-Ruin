@@ -14,4 +14,9 @@ func get_command(_unit: Unit) -> UnitCommand:
 	c.buttons = command.buttons
 	c.target_id = command.target_id
 	c.upgrade_choice = command.upgrade_choice
+	c.buy_item = command.buy_item
 	return c
+
+
+func commands_while_dead() -> bool:
+	return true

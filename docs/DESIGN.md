@@ -201,6 +201,33 @@ At level 3 the ability offers two upgrades. Press **1** or **2** (bots pick thro
 In the soak the same champion on each team takes opposite options and the next seed swaps them, so every pick is
 an A/B test.
 
+### Gold and the shop (added 2026-10-22)
+
+Anthony asked for last hits to pay more gold. Every number lives in `data/economy.tres` and `data/items/*.tres`.
+
+Income: 300 to start, 2 a second for everyone (dead or alive), 6 per enemy minion split among nearby champions plus
+**18 to the champion that lands the last hit** (3 times what standing near pays), Breakers 20 split plus 40 for the
+last hit, 200 for a champion kill and 75 to each nearby ally, 150 to every champion of the team per structure, and
+100 each for the Shrinebearer.
+
+Shop: press **B** at your own fountain, or while dead, then **1 to 4**. Four slots, each item once:
+
+| # | Item | Cost | Does |
+|---|---|---|---|
+| 1 | Oathbound Plate | 700 | +150 health |
+| 2 | Ember Edge | 800 | +12% damage |
+| 3 | Ash Hourglass | 750 | Q, E and R cooldowns 15% shorter (basic attacks unchanged) |
+| 4 | Wayfarer Greaves | 600 | +8% walking speed (dashes unchanged) |
+
+Buying is a field on the UnitCommand (`buy_item`), so players, bots, tests and network clients all go through the
+same check in `Unit.buy_problem()`. Bots buy their champion's `item_build` order (ChampionDef) when they stand in
+the fountain with the gold, and never walk home just to shop. Gold and items travel in the snapshot progress block
+(protocol version 2), so a network client's prediction uses the same speed bonus.
+
+Measured (24 seeds, 18 to 41, against the same seeds without gold): sides 12 to 12 both times, median match 8.5 min
+(was 8.9), range 5.5 to 14.4 min, first bot purchase at 1.1 to 2.6 min, 2.9 items per champion by the end, about
+290 gold a minute.
+
 ### Measured (headless soak, 48 seeds, after ultimates and passives)
 
 Two runs of 24 seeds. All 48 ended by a core falling, 6.5 to 14.3 min (median about 11). The objective was
@@ -241,4 +268,4 @@ Everything here is view only and reads public sim state; timing stays in the sim
 
 ## Not in this build (on purpose)
 
-Third regular abilities, items, more champions. See `docs/ROADMAP.md`.
+Third regular abilities, more champions, item recipes or actives. See `docs/ROADMAP.md`.

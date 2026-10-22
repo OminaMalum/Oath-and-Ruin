@@ -35,6 +35,8 @@ enum Passive { NONE, INSCRIBE, RESOLVE, EMBER }
 @export var passive_name: String = ""
 @export_multiline var passive_description: String = ""
 @export var passive_value: float = 0.0
+## Item ids in the order bots buy them (see data/economy.tres).
+@export var item_build: Array[StringName] = []
 
 @export_group("Presentation")
 @export var primary_color: Color = Color(0.45, 0.32, 0.22)

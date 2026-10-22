@@ -32,6 +32,9 @@ func setup(a: CombatAuthority, p: Unit, r: CameraRig, b: SparringBot) -> void:
 		if src == player and t.protectors.size() > 0:
 			notice("%s is protected by its tower" % t.def.display_name))
 	p.cast_rejected.connect(func(_slot: int, reason: String) -> void: notice(reason))
+	p.gold_earned.connect(func(g: float, at: Vector3) -> void:
+		_numbers.append({"pos": at + Vector3(0, 2.2, 0), "text": "+%d gold" % roundi(g), "t": 0.0, "gold": true, "life": 1.4}))
+	p.item_bought.connect(func(it: ItemDef) -> void: notice("Bought %s: %s" % [it.display_name, it.description]))
 
 
 ## A short message above the ability bar explaining why something did not happen.
@@ -61,7 +64,7 @@ func _process(delta: float) -> void:
 	for n in _numbers:
 		n.t += delta
 		n.pos += Vector3(0, 1.2 * delta, 0)
-	_numbers = _numbers.filter(func(n: Dictionary) -> bool: return n.t < 0.9)
+	_numbers = _numbers.filter(func(n: Dictionary) -> bool: return n.t < n.get("life", 0.9))
 	for h in _hits_taken:
 		h.t += delta
 	_hits_taken = _hits_taken.filter(func(h: Dictionary) -> bool: return h.t < 1.2)
@@ -129,7 +132,13 @@ func _draw() -> void:
 		if cam.is_position_behind(n.pos):
 			continue
 		var p := cam.unproject_position(n.pos)
-		var a: float = 1.0 - n.t / 0.9
+		var a: float = 1.0 - n.t / n.get("life", 0.9)
+		if n.get("gold", false):
+			var gc := Palette.GOLD
+			gc.a = a
+			_text(p + Vector2(-90, -40), n.text, 30, Color(0, 0, 0, 0.7 * a), HORIZONTAL_ALIGNMENT_CENTER, 182)
+			_text(p + Vector2(-92, -42), n.text, 30, gc, HORIZONTAL_ALIGNMENT_CENTER, 182)
+			continue
 		var col := Color(1, 0.9, 0.55, a) if n.enemy else Color(1, 0.45, 0.35, a)
 		_text(p + Vector2(10, -14), n.text, 26, col, HORIZONTAL_ALIGNMENT_CENTER, 100)
 
@@ -182,7 +191,17 @@ func _draw() -> void:
 			var lo := Unit.LEVEL_XP[player.level - 1]
 			var hi := Unit.LEVEL_XP[player.level]
 			_bar(Rect2(Vector2(hb.position.x + hb.size.x + 14, hb.position.y + 30), Vector2(120, 6)), (player.xp - lo) / (hi - lo), Palette.BRASS)
-	if player.upgrade_pending:
+	var shop := HumanController.shop_open and player.shop_point.is_finite() and not following
+	if player.shop_point.is_finite():
+		# Gold, right above the level, in big pale yellow digits.
+		var gr := Rect2(Vector2(c.x + 300, vs.y - 182), Vector2(170, 38))
+		draw_rect(gr, Color(0.06, 0.05, 0.04, 0.7))
+		_text(gr.position + Vector2(0, 28), "%d gold" % floori(player.gold), 26, Palette.GOLD, HORIZONTAL_ALIGNMENT_CENTER, gr.size.x)
+		if not shop and player.can_shop() and not following:
+			var tr := Rect2(Vector2(c.x + 300, vs.y - 222), Vector2(170, 34))
+			draw_rect(tr, Color(0.06, 0.05, 0.04, 0.7))
+			_text(tr.position + Vector2(0, 25), "B  shop", FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, tr.size.x)
+	if player.upgrade_pending and not shop:
 		# The upgrade offer: two big cards above the ability bar, keys 1 and 2.
 		var opts := player.upgrade_options()
 		_text(Vector2(0, vs.y - 312), "Level %d: choose an upgrade for %s" % [Unit.UPGRADE_LEVEL, player.def.get_slot(1).display_name], FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
@@ -244,8 +263,13 @@ func _draw() -> void:
 
 	if not player.alive and not following:
 		draw_rect(Rect2(Vector2.ZERO, vs), Color(0.05, 0.04, 0.04, 0.45))
-		_text(Vector2(0, vs.y * 0.42), "Defeated", 48, Color(0.95, 0.85, 0.7), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-		_text(Vector2(0, vs.y * 0.42 + 46), "Respawning in %.1f" % maxf(player.respawn_timer, 0.0), 30, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		var dy := vs.y * (0.16 if shop else 0.42)
+		_text(Vector2(0, dy), "Defeated", 48, Color(0.95, 0.85, 0.7), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, dy + 46), "Respawning in %.1f" % maxf(player.respawn_timer, 0.0), 30, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		if player.shop_point.is_finite() and not shop:
+			_text(Vector2(0, dy + 90), "Press B to shop while you wait", FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	if shop:
+		_draw_shop(vs, c)
 	if following:
 		# Spectating a bot: a small line instead of the death overlay, so the
 		# match stays in view.
@@ -271,6 +295,7 @@ func _draw() -> void:
 			("E  %s" % player.get_slot(2).display_name) if player.get_slot(2) else "",
 			("R  %s (ultimate, level %d)" % [player.get_slot(3).display_name, Unit.ULT_LEVEL]) if player.get_slot(3) else "",
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
+			"B  shop at your fountain or while dead, then 1 to 4 to buy" if player.shop_point.is_finite() else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  free the mouse",
 			("%s: %s" % [player.def.passive_name, player.def.passive_description]) if not player.def.passive_name.is_empty() else "",
@@ -283,6 +308,41 @@ func _draw() -> void:
 	# how fast frames were written offline, not how the game runs.
 	if not OS.has_feature("movie"):
 		_text(Vector2(vs.x - 260, 36), "%d fps" % Engine.get_frames_per_second(), SMALL, Color(0.8, 0.8, 0.8), HORIZONTAL_ALIGNMENT_RIGHT, 236)
+
+
+## The shop: one big row per item with its key, name, what it does and its
+## price. Owned items say so; ones you cannot afford yet are greyed with the
+## gold still needed. Away from the fountain the header says where to go.
+func _draw_shop(vs: Vector2, c: Vector2) -> void:
+	var eco := Unit.ECONOMY
+	var row_h := 54.0
+	var w := 920.0
+	var top := vs.y - 196.0 - 64.0 - row_h * eco.items.size()
+	var panel := Rect2(Vector2(c.x - w * 0.5, top), Vector2(w, 64.0 + row_h * eco.items.size() + 12.0))
+	draw_rect(panel.grow(2), Palette.BRASS)
+	draw_rect(panel, Color(0.10, 0.09, 0.08, 0.95))
+	var open := player.can_shop()
+	var head := "Shop    %d gold    %d of %d slots used" % [floori(player.gold), player.items.size(), eco.slots] if open \
+		else "The shop opens at your fountain or while you respawn"
+	_text(panel.position + Vector2(20, 42), head, 26, Palette.GOLD if open else Color(0.85, 0.82, 0.75), HORIZONTAL_ALIGNMENT_LEFT, w - 140)
+	_text(panel.position + Vector2(w - 130, 42), "B  close", FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_RIGHT, 110)
+	for i in eco.items.size():
+		var it: ItemDef = eco.items[i]
+		var r := Rect2(panel.position + Vector2(12, 60 + i * row_h), Vector2(w - 24, row_h - 8))
+		var owned := player.items.has(it)
+		var short := ceili(it.cost - player.gold)
+		var ready := open and not owned and short <= 0 and player.items.size() < eco.slots
+		draw_rect(r, Color(0.18, 0.16, 0.13, 0.95) if ready else Color(0.13, 0.12, 0.10, 0.95))
+		if ready:
+			draw_rect(Rect2(r.position, Vector2(6, r.size.y)), Palette.TEAL)
+		var main := Color(0.96, 0.93, 0.86) if not owned else Color(0.62, 0.60, 0.56)
+		if not ready and not owned:
+			main = Color(0.75, 0.72, 0.68)
+		_text(r.position + Vector2(18, 33), str(i + 1), 28, Palette.TEAL if ready else Color(0.6, 0.6, 0.58), HORIZONTAL_ALIGNMENT_LEFT, 30)
+		_text(r.position + Vector2(60, 33), it.display_name, 26, main, HORIZONTAL_ALIGNMENT_LEFT, 250)
+		_text(r.position + Vector2(310, 33), it.description, FONT_SIZE, main, HORIZONTAL_ALIGNMENT_LEFT, 380)
+		var price := "Owned" if owned else ("%d" % it.cost if short <= 0 else "%d  (need %d)" % [it.cost, short])
+		_text(r.position + Vector2(r.size.x - 200, 33), price, FONT_SIZE, Palette.GOLD if ready else main, HORIZONTAL_ALIGNMENT_RIGHT, 186)
 
 
 ## "none", "in_range", "out_of_range" or "blocked" for the basic attack,

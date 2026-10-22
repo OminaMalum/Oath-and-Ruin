@@ -16,6 +16,8 @@ const AUTUMN_DEEP := Color(0.62, 0.30, 0.12)
 const LAPIS := Color(0.16, 0.26, 0.52)
 const TEAL := Color(0.25, 0.80, 0.78)
 const AMBER := Color(1.0, 0.62, 0.20)
+## Gold counter and gold popups: a pale yellow, kept apart from the enemy amber.
+const GOLD := Color(1.0, 0.9, 0.42)
 
 ## Team colours for telegraphs and bars: allies teal, enemies amber.
 ## (Deliberately not a red and blue pair side by side.)

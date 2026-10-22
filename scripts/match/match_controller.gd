@@ -20,6 +20,7 @@ const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")
 const CASTER := preload("res://data/units/minion_caster.tres")
 const BREAKER := preload("res://data/units/minion_breaker.tres")
+const ECONOMY := Unit.ECONOMY
 const BEAST_WILD := preload("res://data/units/shrinebearer_wild.tres")
 const BEAST_TAME := preload("res://data/units/shrinebearer.tres")
 
@@ -122,12 +123,16 @@ func start() -> void:
 			champions.append(u)
 			if not (team == 0 and slot == 0 and human_slot):
 				u.controller = ChampionBot.new(authority, info, bot_seed * 100 + team * 10 + slot)
-			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0}
+			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0, "gold_earned": 0.0, "items": []}
 			u.upgraded.connect(func(_slot: int, a: AbilityDef) -> void:
 				stats.champions[u.name].upgrade = String(a.id)
 				stats.champions[u.name].upgrade_at = snappedf(authority.time, 0.1)
 				stats.events.append({"t": snappedf(authority.time, 0.1), "event": "upgrade", "unit": u.name, "pick": String(a.id)}))
 			u.leveled.connect(func(lv: int) -> void: stats.champions[u.name].level = lv)
+			u.shop_point = info.fountain(team)
+			u.gold = ECONOMY.start_gold
+			u.item_bought.connect(func(it: ItemDef) -> void:
+				stats.champions[u.name].items.append({"item": String(it.id), "t": snappedf(authority.time, 0.1)}))
 
 
 ## The player's pick goes first on their team (slot 0), the others follow.
@@ -171,6 +176,7 @@ func _physics_process(dt: float) -> void:
 		_spawn_wave()
 	for u in champions:
 		u.add_xp(XP_PER_SECOND * dt)
+		_pay(u, ECONOMY.per_second * dt)
 	for u in champions:
 		if u.alive and UnitController.flat_distance(u.global_position, info.fountain(u.team)) <= FOUNTAIN_RADIUS:
 			authority.heal(u, u.def.fountain_heal * dt)
@@ -352,15 +358,25 @@ func _on_damaged(target: Unit, amount: float, source: Unit) -> void:
 			c.damage_to_structures += amount
 
 
-## Gives `amount` to `team`'s living champions within XP_RADIUS of `at`
-## (split between them when `split`).
-func _grant_xp(team: int, at: Vector3, amount: float, split: bool, skip: Unit = null) -> void:
+## Gives `amount` xp and `gold` to `team`'s living champions within
+## XP_RADIUS of `at` (split between them when `split`).
+func _grant_xp(team: int, at: Vector3, amount: float, split: bool, skip: Unit = null, gold: float = 0.0) -> void:
 	var near: Array[Unit] = []
 	for u in champions:
 		if u.alive and u.team == team and u != skip and UnitController.flat_distance(u.global_position, at) <= XP_RADIUS:
 			near.append(u)
 	for u in near:
 		u.add_xp(amount / near.size() if split else amount)
+		_pay(u, gold / near.size() if split else gold)
+
+
+## Gold in, counted for the match stats. `at` set: the HUD shows it there.
+func _pay(u: Unit, gold: float, at: Vector3 = Vector3.INF) -> void:
+	if gold <= 0.0:
+		return
+	u.add_gold(gold, at)
+	if stats.champions.has(u.name):
+		stats.champions[u.name].gold_earned += gold
 
 
 func _on_died(target: Unit, killer: Unit) -> void:
@@ -372,19 +388,24 @@ func _on_died(target: Unit, killer: Unit) -> void:
 		ChampionDef.Kind.CHAMPION:
 			if killer and is_instance_valid(killer) and killer.def.kind == ChampionDef.Kind.CHAMPION:
 				killer.add_xp(XP_KILL)
-			_grant_xp(1 - target.team, at, XP_ASSIST, false, killer)
+				_pay(killer, ECONOMY.kill, at)
+			_grant_xp(1 - target.team, at, XP_ASSIST, false, killer, ECONOMY.assist)
 		ChampionDef.Kind.MINION:
 			if target.team < 2:
-				_grant_xp(1 - target.team, at, XP_BREAKER if target.def.look == ChampionDef.Look.BREAKER else XP_MINION, true)
+				var big := target.def.look == ChampionDef.Look.BREAKER
+				_grant_xp(1 - target.team, at, XP_BREAKER if big else XP_MINION, true, null,
+						ECONOMY.breaker_share if big else ECONOMY.minion_share)
 				if killer and is_instance_valid(killer) and killer.def.kind == ChampionDef.Kind.CHAMPION:
 					killer.add_xp(XP_LAST_HIT)  # the last hit is worth going for
+					_pay(killer, ECONOMY.breaker_last_hit if big else ECONOMY.last_hit, at)
 		ChampionDef.Kind.NEUTRAL:
 			if killer and is_instance_valid(killer) and killer.team < 2:
-				_grant_xp(killer.team, at, XP_BEAST, false)
+				_grant_xp(killer.team, at, XP_BEAST, false, null, ECONOMY.beast)
 		ChampionDef.Kind.STRUCTURE:
 			for u in champions:
 				if u.team == 1 - target.team:
 					u.add_xp(XP_STRUCTURE)
+					_pay(u, ECONOMY.structure)
 	match target.def.kind:
 		ChampionDef.Kind.CHAMPION:
 			# Respawns grow with match time: 6 s, plus 2 s per minute, at most 20 s.

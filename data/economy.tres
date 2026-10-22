@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EconomyDef" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/economy_def.gd" id="1_econ"]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="6_item"]
+[ext_resource type="Resource" path="res://data/items/oathbound_plate.tres" id="2_plate"]
+[ext_resource type="Resource" path="res://data/items/ember_edge.tres" id="3_edge"]
+[ext_resource type="Resource" path="res://data/items/ash_hourglass.tres" id="4_glass"]
+[ext_resource type="Resource" path="res://data/items/wayfarer_greaves.tres" id="5_greaves"]
+
+[resource]
+script = ExtResource("1_econ")
+items = Array[ExtResource("6_item")]([ExtResource("2_plate"), ExtResource("3_edge"), ExtResource("4_glass"), ExtResource("5_greaves")])

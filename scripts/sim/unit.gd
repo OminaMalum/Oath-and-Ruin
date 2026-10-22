@@ -45,6 +45,20 @@ var dash_hit: Array[Unit] = []
 ## Last flat move direction from the command, in world space (dash aim).
 var move_dir: Vector3 = Vector3.ZERO
 
+## Gold and items. The match pays gold in; buy_item() is the only way out.
+const ECONOMY := preload("res://data/economy.tres")
+## Gold that came with a place to show it (last hit, kill): the HUD pops it up.
+signal gold_earned(amount: float, at: Vector3)
+signal item_bought(item: ItemDef)
+var gold: float = 0.0
+var items: Array[ItemDef] = []
+## Own fountain; buying works within ECONOMY.shop_radius of it, or while dead.
+## INF: this unit has no shop (training, minions).
+var shop_point: Vector3 = Vector3.INF
+## From items: multiplies ability cooldowns (Q, E, R) and walking speed.
+var cooldown_mult: float = 1.0
+var speed_mult: float = 1.0
+
 ## Progression (match rules feed xp; the unit applies levels and the pick).
 const LEVEL_XP: Array[float] = [0.0, 220.0, 500.0, 850.0, 1300.0]  # xp to reach levels 1..5
 const HEALTH_PER_LEVEL := 0.07
@@ -129,14 +143,96 @@ func add_xp(amount: float) -> void:
 	xp += amount
 	while level < LEVEL_XP.size() and xp >= LEVEL_XP[level]:
 		level += 1
-		var frac := health / max_health
-		max_health = def.max_health * (1.0 + HEALTH_PER_LEVEL * (level - 1))
-		damage_mult = 1.0 + DAMAGE_PER_LEVEL * (level - 1)
-		if alive:
-			health = max_health * frac
+		recompute_stats()
 		if level == UPGRADE_LEVEL and upgrade_options().size() == 2:
 			upgrade_pending = true
 		leveled.emit(level)
+
+
+## Level and item bonuses to max health, damage, cooldowns and speed. Health
+## keeps its fraction, so a level or an item never heals or hurts.
+func recompute_stats(set_max_health: bool = true) -> void:
+	var hp := 0.0
+	var dmg := 0.0
+	var cdr := 0.0
+	var spd := 0.0
+	for it in items:
+		hp += it.health
+		dmg += it.damage
+		cdr += it.cooldown
+		spd += it.move_speed
+	damage_mult = (1.0 + DAMAGE_PER_LEVEL * (level - 1)) * (1.0 + dmg)
+	cooldown_mult = clampf(1.0 - cdr, 0.4, 1.0)
+	speed_mult = 1.0 + spd
+	if set_max_health:
+		var frac := health / max_health if max_health > 0.0 else 1.0
+		max_health = def.max_health * (1.0 + HEALTH_PER_LEVEL * (level - 1)) + hp
+		if alive:
+			health = max_health * frac
+
+
+func add_gold(amount: float, at: Vector3 = Vector3.INF) -> void:
+	if def.kind != ChampionDef.Kind.CHAMPION or amount <= 0.0:
+		return
+	gold += amount
+	if at.is_finite():
+		gold_earned.emit(amount, at)
+
+
+func can_shop() -> bool:
+	if not shop_point.is_finite():
+		return false
+	return not alive or _flat_distance_to(shop_point) <= ECONOMY.shop_radius
+
+
+## Why item `index` (1-based, ECONOMY.items) cannot be bought now; "" if it can.
+func buy_problem(index: int) -> String:
+	if index < 1 or index > ECONOMY.items.size():
+		return "No such item"
+	var it: ItemDef = ECONOMY.items[index - 1]
+	if items.has(it):
+		return "You already own %s" % it.display_name
+	if items.size() >= ECONOMY.slots:
+		return "Your item slots are full"
+	if not can_shop():
+		return "The shop opens at your fountain or while you wait to respawn"
+	if gold < it.cost:
+		return "%s needs %d more gold" % [it.display_name, ceili(it.cost - gold)]
+	return ""
+
+
+func buy_item(index: int) -> bool:
+	var problem := buy_problem(index)
+	if not problem.is_empty():
+		cast_rejected.emit(-1, problem)
+		return false
+	var it: ItemDef = ECONOMY.items[index - 1]
+	gold -= it.cost
+	items.append(it)
+	recompute_stats()
+	item_bought.emit(it)
+	return true
+
+
+## Network: the item list as one bit per ECONOMY.items index.
+func item_mask() -> int:
+	var m := 0
+	for it in items:
+		var i := ECONOMY.items.find(it)
+		if i >= 0:
+			m |= 1 << i
+	return m
+
+
+func set_item_mask(m: int) -> void:
+	items.clear()
+	for i in ECONOMY.items.size():
+		if m & (1 << i):
+			items.append(ECONOMY.items[i])
+
+
+func _flat_distance_to(p: Vector3) -> float:
+	return Vector2(global_position.x - p.x, global_position.z - p.z).length()
 
 
 func choose_upgrade(option: int) -> void:
@@ -160,11 +256,16 @@ func cooldown_fraction(slot: int) -> float:
 	var a := get_slot(slot)
 	if a == null or a.cooldown <= 0.0:
 		return 0.0
-	return clampf(cooldowns[slot] / a.cooldown, 0.0, 1.0)
+	return clampf(cooldowns[slot] / cooldown_for(slot, a), 0.0, 1.0)
+
+
+## The cooldown a cast from `slot` starts: items shorten abilities, not basics.
+func cooldown_for(slot: int, a: AbilityDef) -> float:
+	return a.cooldown * (cooldown_mult if slot > 0 else 1.0)
 
 
 func current_move_speed() -> float:
-	var speed := def.move_speed * (1.0 - slow_amount)
+	var speed := def.move_speed * speed_mult * (1.0 - slow_amount)
 	if is_casting():
 		var a := cast_ability()
 		speed *= a.move_mult_while_casting if a else 1.0
@@ -181,6 +282,8 @@ func muzzle_position() -> Vector3:
 
 
 func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
+	if cmd.buy_item > 0:
+		buy_item(cmd.buy_item)  # dead champions can shop too
 	if not alive:
 		return
 	for i in cooldowns.size():
@@ -218,7 +321,7 @@ func step_motion(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> voi
 	var dir := Vector3(cmd.move.x, 0.0, -cmd.move.y).limit_length(1.0).rotated(Vector3.UP, aim_yaw)
 	move_dir = dir
 	var speed := current_move_speed()
-	var top_speed := def.move_speed
+	var top_speed := def.move_speed * speed_mult
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	if dash_timer > 0.0:
@@ -284,7 +387,7 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 			cast_slot = buffered_slot
 			cast_phase = CastPhase.WINDUP
 			cast_timer = a.cast_time
-			cooldowns[buffered_slot] = a.cooldown
+			cooldowns[buffered_slot] = cooldown_for(buffered_slot, a)
 			buffered_slot = -1
 		elif a == null or cooldowns[buffered_slot] > buffer_timer:
 			buffered_slot = -1
@@ -341,7 +444,7 @@ func _try_start_cast(slot: int, cmd: UnitCommand, authority: CombatAuthority) ->
 	cast_timer = a.cast_time
 	# Cooldown runs from the moment the cast commits, so "cooldown 0.85"
 	# means one attack every 0.85 s when held.
-	cooldowns[slot] = a.cooldown
+	cooldowns[slot] = cooldown_for(slot, a)
 	cast_target = clamp_target(a, aim_point)
 	cast_started.emit(slot, a, cast_target)
 

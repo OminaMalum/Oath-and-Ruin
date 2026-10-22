@@ -72,3 +72,7 @@ func get_command(unit: Unit) -> UnitCommand:
 	again.buttons = latest.buttons & UnitCommand.BTN_ATTACK
 	again.target_id = latest.target_id
 	return again
+
+
+func commands_while_dead() -> bool:
+	return true

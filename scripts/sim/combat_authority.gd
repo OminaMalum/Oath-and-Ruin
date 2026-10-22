@@ -102,6 +102,8 @@ func step(dt: float) -> void:
 			var cmd: UnitCommand = u.controller.get_command(u) if u.controller else UnitCommand.new()
 			u.sim_step(cmd, dt, self)
 		elif u.def.respawn_time >= 0.0:
+			if u.controller and u.controller.commands_while_dead():
+				u.sim_step(u.controller.get_command(u), dt, self)  # only shopping applies
 			u.respawn_timer -= dt
 			if u.respawn_timer <= 0.0:
 				u.respawn()

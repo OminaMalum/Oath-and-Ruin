@@ -39,6 +39,7 @@ func _run() -> void:
 		"test_second_slot_and_pierce", "test_stun", "test_knife_slow",
 		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
 		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember", "test_last_hit_xp",
+		"test_gold_and_shop", "test_items_change_stats", "test_bots_buy_items",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
 	]
@@ -862,6 +863,110 @@ func test_last_hit_xp() -> void:
 	check(is_equal_approx(ally.xp - a0, share), "a nearby ally gets its share of the minion (%.1f)" % (ally.xp - a0))
 	check(is_equal_approx(killer.xp - k0, share + MatchController.XP_LAST_HIT), "the last hit pays %.0f on top (%.1f)" % [MatchController.XP_LAST_HIT, killer.xp - k0])
 	authority.auto_step = true
+
+
+func test_gold_and_shop() -> void:
+	var eco := Unit.ECONOMY
+	var mc := _match()
+	await ticks(2)
+	var killer: Unit = mc.champions[0]
+	var ally: Unit = mc.champions[1]
+	check(absf(killer.gold - eco.start_gold) < 1.0, "champions start with %d gold" % eco.start_gold)
+	var minion := spawn(MELEE, 1, killer.global_position + Vector3(0, 0, -2))
+	await ticks(1)
+	var k0 := killer.gold
+	var a0 := ally.gold
+	var popups := []
+	killer.gold_earned.connect(func(g: float, _at: Vector3) -> void: popups.append(g))
+	authority.apply_damage(killer, minion, 99999.0, killer.def.basic_attack)
+	var share := eco.minion_share / 3.0
+	check(is_equal_approx(ally.gold - a0, share), "a nearby ally gets its gold share of the minion (%.1f)" % (ally.gold - a0))
+	check(is_equal_approx(killer.gold - k0, share + eco.last_hit), "the last hit pays %.0f gold on top (%.1f)" % [eco.last_hit, killer.gold - k0])
+	check(popups == [eco.last_hit], "the last hit gold is shown to the player")
+	check(eco.last_hit >= 2.0 * eco.minion_share, "last hits pay much more than standing near")
+	await secs(1.0)
+	check(ally.gold - a0 > share + eco.per_second * 0.9, "gold trickles in over time")
+
+	# Buying: at the fountain, with enough gold, through the command.
+	var plate: ItemDef = eco.items[0]
+	killer.gold = plate.cost - 1.0
+	var notes := []
+	killer.cast_rejected.connect(func(_s: int, r: String) -> void: notes.append(r))
+	(killer.controller as ScriptedController).command.buy_item = 1
+	await ticks(1)
+	check(killer.items.is_empty() and notes.size() > 0 and "more gold" in notes[-1], "not enough gold: nothing bought, with a reason")
+	killer.gold = plate.cost + 50.0
+	await ticks(1)
+	check(killer.items == [plate] and absf(killer.gold - 50.0) < 1.0, "bought %s for %d gold" % [plate.display_name, plate.cost])
+	await ticks(1)
+	check(killer.items.size() == 1, "the same item cannot be bought twice")
+	(killer.controller as ScriptedController).command.buy_item = 0
+	killer.gold = 5000.0
+	killer.global_position = Vector3(0, 0, 0)
+	(killer.controller as ScriptedController).command.buy_item = 2
+	await ticks(1)
+	check(killer.items.size() == 1, "no buying away from the fountain")
+	authority.apply_damage(ally, killer, 99999.0, SCRIBE.basic_attack)  # a friendly hit does nothing
+	authority.apply_damage(mc.champions[3], killer, 99999.0, SCRIBE.basic_attack)
+	await ticks(1)
+	check(not killer.alive and killer.items.size() == 2, "a dead champion can shop while waiting")
+	(killer.controller as ScriptedController).command.buy_item = 0
+	check(mc.stats.champions[killer.name].items.size() == 2, "purchases go into the match stats")
+	check(mc.champions[3].gold > 0.0 and mc.stats.champions[mc.champions[3].name].gold_earned >= eco.kill, "a champion kill pays %d" % eco.kill)
+	var d := UnitCommand.from_dict({"i": 99})
+	check(d.buy_item == 0, "a bad item number from the network is dropped")
+	check(UnitCommand.from_dict({"i": 3}).buy_item == 3, "a good one survives")
+
+
+func test_items_change_stats() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	await ticks(2)
+	var eco := Unit.ECONOMY
+	var hp0 := me.max_health
+	var by_id := {}
+	for it: ItemDef in eco.items:
+		by_id[it.id] = it
+	check(by_id.size() == 4, "four items in the shop")
+	me.items.append(by_id[&"oathbound_plate"])
+	me.items.append(by_id[&"ember_edge"])
+	me.items.append(by_id[&"ash_hourglass"])
+	me.items.append(by_id[&"wayfarer_greaves"])
+	me.recompute_stats()
+	check(is_equal_approx(me.max_health, hp0 + 150.0), "plate adds 150 health")
+	check(is_equal_approx(me.damage_mult, 1.12), "edge adds 12% damage")
+	check(is_equal_approx(me.current_move_speed(), SCRIBE.move_speed * 1.08), "greaves add 8% speed")
+	check(is_equal_approx(me.cooldown_for(1, me.get_slot(1)), me.get_slot(1).cooldown * 0.85), "hourglass: Q 15% shorter")
+	check(is_equal_approx(me.cooldown_for(0, me.get_slot(0)), me.get_slot(0).cooldown), "basic attacks unchanged")
+	var start := me.global_position
+	cmd(me).move = Vector2(0, 1)
+	await secs(1.0)
+	var walked := UnitController.flat_distance(start, me.global_position)
+	check(walked > SCRIBE.move_speed * 1.03, "walks faster with greaves (%.2f m in 1 s)" % walked)
+	# Network: gold and items survive a snapshot and set the client's stats.
+	me.gold = 1234.0
+	var s: Array = SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([me]))).units[me.net_id]
+	var twin := Unit.new()
+	twin.def = SCRIBE
+	world.add_child(twin)
+	twin.collision_layer = 0
+	SnapshotCodec.apply(twin, s)
+	check(twin.items.size() == 4 and is_equal_approx(twin.gold, 1234.0), "items and gold reach the client")
+	check(is_equal_approx(twin.speed_mult, 1.08) and is_equal_approx(twin.max_health, me.max_health), "client stats match the server")
+	twin.queue_free()
+
+
+func test_bots_buy_items() -> void:
+	var mc := MatchController.new()
+	mc.human_slot = false
+	world.add_child(mc)
+	mc.setup(authority, world)
+	mc.start()
+	await ticks(2)
+	for c in mc.champions:
+		c.gold = 5000.0
+	await secs(0.5)
+	for c in mc.champions:
+		check(c.items.size() >= 1 and c.items[0].id == c.def.item_build[0], "%s bot buys its first item (%s)" % [c.name, c.items[0].id if c.items.size() > 0 else "none"])
 
 
 # --- Networking: prediction, snapshots, command queue ------------------------

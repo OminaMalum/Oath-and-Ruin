@@ -111,6 +111,7 @@ func _decide(unit: Unit) -> UnitCommand:
 	c.aim_yaw = unit.aim_yaw
 	if unit.upgrade_pending:
 		c.upgrade_choice = upgrade_pick  # the same path a player's 1 or 2 key takes
+	c.buy_item = _next_buy(unit)
 	var pos := unit.global_position
 	var hp := unit.health / unit.max_health
 	var fountain := match_info.fountain(unit.team)
@@ -514,3 +515,20 @@ func _clump(unit: Unit, at: Vector3, radius: float) -> int:
 		if u.alive and authority.are_enemies(unit, u) and flat_distance(at, u.global_position) <= radius + u.def.radius:
 			n += 1
 	return n
+
+
+## The next item in the champion's build order, as a shop number, once the
+## bot stands in its fountain with the gold for it; 0 otherwise. It waits
+## for the next item instead of skipping to a cheaper one.
+func _next_buy(unit: Unit) -> int:
+	if not unit.can_shop():
+		return 0
+	for id in unit.def.item_build:
+		var i := -1
+		for n in Unit.ECONOMY.items.size():
+			if Unit.ECONOMY.items[n].id == id:
+				i = n
+		if i < 0 or unit.items.has(Unit.ECONOMY.items[i]):
+			continue
+		return i + 1 if unit.buy_problem(i + 1).is_empty() else 0
+	return 0

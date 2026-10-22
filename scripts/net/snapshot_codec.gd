@@ -14,14 +14,14 @@ extends RefCounted
 ##           u16 health, then each block present in `blocks`, in bit order.
 ## Decoding gives the same per-unit Array the client used before (see FIELDS).
 
-const VERSION := 1
+const VERSION := 2
 ## Packet budget: ENet's default MTU in Godot 4.7.2 (thirdparty/enet/enet.h,
 ## ENET_HOST_DEFAULT_MTU). Godot warns above it for unreliable sends.
 const MTU := 1392
 
 ## Indices of the decoded per-unit Array.
 enum { POS, YAW, HEALTH, ALIVE, PHASE, SLOT, CAST_TIMER, CAST_TARGET, COOLDOWNS, SLOW, SLOW_TIMER,
-	RESPAWN, STUN, DASH_TIMER, DASH_VEL, LEVEL, UPGRADE, MAX_HEALTH, FIELD_COUNT }
+	RESPAWN, STUN, DASH_TIMER, DASH_VEL, LEVEL, UPGRADE, MAX_HEALTH, GOLD, ITEMS, FIELD_COUNT }
 
 const F_ALIVE := 1
 ## Bits 1-2: cast phase. Bits 3-4: upgrade option picked for slot 1 (0 none).
@@ -32,7 +32,7 @@ const B_SLOW := 4        # u8 amount /255, u16 timer
 const B_RESPAWN := 8     # u16 timer
 const B_STUN := 16       # u16 timer
 const B_DASH := 32       # u16 timer, s16 x2 velocity cm/s
-const B_PROGRESS := 64   # u8 level, u16 max health
+const B_PROGRESS := 64   # u8 level, u16 max health, u16 gold, u8 item bits
 
 ## Timers are u16 in 1/600 s, rounded up: ten steps per 60 Hz tick, so a
 ## timer ends on the same tick on both sides, and up to 109 s.
@@ -123,6 +123,8 @@ static func encode_units(units: Array[Unit]) -> PackedByteArray:
 		if blocks & B_PROGRESS:
 			b.put_u8(clampi(u.level, 0, 255))
 			b.put_u16(_u16(u.max_health))
+			b.put_u16(clampi(floori(u.gold), 0, 65535))
+			b.put_u8(u.item_mask() & 255)
 	return b.data_array
 
 
@@ -172,6 +174,8 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 		s[DASH_VEL] = Vector3.ZERO
 		s[LEVEL] = -1
 		s[MAX_HEALTH] = -1.0
+		s[GOLD] = -1.0
+		s[ITEMS] = -1
 		if b.get_available_bytes() < _blocks_size(blocks):
 			return {}
 		if blocks & B_CAST:
@@ -200,6 +204,8 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 		if blocks & B_PROGRESS:
 			s[LEVEL] = b.get_u8()
 			s[MAX_HEALTH] = float(b.get_u16())
+			s[GOLD] = float(b.get_u16())
+			s[ITEMS] = b.get_u8()
 		units[id] = s
 	return {"tick": tick, "ack": ack, "units": units}
 
@@ -213,7 +219,7 @@ static func _blocks_size(blocks: int) -> int:
 	n += 2 if blocks & B_RESPAWN else 0
 	n += 2 if blocks & B_STUN else 0
 	n += 6 if blocks & B_DASH else 0
-	n += 3 if blocks & B_PROGRESS else 0
+	n += 6 if blocks & B_PROGRESS else 0
 	return n
 
 
@@ -237,7 +243,10 @@ static func apply(u: Unit, s: Array) -> void:
 	u.dash_velocity = s[DASH_VEL]
 	if s[LEVEL] >= 0:
 		u.level = s[LEVEL]
-		u.damage_mult = 1.0 + Unit.DAMAGE_PER_LEVEL * (u.level - 1)
+		if s[ITEMS] >= 0:
+			u.set_item_mask(s[ITEMS])
+		u.gold = maxf(s[GOLD], 0.0)
+		u.recompute_stats(false)  # damage, cooldown and speed; max health comes next
 	if s[MAX_HEALTH] > 0.0:
 		u.max_health = s[MAX_HEALTH]
 	var opts := u.upgrade_options()
