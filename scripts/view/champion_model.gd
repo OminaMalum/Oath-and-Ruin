@@ -30,7 +30,6 @@ const LOOKS := {
 	"Bone": ["", Color(0.84, 0.79, 0.66), 0.6, 0.0, 1.0],
 	"Fur": ["poly_wool_herringbone", Color(0.42, 0.36, 0.3), 1.0, 0.0, 4.0],
 	"Feather": ["", Color(0.22, 0.2, 0.18), 0.8, 0.0, 1.0],
-	"Glass": ["", Color(1.0, 0.9, 0.7), 0.1, 0.0, 1.0],
 }
 const SETS := {
 	"poly_wool_herringbone": "poly_wool_herringbone", "brown_leather": "brown_leather", "hessian_230": "hessian_230",
@@ -64,6 +63,8 @@ static func dress(root: Node, team: int, accent: Color, primary := Color(0.4, 0.
 				m = glow
 			elif nm == "Eyes":
 				m = eyes
+			elif nm == "Glass":
+				m = Palette.glow(accent.lightened(0.45), 0.8)
 			elif LOOKS.has(nm):
 				m = _make(LOOKS[nm], team_col if nm == "Team" else (primary if nm.begins_with("Robe") and nm != "RobeInner" else Color.WHITE))
 			else:

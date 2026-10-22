@@ -1,0 +1,10 @@
+{
+  "fps": 30.0,
+  "release": {
+    "ability_1": 0.3,
+    "ability_2": 0.2667,
+    "ability_3": 0.3,
+    "attack": 0.1333
+  },
+  "source": "lanternkeeper.blend"
+}
