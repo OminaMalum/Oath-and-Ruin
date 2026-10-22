@@ -183,7 +183,7 @@ func _draw() -> void:
 	var hb := Rect2(Vector2(c.x - 220, vs.y - 128), Vector2(440, 26))
 	draw_rect(Rect2(Vector2(c.x - 470, vs.y - 140), Vector2(940, 128)), Color(0.06, 0.05, 0.04, 0.55))
 	_bar(hb, player.health / player.max_health, Palette.SELF_HEALTH)
-	_text(Vector2(hb.position.x, hb.position.y + 22), "%d / %d" % [ceili(player.health), roundi(player.max_health)], 24, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	_text(Vector2(hb.position.x, hb.position.y + 22), "%d / %d" % [ceili(player.health), ceili(player.max_health)], 24, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	_text(Vector2(hb.position.x - 230, hb.position.y + 21), player.def.display_name, FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_RIGHT, 220)
 	if player.xp > 0.0 or player.level > 1:
 		# Level and progress to the next one, right of the health bar.
