@@ -1,0 +1,10 @@
+{
+  "fps": 30.0,
+  "release": {
+    "ability_1": 0.8667,
+    "ability_2": 0.2667,
+    "ability_3": 0.3333,
+    "attack": 0.2
+  },
+  "source": "thornwright.blend"
+}
