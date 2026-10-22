@@ -639,7 +639,9 @@ func _process(delta: float) -> void:
 	if absf(_alpha - want_a) > 0.001:
 		_alpha = move_toward(_alpha, want_a, delta * 5.0)
 		for m in _materials:
-			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if _alpha < 0.999 else BaseMaterial3D.TRANSPARENCY_DISABLED
+			# Depth pre-pass keeps the faded parts sorted against each other, so
+			# a tower seen through does not flicker part over part.
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS if _alpha < 0.999 else BaseMaterial3D.TRANSPARENCY_DISABLED
 			m.albedo_color.a = _alpha
 	# Hit flash: brief warm white on every part.
 	_flash = maxf(0.0, _flash - delta * 6.0)

@@ -131,7 +131,7 @@ func _lanterns() -> void:
 			var a := MeshInstance3D.new()
 			a.mesh = arm
 			a.material_override = iron
-			a.position = Vector3(x - side * 0.28, 2.45, z)
+			a.position = Vector3(x - side * 0.28, 2.56, z)  # clear of the buttress caps (top 2.48)
 			_root.add_child(a)
 			var lantern := _p("wooden_lantern_01", "wooden_lantern_01", Vector3(x - side * 0.52, 1.85, z), 0.0, 1.1, false)
 			_p("wooden_lantern_01", "wooden_lantern_01_handle", Vector3(x - side * 0.52, 1.85 + 0.35 * 1.1, z), 0.0, 1.1, false)

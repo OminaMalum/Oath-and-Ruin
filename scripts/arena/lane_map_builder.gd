@@ -23,6 +23,7 @@ var _rng := RandomNumberGenerator.new()
 var _drng := RandomNumberGenerator.new()  # dressing only, so the wall layout never moves
 var _slate: StandardMaterial3D
 var _plinth: StandardMaterial3D
+var _wall_boxes: Array[AABB] = []
 
 
 func _ready() -> void:
@@ -60,16 +61,45 @@ func _environment() -> void:
 ## course at its foot, so the walls read as built masonry, not boxes.
 func _wall(size: Vector3, pos: Vector3, m: Material) -> StaticBody3D:
 	var body := _static_box(size, pos, m)
+	# Where walls meet at corners their outer faces lie in one plane and,
+	# with different stone tints, z-fought. Each block's visible mesh (not
+	# its collision) is grown by its own few millimetres, so no two coincide.
+	var vis := _wall_grow(size, pos)
+	for mi in body.find_children("*", "MeshInstance3D", false, false):
+		((mi as MeshInstance3D).mesh as BoxMesh).size = vis
 	var top := pos.y + size.y * 0.5
 	var over := _drng.randf_range(0.10, 0.18)
 	_deco(_box_mesh(Vector3(size.x + over * 2.0, 0.26, size.z + over * 2.0)), _slate,
-		Vector3(pos.x, top + 0.11, pos.z), Vector3.ONE, Vector3(0, _drng.randf_range(-0.6, 0.6), 0))
-	# The plinth widens only across the wall, so neighbouring plinths never
-	# share a face; its height varies a little so tops never line up either.
-	var thick := Vector3(0.16, 0.0, 0.0) if size.x <= size.z else Vector3(0.0, 0.0, 0.16)
+		Vector3(pos.x, top + 0.11 + 0.006 * (_wall_boxes.size() % 4), pos.z), Vector3.ONE, Vector3(0, _drng.randf_range(-0.6, 0.6), 0))
+	# The plinth stands proud of the wall on every side, so none of its faces
+	# lies in a wall face (that z-fought at every wall end). Where two plinths
+	# overlap they share one material and one world-space texture, so the
+	# overlap cannot flicker; heights vary so their tops never line up.
+	var thick := Vector3(0.16, 0.0, 0.16)
 	var ph := _drng.randf_range(0.45, 0.62)
 	_deco(_box_mesh(Vector3(size.x, ph, size.z) + thick), _plinth, Vector3(pos.x, ph * 0.5 - 0.04, pos.z))
 	return body
+
+
+## Picks the smallest growth (4 to 22 mm a side) that keeps every side face
+## at least 3 mm from the side faces of the walls already placed.
+func _wall_grow(size: Vector3, pos: Vector3) -> Vector3:
+	var grow := 0.004
+	while grow < 0.022:
+		var g := Vector3(grow, 0.0, grow) * 2.0
+		var box := AABB(pos - (size + g) * 0.5, size + g)
+		var ok := true
+		for o in _wall_boxes:
+			if not box.grow(0.01).intersects(o):
+				continue
+			for k: int in [0, 2]:
+				if absf(box.position[k] - o.position[k]) < 0.003 or absf(box.end[k] - o.end[k]) < 0.003:
+					ok = false
+		if ok:
+			_wall_boxes.append(box)
+			return size + g
+		grow += 0.0035
+	return size + Vector3(grow, 0.0, grow) * 2.0
 
 
 static func _box_mesh(size: Vector3) -> BoxMesh:

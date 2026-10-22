@@ -99,6 +99,14 @@ static func mesh(model: String, part := "") -> Mesh:
 		if part.is_empty() or mi.name == part:
 			found = (mi as MeshInstance3D).mesh
 			break
+	# Leaf cards are alpha scissored; without coverage their edges crawl and
+	# sparkle as the camera moves. Alpha to coverage smooths them under MSAA.
+	if found:
+		for i in found.get_surface_count():
+			var m := found.surface_get_material(i) as BaseMaterial3D
+			if m and m.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR:
+				m.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE_AND_TO_ONE
+				m.alpha_antialiasing_edge = 0.3
 	root.free()
 	_cache[key] = found
 	return found
