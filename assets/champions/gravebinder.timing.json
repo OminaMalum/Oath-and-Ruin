@@ -1,0 +1,10 @@
+{
+  "fps": 30.0,
+  "release": {
+    "ability_1": 0.3,
+    "ability_2": 0.3,
+    "ability_3": 0.3333,
+    "attack": 0.1667
+  },
+  "source": "gravebinder.blend"
+}
