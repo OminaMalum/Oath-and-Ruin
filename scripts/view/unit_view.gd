@@ -78,6 +78,12 @@ func _build_placeholder() -> void:
 			_build_warden()
 		ChampionDef.Look.SKIRMISHER:
 			_build_skirmisher()
+		ChampionDef.Look.CLERIC:
+			_build_cleric()
+		ChampionDef.Look.RANGER:
+			_build_ranger()
+		ChampionDef.Look.WARLOCK:
+			_build_warlock()
 		ChampionDef.Look.TRAINING_DUMMY:
 			_build_dummy()
 		ChampionDef.Look.MINION_MELEE:
@@ -406,6 +412,117 @@ func _build_skirmisher() -> void:
 	_focus_mat = Palette.glow(unit.def.accent_color, 1.0)
 	_focus = _part(_sphere(0.05), _focus_mat, Vector3(0, 1.36, -0.13))  # clasp
 	_team_ring(0.55)
+
+
+## The held arm for the batch B champions: a pivot at the right shoulder
+## that the cast pose swings forward, like the Ruinscribe's staff arm.
+func _shoulder_arm(at: Vector3, sleeve: StandardMaterial3D) -> Node3D:
+	_arm = Node3D.new()
+	_arm.name = "Arm"
+	_arm.position = at
+	_body.add_child(_arm)
+	var upper := _part(_cyl(0.07, 0.08, 0.5), sleeve, at + Vector3(0.04, -0.22, -0.12), Vector3(60, 0, -10))
+	_attach(upper, _arm)
+	return _arm
+
+
+## Lanternkeeper: a broad pale robe, a team-coloured stole, a prayer book at
+## the hip and a lantern hung from a short crook held out in front. The lit
+## lantern is the silhouette: find the light, find the healer.
+func _build_cleric() -> void:
+	var robe := Palette.mat(unit.def.primary_color)
+	var leather := Palette.mat(Palette.LEATHER_DARK)
+	var wood := Palette.mat(Palette.WOOD)
+	var brass := Palette.mat(Palette.BRASS, 0.45, 0.8)
+	var skin := Palette.mat(Color(0.74, 0.58, 0.46))
+	var team := _team_mat()
+	_skirt = _part(_cyl(0.28, 0.50, 1.0), robe, Vector3(0, 0.5, 0))
+	_part(_cyl(0.22, 0.28, 0.55), robe, Vector3(0, 1.27, 0))                    # torso
+	_part(_box(Vector3(0.14, 0.9, 0.05)), team, Vector3(0.1, 1.15, -0.27))     # stole, two bands
+	_part(_box(Vector3(0.14, 0.9, 0.05)), team, Vector3(-0.1, 1.15, -0.27))
+	_part(_cyl(0.30, 0.50, 0.10), team, Vector3(0, 0.08, 0))                    # hem band
+	_part(_box(Vector3(0.56, 0.08, 0.32)), leather, Vector3(0, 1.02, 0))        # belt
+	_part(_box(Vector3(0.20, 0.26, 0.08)), Palette.mat(Color(0.42, 0.18, 0.12)), Vector3(-0.34, 0.95, -0.02))  # book
+	_part(_sphere(0.14), skin, Vector3(0, 1.70, -0.02))                         # face
+	_part(_cyl(0.17, 0.22, 0.22), robe, Vector3(0, 1.78, 0.04))                 # cowl
+	_part(_cyl(0.32, 0.32, 0.03, 16), robe, Vector3(0, 1.88, 0.02))             # brim
+	_shoulder_arm(Vector3(0.28, 1.48, 0.0), robe)
+	_attach(_part(_cyl(0.025, 0.03, 1.3), wood, Vector3(0.36, 1.25, -0.42)), _arm)                 # crook pole
+	_attach(_part(_box(Vector3(0.03, 0.03, 0.32)), wood, Vector3(0.36, 1.88, -0.56)), _arm)       # crook arm
+	_attach(_part(_box(Vector3(0.20, 0.03, 0.20)), brass, Vector3(0.36, 1.78, -0.70)), _arm)      # lantern cap
+	_attach(_part(_box(Vector3(0.20, 0.03, 0.20)), brass, Vector3(0.36, 1.52, -0.70)), _arm)      # lantern base
+	_focus_mat = Palette.glow(unit.def.accent_color, 2.0)
+	_focus = _attach(_part(_box(Vector3(0.14, 0.22, 0.14)), _focus_mat, Vector3(0.36, 1.65, -0.70)), _arm)
+	var light := OmniLight3D.new()
+	light.light_color = unit.def.accent_color
+	light.light_energy = 0.8
+	light.omni_range = 4.0
+	light.position = Vector3(0, 0, 0)
+	_focus.add_child(light)
+	_team_ring(0.64)
+
+
+## Thornwright: a hooded archer in green leathers with a team-coloured
+## cape, a quiver on the back and a tall longbow held out front.
+func _build_ranger() -> void:
+	var leathers := Palette.mat(unit.def.primary_color)
+	var leather := Palette.mat(Palette.LEATHER_DARK)
+	var wood := Palette.mat(Palette.WOOD.lightened(0.1))
+	var skin := Palette.mat(Color(0.72, 0.56, 0.44))
+	var team := _team_mat()
+	for x: float in [-0.12, 0.12]:
+		var hip := _pivot_at(Vector3(x, 0.82, 0), "Hip")
+		_attach(_part(_cyl(0.11, 0.13, 0.82), leather, Vector3(x, 0.41, 0)), hip)
+		_legs.append(hip)
+	_part(_cyl(0.19, 0.24, 0.62), leathers, Vector3(0, 1.12, 0))                # tunic
+	_part(_box(Vector3(0.44, 0.07, 0.28)), leather, Vector3(0, 0.86, 0))        # belt
+	_part(_box(Vector3(0.50, 0.95, 0.05)), team, Vector3(0, 1.0, 0.24), Vector3(8, 0, 0))  # cape
+	_part(_cyl(0.07, 0.07, 0.62), leather, Vector3(-0.12, 1.32, 0.22), Vector3(-20, 0, 20))  # quiver
+	for k in 3:  # fletchings
+		_part(_box(Vector3(0.04, 0.10, 0.02)), Palette.mat(Palette.STRAW), Vector3(-0.22 + k * 0.04, 1.64, 0.32), Vector3(-20, 0, 20))
+	_part(_sphere(0.13), skin, Vector3(0, 1.56, -0.05))                         # face
+	_part(_sphere(0.17), leathers, Vector3(0, 1.59, 0.01))                      # hood
+	_part(_cyl(0.0, 0.10, 0.22), leathers, Vector3(0, 1.72, 0.14), Vector3(-45, 0, 0))  # hood point
+	_shoulder_arm(Vector3(0.25, 1.42, 0.0), leathers)
+	# The bow: a grip and two limbs bent back, with a taut string.
+	var grip := Vector3(0.30, 1.30, -0.42)
+	_attach(_part(_box(Vector3(0.05, 0.22, 0.05)), leather, grip), _arm)
+	_attach(_part(_box(Vector3(0.04, 0.72, 0.04)), wood, grip + Vector3(0, 0.44, 0.07), Vector3(-12, 0, 0)), _arm)
+	_attach(_part(_box(Vector3(0.04, 0.72, 0.04)), wood, grip + Vector3(0, -0.44, 0.07), Vector3(12, 0, 0)), _arm)
+	_attach(_part(_box(Vector3(0.01, 1.62, 0.01)), Palette.mat(Color(0.9, 0.88, 0.8)), grip + Vector3(0, 0, 0.16)), _arm)
+	_focus_mat = Palette.glow(unit.def.accent_color, 1.4)
+	_focus = _attach(_part(_cyl(0.0, 0.04, 0.12, 6), _focus_mat, grip + Vector3(0, 0, -0.10), Vector3(-90, 0, 0)), _arm)  # nocked arrowhead
+	_team_ring(0.55)
+
+
+## Gravebinder: tall and narrow in a dark robe with a high spiked collar and
+## a pale bone mask; chains hang from the left hand, a rod with a violet
+## orb in the right.
+func _build_warlock() -> void:
+	var robe := Palette.mat(unit.def.primary_color)
+	var bone := Palette.mat(Color(0.86, 0.82, 0.70))
+	var iron := Palette.mat(Palette.IRON, 0.4, 0.8)
+	var team := _team_mat()
+	_skirt = _part(_cyl(0.20, 0.44, 1.15), robe, Vector3(0, 0.58, 0))
+	_part(_cyl(0.18, 0.22, 0.6), robe, Vector3(0, 1.42, 0))                     # torso
+	_part(_cyl(0.24, 0.44, 0.10), team, Vector3(0, 0.08, 0))                    # hem band
+	_part(_box(Vector3(0.46, 0.12, 0.30)), team, Vector3(0, 1.18, 0))           # sash
+	for x: float in [-0.16, 0.0, 0.16]:  # collar spikes
+		_part(_cyl(0.0, 0.05, 0.36, 6), robe, Vector3(x, 1.86, 0.10), Vector3(-15, 0, x * -80.0))
+	_part(_sphere(0.14), bone, Vector3(0, 1.84, -0.03))                         # mask
+	_part(_box(Vector3(0.18, 0.04, 0.04)), Palette.mat(Color(0.06, 0.05, 0.06)), Vector3(0, 1.86, -0.16))  # eye slit
+	_part(_sphere(0.17), robe, Vector3(0, 1.88, 0.04))                          # hood
+	# Chains from the left hand: a short run of links.
+	for k in 6:
+		var link := TorusMesh.new()
+		link.inner_radius = 0.035
+		link.outer_radius = 0.055
+		_part(link, iron, Vector3(-0.34, 1.12 - k * 0.09, -0.10), Vector3(0, 0, 90 if k % 2 == 0 else 0))
+	_shoulder_arm(Vector3(0.24, 1.58, 0.0), robe)
+	_attach(_part(_cyl(0.02, 0.025, 0.8), iron, Vector3(0.30, 1.36, -0.40)), _arm)   # rod
+	_focus_mat = Palette.glow(unit.def.accent_color, 1.6)
+	_focus = _attach(_part(_sphere(0.09), _focus_mat, Vector3(0.30, 1.80, -0.40)), _arm)
+	_team_ring(0.56)
 
 
 ## Training dummy: straw body on a post with a painted target shield.

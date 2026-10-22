@@ -102,9 +102,9 @@ Each of the other seventeen gets this table row when its batch starts, and the r
 | 1 | Ruinscribe | Spellcaster | wizard | long / low / low | Binding Glyph (delayed circle, slow); Unmaking Lance (piercing line) | Line | dive it, spread out | In build |
 | 2 | Oathwarden | Frontline | fighter | melee / high / low | Warding Stand (allies inside take less); Shield Slam (short stun) | Oath | kite it, fight outside the ward | In build |
 | 3 | Ashrunner | Skirmisher | rogue | melee / medium / high | Vault (leap through enemies); Ember Knife (thrown slow) | Ember | stun the leap, stand by your frontline | In build |
-| 4 | Lanternkeeper | Support | cleric | short / medium / low | Lantern light heals allies who stand in it; a raven that reveals a flank for 4 s | Oath, Hunt | kill it first, fight outside the light | Batch B |
-| 5 | Thornwright | Marksman | ranger | long / low / medium | Longbow with a charged shot; a bramble that slows a path | Line | flank it, close the distance | Batch B |
-| 6 | Gravebinder | Controller | warlock | mid / medium / low | Chains that root the first enemy hit; a grasping ground that pulls to its centre | Line | bait the chain, hold your dash | Batch B |
+| 4 | Lanternkeeper | Support | cleric | short / medium / low | Lantern light heals allies who stand in it; a raven that reveals a flank for 4 s | Oath, Hunt | kill it first, fight outside the light | In build |
+| 5 | Thornwright | Marksman | ranger | long / low / medium | Longbow with a charged shot; a bramble that slows a path | Line | flank it, close the distance | In build |
+| 6 | Gravebinder | Controller | warlock | mid / medium / low | Chains that root the first enemy hit; a grasping ground that pulls to its centre | Line | bait the chain, hold your dash | In build |
 | 7 | Barrowking | Frontline | barbarian | melee / high / low | Taunting roar (enemies near must attack it for 1.5 s); grows tougher while below half health | Oath | ignore it, burn it from range | Batch C |
 | 8 | Veilsinger | Support | bard | mid / low / medium | Song that speeds allied attacks; a charm that turns an enemy to walk away for 1 s | Ember | silence the song by stunning it | Batch C |
 | 9 | Stormscald | Spellcaster | evoker | long / low / low | Called lightning on a point after 1.2 s; a storm wall that blocks shots for 3 s | Line | move early, wait out the wall | Batch C |

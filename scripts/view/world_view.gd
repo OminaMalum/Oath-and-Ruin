@@ -172,6 +172,30 @@ func _spawn_ward(ar: CombatAuthority.SimArea) -> void:
 	var fill := _disc(r, Palette.ground_decal(col, 0.18), 0.03)
 	fill.name = "Fill"
 	n.add_child(fill)
+	if ar.ability.enemy_slow > 0.0:
+		# A slowing field (thorns): no dome, a scatter of dark spikes inside
+		# the ring, so it reads as rough ground to walk around.
+		var rng := RandomNumberGenerator.new()
+		rng.seed = ar.id
+		var thorn := Palette.mat(Color(0.26, 0.22, 0.12))
+		for k in 18:
+			var a := rng.randf() * TAU
+			var d := sqrt(rng.randf()) * r * 0.9
+			var spike := MeshInstance3D.new()
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.0
+			cm.bottom_radius = 0.07
+			cm.height = rng.randf_range(0.35, 0.7)
+			cm.radial_segments = 5
+			spike.mesh = cm
+			spike.material_override = thorn
+			spike.position = Vector3(cos(a) * d, cm.height * 0.5, sin(a) * d)
+			spike.rotation_degrees = Vector3(rng.randf_range(-25, 25), 0, rng.randf_range(-25, 25))
+			n.add_child(spike)
+		add_child(n)
+		n.global_position = ar.center + Vector3(0, 0.03 + Palette.DECAL_LIFT, 0)
+		_areas[ar] = n
+		return
 	var dome := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = r

@@ -243,6 +243,38 @@ Measured (72 seeds, 18 to 89): about 6 recalls per bot per match, 3.2 items per 
 10.1 min per batch of 24 (8.5 before recall), Oath 42 / Ruin 30. That lean is within noise for 72 matches
 (earlier 60 seeds leaned the other way, 27 / 33) but is worth watching.
 
+### Batch B: three more champions (added 2026-10-22)
+
+Six champions now. Each match draws three of them and both teams field the same three (a mirror, so a lineup
+can never favour a side). The human pick is always in; the rest come from the bot seed. `--lineup=a,b,c` fixes it.
+
+| | Lanternkeeper | Thornwright | Gravebinder |
+|---|---|---|---|
+| Role | Support (cleric) | Marksman (ranger) | Controller (warlock) |
+| Health, speed | 600, 6.1 | 520, 6.2 | 590, 6.0 |
+| Basic | Censer Spark, 11 m, 36 | Longbow, 22 m, 40 | Grave Bolt, 15 m, 40 |
+| Q | Lantern Light: 3.6 m ward for 4 s, heals allies 30/s | Charged Shot: 0.85 s draw, piercing, 115 | Binding Chains: 70 and a 1.2 s root |
+| E | Raven's Mark: 18 m shot, 50, target takes 25% more for 4 s | Bramble: 40, leaves a 2.8 m thorn field for 4 s that slows enemies 35% | Grasping Earth: 3.2 m, 60, pulls 2.5 m to the centre |
+| R | Dawnlight: 5 m, heals allies 200, 60 to enemies | Thornstorm: 4.2 m, 210, slow | Grave Pact: 4.5 m, 150, 1.5 s root |
+| Passive | Kindled: allies within 7 m regain 4 health a second | Steady Aim: basic attacks beyond 12 m deal 15% more | Soul Tithe: 20% more to stunned, rooted or slowed targets |
+
+New rules, all in the one combat authority and carried in snapshots (protocol version 4):
+- **Root**: cannot move or dash (a dash pressed while rooted is spent), can still attack and cast.
+- **Mark**: the target takes extra damage from every source until it runs out.
+- **Pull**: a ground area moves enemies toward its centre over 0.25 s, on the dash path, so walls still stop them.
+- **Ally heal**: a ground area can heal allies as well as hurt enemies.
+- **Leaves**: a ground area can leave a ward behind (the bramble field).
+
+Bots aim heals at the most hurt ally in range under 45% health, and fire roots and marks at champions in range.
+The HUD tags rooted and marked units over their heads and tells you in plain words when it is you.
+
+Measured (24 seeds, 18 to 41, random mirror lineups): all 24 ended by a core falling, median 10.2 min, range 5.8
+to 14.7. First pass had the Thornwright taking 61% of its team's kills, so the longbow went 44 to 40, Steady Aim
+25% to 15%, Charged Shot 130 to 115 (upgrades 150 and 100). After: team kill share Ashrunner 49%, Ruinscribe 47%,
+Thornwright 42%, Gravebinder 34%, Lanternkeeper 19%, Oathwarden 11% (the two supports are meant to sit low). Ruin
+won 15 of 24, the same count both passes; with mirror lineups that is side or seed noise, still worth watching.
+Zero script errors.
+
 ### Measured (headless soak, 48 seeds, after ultimates and passives)
 
 Two runs of 24 seeds. All 48 ended by a core falling, 6.5 to 14.3 min (median about 11). The objective was
@@ -283,4 +315,4 @@ Everything here is view only and reads public sim state; timing stays in the sim
 
 ## Not in this build (on purpose)
 
-Third regular abilities, more champions, item recipes or actives. See `docs/ROADMAP.md`.
+Third regular abilities, champions 7 to 20, item recipes or actives. See `docs/ROADMAP.md`.

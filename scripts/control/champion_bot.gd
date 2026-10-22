@@ -262,7 +262,18 @@ func _decide(unit: Unit) -> UnitCommand:
 		c.buttons = UnitCommand.BTN_ATTACK
 		var dist := flat_distance(pos, _target.global_position)
 		for slot in range(1, unit.def.slot_count()):
-			if unit.cooldowns[slot] <= 0.0 and _use_ability(unit, unit.get_slot(slot), _target, dist, hp):
+			var ab := unit.get_slot(slot)
+			if unit.cooldowns[slot] > 0.0 or ab == null:
+				continue
+			if ab.ally_heal > 0.0:
+				# A healing burst goes where the hurt ally stands, not on the enemy.
+				var who := _hurt_ally_for(unit, ab)
+				if who and (not ab.is_ultimate or unit.ultimate_ready_level()):
+					c.aim_point = who.global_position
+					c.buttons |= UnitCommand.ability_button(slot)
+					break
+				continue
+			if _use_ability(unit, ab, _target, dist, hp):
 				c.buttons |= UnitCommand.ability_button(slot)
 				break
 		# Ranged champions sidestep while fighting champions, so skillshots can miss.
@@ -308,6 +319,9 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 	var champ := target.def.kind == ChampionDef.Kind.CHAMPION
 	if a.is_ultimate:
 		return _use_ultimate(unit, a, target, dist, hp)
+	if a.delivery == AbilityDef.Delivery.PROJECTILE and (a.root_duration > 0.0 or a.mark_duration > 0.0):
+		# Chains and marks are for champions in reach.
+		return champ and dist <= a.range
 	if a.stun_duration > 0.0:
 		# A stun is for champions: when they are casting, fleeing, or about to die.
 		return champ and dist <= a.range + target.def.radius and (target.is_casting() \
@@ -573,3 +587,18 @@ func _next_item_cost(unit: Unit) -> float:
 
 func commands_while_dead() -> bool:
 	return true
+
+
+## The most hurt allied champion (itself included) under 45% health within
+## reach of a healing burst, or null.
+func _hurt_ally_for(unit: Unit, a: AbilityDef) -> Unit:
+	var best: Unit = null
+	var best_hp := 0.45
+	for u in authority.units:
+		if u.alive and u.team == unit.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+				and flat_distance(unit.global_position, u.global_position) <= a.range:
+			var f := u.health / u.max_health
+			if f < best_hp:
+				best_hp = f
+				best = u
+	return best

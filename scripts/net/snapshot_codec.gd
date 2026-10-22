@@ -10,18 +10,18 @@ extends RefCounted
 ## Layout (little endian):
 ##   header  u8 version, u32 server tick, u32 ack (last client tick the
 ##           server applied for the receiving player; 0 for none), u16 count
-##   unit    u16 id, u8 flags, u8 blocks, s16 x3 position (cm), u16 yaw,
+##   unit    u16 id, u8 flags, u16 blocks, s16 x3 position (cm), u16 yaw,
 ##           u16 health, then each block present in `blocks`, in bit order.
 ## Decoding gives the same per-unit Array the client used before (see FIELDS).
 
-const VERSION := 3
+const VERSION := 4
 ## Packet budget: ENet's default MTU in Godot 4.7.2 (thirdparty/enet/enet.h,
 ## ENET_HOST_DEFAULT_MTU). Godot warns above it for unreliable sends.
 const MTU := 1392
 
 ## Indices of the decoded per-unit Array.
 enum { POS, YAW, HEALTH, ALIVE, PHASE, SLOT, CAST_TIMER, CAST_TARGET, COOLDOWNS, SLOW, SLOW_TIMER,
-	RESPAWN, STUN, DASH_TIMER, DASH_VEL, LEVEL, UPGRADE, MAX_HEALTH, GOLD, ITEMS, RECALL, FIELD_COUNT }
+	RESPAWN, STUN, DASH_TIMER, DASH_VEL, LEVEL, UPGRADE, MAX_HEALTH, GOLD, ITEMS, RECALL, ROOT, MARK, MARK_TIMER, FIELD_COUNT }
 
 const F_ALIVE := 1
 ## Bits 1-2: cast phase. Bits 3-4: upgrade option picked for slot 1 (0 none).
@@ -34,6 +34,8 @@ const B_STUN := 16       # u16 timer
 const B_DASH := 32       # u16 timer, s16 x2 velocity cm/s
 const B_PROGRESS := 64   # u8 level, u16 max health, u16 gold, u8 item bits
 const B_RECALL := 128    # u16 timer
+const B_ROOT := 256      # u16 timer
+const B_MARK := 512      # u8 amount /255, u16 timer
 
 ## Timers are u16 in 1/600 s, rounded up: ten steps per 60 Hz tick, so a
 ## timer ends on the same tick on both sides, and up to 109 s.
@@ -98,8 +100,12 @@ static func encode_units(units: Array[Unit]) -> PackedByteArray:
 			blocks |= B_PROGRESS
 		if u.recall_timer > 0.0:
 			blocks |= B_RECALL
+		if u.root_timer > 0.0:
+			blocks |= B_ROOT
+		if u.mark_timer > 0.0:
+			blocks |= B_MARK
 		b.put_u8(flags)
-		b.put_u8(blocks)
+		b.put_u16(blocks)
 		_put_vec(b, u.global_position)
 		b.put_u16(_u16(wrapf(u.aim_yaw, 0.0, TAU) * YAW_SCALE))
 		# Never round a living unit down to 0 health on the wire.
@@ -130,6 +136,11 @@ static func encode_units(units: Array[Unit]) -> PackedByteArray:
 			b.put_u8(u.item_mask() & 255)
 		if blocks & B_RECALL:
 			b.put_u16(_timer(u.recall_timer))
+		if blocks & B_ROOT:
+			b.put_u16(_timer(u.root_timer))
+		if blocks & B_MARK:
+			b.put_u8(clampi(roundi(u.mark_amount * 255.0), 0, 255))
+			b.put_u16(_timer(u.mark_timer))
 	return b.data_array
 
 
@@ -154,11 +165,11 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 	var count := b.get_u16()
 	var units := {}
 	for n in count:
-		if b.get_available_bytes() < 14:
+		if b.get_available_bytes() < 15:
 			return {}
 		var id := b.get_u16()
 		var flags := b.get_u8()
-		var blocks := b.get_u8()
+		var blocks := b.get_u16()
 		var s := []
 		s.resize(FIELD_COUNT)
 		s[POS] = _get_vec(b)
@@ -182,6 +193,9 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 		s[GOLD] = -1.0
 		s[ITEMS] = -1
 		s[RECALL] = 0.0
+		s[ROOT] = 0.0
+		s[MARK] = 0.0
+		s[MARK_TIMER] = 0.0
 		if b.get_available_bytes() < _blocks_size(blocks):
 			return {}
 		if blocks & B_CAST:
@@ -214,6 +228,11 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 			s[ITEMS] = b.get_u8()
 		if blocks & B_RECALL:
 			s[RECALL] = b.get_u16() / TIMER_SCALE
+		if blocks & B_ROOT:
+			s[ROOT] = b.get_u16() / TIMER_SCALE
+		if blocks & B_MARK:
+			s[MARK] = b.get_u8() / 255.0
+			s[MARK_TIMER] = b.get_u16() / TIMER_SCALE
 		units[id] = s
 	return {"tick": tick, "ack": ack, "units": units}
 
@@ -229,6 +248,8 @@ static func _blocks_size(blocks: int) -> int:
 	n += 6 if blocks & B_DASH else 0
 	n += 6 if blocks & B_PROGRESS else 0
 	n += 2 if blocks & B_RECALL else 0
+	n += 2 if blocks & B_ROOT else 0
+	n += 3 if blocks & B_MARK else 0
 	return n
 
 
@@ -251,6 +272,9 @@ static func apply(u: Unit, s: Array) -> void:
 	u.dash_timer = s[DASH_TIMER]
 	u.dash_velocity = s[DASH_VEL]
 	u.recall_timer = s[RECALL]
+	u.root_timer = s[ROOT]
+	u.mark_amount = s[MARK]
+	u.mark_timer = s[MARK_TIMER]
 	if s[LEVEL] >= 0:
 		u.level = s[LEVEL]
 		if s[ITEMS] >= 0:

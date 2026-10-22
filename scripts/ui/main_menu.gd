@@ -39,11 +39,15 @@ func _ready() -> void:
 	pick_label.add_theme_font_size_override("font_size", 24)
 	pick_label.add_theme_color_override("font_color", Color(0.85, 0.80, 0.70))
 	box.add_child(pick_label)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	box.add_child(row)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	box.add_child(grid)
+	var row := grid
 	var group := ButtonGroup.new()
-	for c in [["Ruinscribe", "Ranged caster", &"ruinscribe"], ["Oathwarden", "Frontline", &"oathwarden"], ["Ashrunner", "Skirmisher", &"ashrunner"]]:
+	for c in [["Ruinscribe", "Ranged caster", &"ruinscribe"], ["Oathwarden", "Frontline", &"oathwarden"], ["Ashrunner", "Skirmisher", &"ashrunner"],
+			["Lanternkeeper", "Support", &"lanternkeeper"], ["Thornwright", "Marksman", &"thornwright"], ["Gravebinder", "Controller", &"gravebinder"]]:
 		var b := Button.new()
 		b.toggle_mode = true
 		b.button_group = group
@@ -62,4 +66,4 @@ func _ready() -> void:
 		var mode: String = item[1]
 		b.pressed.connect(func() -> void: chosen.emit(mode))
 		box.add_child(b)
-	(box.get_child(4) as Button).grab_focus.call_deferred()
+	(box.get_child(4) as Button).grab_focus.call_deferred()  # 3v3 Bot Match

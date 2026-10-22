@@ -40,3 +40,6 @@ Poly Haven texture hessian_230 (champion trousers),colormass and Rico Cilliers,h
 Poly Haven texture bark_willow_02 (staff wood),Charlotte Baglioni,https://polyhaven.com/a/bark_willow_02,2026-10-22,CC0-1.0,No,None,assets/env/textures/bark_willow_02_*_1k.jpg,Permanent
 Ruinscribe champion model rig and clips,Oath & Ruin project (code-built in Blender by tools/blender/build_ruinscribe.py),n/a (original),2026-10-22,Project-owned,No,None,assets/champions/ruinscribe.glb,Permanent (first modelled champion)
 Spell effects: spell circles light pillars trails shockwaves,Oath & Ruin project (shaders and particles in code),n/a (original),2026-10-22,Project-owned,No,None,scripts/view/spell_fx.gd; scripts/view/shaders/spell_*.gdshader,Permanent
+Lanternkeeper placeholder model,Oath & Ruin project (code-built primitives),n/a (original),2026-10-22,Project-owned,No,None,scripts/view/unit_view.gd,Placeholder: replace with original modeled and rigged champion
+Thornwright placeholder model,Oath & Ruin project (code-built primitives),n/a (original),2026-10-22,Project-owned,No,None,scripts/view/unit_view.gd,Placeholder: replace with original modeled and rigged champion
+Gravebinder placeholder model,Oath & Ruin project (code-built primitives),n/a (original),2026-10-22,Project-owned,No,None,scripts/view/unit_view.gd,Placeholder: replace with original modeled and rigged champion

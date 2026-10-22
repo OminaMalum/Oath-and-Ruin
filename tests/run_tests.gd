@@ -12,6 +12,9 @@ const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")
 const WARDEN := preload("res://data/champions/oathwarden.tres")
 const RUNNER := preload("res://data/champions/ashrunner.tres")
+const LANTERN := preload("res://data/champions/lanternkeeper.tres")
+const THORN := preload("res://data/champions/thornwright.tres")
+const GRAVE := preload("res://data/champions/gravebinder.tres")
 const DT := 1.0 / 60.0
 
 var failures: int = 0
@@ -40,6 +43,8 @@ func _run() -> void:
 		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
 		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember", "test_last_hit_xp",
 		"test_gold_and_shop", "test_items_change_stats", "test_bots_buy_items", "test_recall",
+		"test_batch_b_data", "test_root", "test_pull", "test_bramble_field", "test_mark",
+		"test_lantern_heals", "test_dawnlight", "test_longshot", "test_tithe",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
 	]
@@ -626,11 +631,24 @@ func test_roster() -> void:
 	var r0 := mc.team_roster(0)
 	var r1 := mc.team_roster(1)
 	check(r0[0].id == &"ashrunner" and r0.size() == 3, "the player's pick takes slot 0")
-	check(r1[0].id == &"ruinscribe", "the bot team keeps the default order")
+	check(r0 == r1, "both teams field the same three champions")
 	var ids := {}
 	for d in r0:
 		ids[d.id] = true
-	check(ids.size() == 3, "one of each role per team")
+	check(ids.size() == 3, "three different champions")
+	var seen := {}
+	for s in range(1, 40):
+		var m := MatchController.new()
+		m.human_slot = false
+		m.bot_seed = s
+		for d in m.team_roster(0):
+			seen[d.id] = true
+		m.free()
+	check(seen.size() == MatchController.ROSTER.size(), "over many seeds every champion gets drafted (%d of %d)" % [seen.size(), MatchController.ROSTER.size()])
+	var fixed := MatchController.new()
+	fixed.lineup_ids = [&"gravebinder", &"lanternkeeper", &"thornwright"]
+	check(fixed.team_roster(0)[1].id == &"lanternkeeper", "a fixed lineup is kept in order")
+	fixed.free()
 	await ticks(1)
 
 
@@ -1018,6 +1036,147 @@ func test_recall() -> void:
 	var s: Array = SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([me]))).units[me.net_id]
 	check(absf(s[SnapshotCodec.RECALL] - me.recall_timer) < 0.01, "recall timer survives a snapshot")
 	check(UnitCommand.from_dict({"b": UnitCommand.BTN_RECALL}).pressed(UnitCommand.BTN_RECALL), "recall survives the command path")
+
+
+# --- Batch B: Lanternkeeper, Thornwright, Gravebinder ------------------------
+
+func _cast(u: Unit, slot: int, at: Vector3, wait: float) -> void:
+	aim(u, at)
+	cmd(u).buttons = UnitCommand.ability_button(slot) if slot > 0 else UnitCommand.BTN_ATTACK
+	await ticks(1)
+	cmd(u).buttons = 0
+	await secs(wait)
+
+
+func test_batch_b_data() -> void:
+	for def: ChampionDef in [LANTERN, THORN, GRAVE]:
+		check(def.abilities.size() == 3 and def.get_slot(3).is_ultimate, "%s has Q, E and an ultimate R" % def.id)
+		check(def.get_slot(1).upgrades.size() == 2, "%s Q offers two upgrades" % def.id)
+		check(def.passive != ChampionDef.Passive.NONE and not def.passive_name.is_empty(), "%s has a passive" % def.id)
+		check(def.item_build.size() == 4, "%s has a bot item order" % def.id)
+		for slot in def.slot_count():
+			check(not def.get_slot(slot).description.is_empty(), "%s slot %d is described" % [def.id, slot])
+	await ticks(1)
+
+
+func test_root() -> void:
+	var me := spawn(GRAVE, 0, Vector3.ZERO)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	await _cast(me, 1, foe.global_position, 0.9)
+	var chains := GRAVE.get_slot(1)
+	check(foe.root_timer > 0.0, "chains root the enemy hit")
+	check(is_equal_approx(foe.health, WARDEN.max_health - chains.damage), "chains deal %.0f" % chains.damage)
+	var at := foe.global_position
+	cmd(foe).move = Vector2(1, 0)
+	await secs(0.3)
+	check(UnitController.flat_distance(at, foe.global_position) < 0.05, "a rooted champion cannot walk")
+	await secs(1.2)
+	check(UnitController.flat_distance(at, foe.global_position) > 1.0, "it walks again once the root ends")
+	# A rooted dash does not happen.
+	var runner := spawn(RUNNER, 1, Vector3(10, 0, 0))
+	await ticks(2)
+	runner.apply_root(2.0)
+	var r0 := runner.global_position
+	await _cast(runner, 1, Vector3(10, 0, -10), 0.5)
+	check(UnitController.flat_distance(r0, runner.global_position) < 0.05, "a rooted champion cannot dash")
+	var s: Array = SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([runner]))).units[runner.net_id]
+	check(absf(s[SnapshotCodec.ROOT] - runner.root_timer) < 0.01, "root timer survives a snapshot")
+
+
+func test_pull() -> void:
+	var me := spawn(GRAVE, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(2.4, 0, -8))
+	await ticks(2)
+	var center := Vector3(0, 0, -8)
+	await _cast(me, 2, center, 1.4)
+	var d := UnitController.flat_distance(foe.global_position, center)
+	check(d < 1.0, "grasping earth drags the enemy toward the middle (%.2f m from it)" % d)
+	check(foe.health < DUMMY.max_health, "and hurts it")
+
+
+func test_bramble_field() -> void:
+	var me := spawn(THORN, 0, Vector3.ZERO)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	await _cast(me, 2, foe.global_position, 1.0)
+	var field := authority.areas.filter(func(a: CombatAuthority.SimArea) -> bool: return a.ability.enemy_slow > 0.0)
+	check(field.size() == 1, "bramble leaves a thorn field behind")
+	await secs(2.0)
+	check(foe.slow_amount >= 0.35 - 0.001, "an enemy standing in the thorns stays slowed")
+	foe.global_position = Vector3(8, 0, -8)
+	await secs(0.5)
+	check(foe.slow_timer <= 0.0, "the slow ends soon after leaving")
+	await secs(2.0)
+	check(authority.areas.filter(func(a: CombatAuthority.SimArea) -> bool: return a.ability.enemy_slow > 0.0).is_empty(), "the thorns wither")
+
+
+func test_mark() -> void:
+	var me := spawn(LANTERN, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	await _cast(me, 2, foe.global_position, 0.9)
+	var raven := LANTERN.get_slot(2)
+	check(foe.mark_timer > 0.0, "the raven marks the enemy")
+	var h := foe.health
+	authority.apply_damage(me, foe, 100.0, null)
+	check(is_equal_approx(h - foe.health, 100.0 * (1.0 + raven.mark_amount)), "a marked enemy takes %d%% more" % roundi(raven.mark_amount * 100.0))
+
+
+func test_lantern_heals() -> void:
+	var me := spawn(LANTERN, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	var far := spawn(SCRIBE, 0, Vector3(20, 0, 0))
+	await ticks(2)
+	ally.health = 200.0
+	far.health = 200.0
+	await secs(1.0)
+	check(absf(ally.health - 200.0 - LANTERN.passive_value) < 0.5, "Kindled: a nearby ally regains %.0f a second (%.1f)" % [LANTERN.passive_value, ally.health - 200.0])
+	check(far.health == 200.0, "an ally far away does not")
+	ally.health = 200.0
+	await _cast(me, 1, me.global_position, 1.3)
+	var gain := ally.health - 200.0
+	check(gain > LANTERN.get_slot(1).heal_per_second * 0.8, "lantern light heals an ally standing in it (%.0f in 1 s)" % gain)
+
+
+func test_dawnlight() -> void:
+	var me := spawn(LANTERN, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(0, 0, -8))
+	var foe := spawn(DUMMY, 1, Vector3(1, 0, -8))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	ally.health = 100.0
+	await _cast(me, 3, ally.global_position, 1.2)
+	var dawn := LANTERN.get_slot(3)
+	check(ally.health >= 100.0 + dawn.ally_heal, "dawnlight heals the ally in it (%.0f)" % ally.health)
+	check(foe.health < DUMMY.max_health, "and burns the enemy")
+
+
+func test_longshot() -> void:
+	var me := spawn(THORN, 0, Vector3.ZERO)
+	var near := spawn(DUMMY, 1, Vector3(-3, 0, -8))
+	await ticks(2)
+	var bow := THORN.basic_attack
+	await _cast(me, 0, near.global_position, 0.8)
+	check(is_equal_approx(DUMMY.max_health - near.health, bow.damage), "Longbow at 8.5 m: plain damage")
+	var far := spawn(DUMMY, 1, Vector3(3, 0, -18))
+	await secs(0.5)  # the bow's cooldown
+	await _cast(me, 0, far.global_position, 1.4)
+	check(is_equal_approx(DUMMY.max_health - far.health, bow.damage * (1.0 + THORN.passive_value)), "Steady Aim: beyond %.0f m it hits %d%% harder" % [THORN.passive_range, roundi(THORN.passive_value * 100.0)])
+
+
+func test_tithe() -> void:
+	var me := spawn(GRAVE, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	var bolt := GRAVE.basic_attack
+	await _cast(me, 0, foe.global_position, 0.8)
+	check(is_equal_approx(DUMMY.max_health - foe.health, bolt.damage), "a free target takes plain damage")
+	foe.apply_slow(0.3, 5.0)
+	var h := foe.health
+	await secs(0.5)
+	await _cast(me, 0, foe.global_position, 0.8)
+	check(is_equal_approx(h - foe.health, bolt.damage * (1.0 + GRAVE.passive_value)), "Soul Tithe: a slowed target takes %d%% more" % roundi(GRAVE.passive_value * 100.0))
 
 
 # --- Networking: prediction, snapshots, command queue ------------------------

@@ -119,8 +119,9 @@ func _draw() -> void:
 				box.position.y -= 34
 			placed.append(box)
 			p = box.position + Vector2(w * 0.5, 22)
-		if u.is_stunned():
-			_text(p + Vector2(-100, 26), "stunned", SMALL, Color(1.0, 0.5, 0.4), HORIZONTAL_ALIGNMENT_CENTER, 200)
+		var tag := "stunned" if u.is_stunned() else ("rooted" if u.root_timer > 0.0 else ("marked" if u.mark_timer > 0.0 else ""))
+		if not tag.is_empty():
+			_text(p + Vector2(-100, 26), tag, SMALL, Color(1.0, 0.5, 0.4) if tag == "stunned" else Color(0.95, 0.85, 0.55), HORIZONTAL_ALIGNMENT_CENTER, 200)
 		var col := Palette.ALLY if u.team == player.team else (Palette.NEUTRAL if u.team >= 2 else Palette.ENEMY)
 		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 6 if minion else (12 if champ else 10))), u.health / u.max_health, col)
 		# Names only for champions, structures and big units, and only up close.
@@ -182,7 +183,7 @@ func _draw() -> void:
 	var hb := Rect2(Vector2(c.x - 220, vs.y - 128), Vector2(440, 26))
 	draw_rect(Rect2(Vector2(c.x - 470, vs.y - 140), Vector2(940, 128)), Color(0.06, 0.05, 0.04, 0.55))
 	_bar(hb, player.health / player.max_health, Palette.SELF_HEALTH)
-	_text(Vector2(hb.position.x, hb.position.y + 22), "%d / %d" % [ceili(player.health), roundi(player.max_health)], 24, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	_text(Vector2(hb.position.x, hb.position.y + 22), "%d / %d" % [ceili(player.health), ceili(player.max_health)], 24, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	_text(Vector2(hb.position.x - 230, hb.position.y + 21), player.def.display_name, FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_RIGHT, 220)
 	if player.xp > 0.0 or player.level > 1:
 		# Level and progress to the next one, right of the health bar.
@@ -266,6 +267,10 @@ func _draw() -> void:
 		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if player.is_stunned():
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Stunned", FONT_SIZE, Color(1.0, 0.45, 0.35), HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	elif player.root_timer > 0.0:
+		_text(Vector2(hb.position.x, hb.position.y - 10), "Rooted: you can attack but not move", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	elif player.mark_timer > 0.0:
+		_text(Vector2(hb.position.x, hb.position.y - 10), "Marked: you take more damage", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.slow_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Slowed", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 

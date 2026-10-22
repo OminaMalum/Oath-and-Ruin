@@ -1,10 +1,11 @@
 extends SceneTree
-## Renders the three champions side by side in each presentation pose and
+## Renders every champion side by side in each presentation pose and
 ## saves one PNG per pose, for checking poses without playing a match.
 ## xvfb-run godot --rendering-driver opengl3 --path . --script tools/pose_sheet.gd -- --out=/tmp/poses
 ## View only: units are not in a sim, their public state is set by hand.
 
-const DEFS := ["res://data/champions/ruinscribe.tres", "res://data/champions/oathwarden.tres", "res://data/champions/ashrunner.tres"]
+const DEFS := ["res://data/champions/ruinscribe.tres", "res://data/champions/oathwarden.tres", "res://data/champions/ashrunner.tres",
+	"res://data/champions/lanternkeeper.tres", "res://data/champions/thornwright.tres", "res://data/champions/gravebinder.tres"]
 var out_dir := "/tmp/poses"
 var units: Array[Unit] = []
 
@@ -38,14 +39,14 @@ func _run() -> void:
 	world.add_child(floor)
 	var cam := Camera3D.new()
 	world.add_child(cam)
-	cam.position = Vector3(0, 2.3, 8.0)  # in front, far enough for all three
+	cam.position = Vector3(0, 2.4, 6.0 + DEFS.size() * 1.2)  # in front, far enough for all of them
 	cam.look_at(Vector3(0, 1.1, 0))
 	cam.fov = 45
 	for i in DEFS.size():
 		var u := Unit.new()
 		u.def = load(DEFS[i])
 		u.team = 0
-		u.position = Vector3(-2.6 + i * 2.6, 0, 0)
+		u.position = Vector3((i - (DEFS.size() - 1) * 0.5) * 2.4, 0, 0)
 		u.rotation.y = deg_to_rad(-70.0)  # near profile, facing right, so swings read
 		world.add_child(u)
 		u.aim_yaw = u.rotation.y
