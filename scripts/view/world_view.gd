@@ -230,6 +230,7 @@ func _spawn_wall(ar: CombatAuthority.SimArea) -> void:
 	stripe.mesh = BoxMesh.new()
 	(stripe.mesh as BoxMesh).size = Vector3(length, 0.02, 0.5)
 	stripe.material_override = Palette.ground_decal(col, 0.9)
+	stripe.name = "Fill"  # shrinks as the wall's time runs out
 	n.add_child(stripe)
 	var glow := Palette.glow(ar.source.def.accent_color, 2.0)
 	for x: float in [-length * 0.5, length * 0.5]:
@@ -304,7 +305,7 @@ func _process(delta: float) -> void:
 	for ar: CombatAuthority.SimArea in _areas:
 		var fill: Node3D = _areas[ar].get_node("Fill")
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)
-		if ar.ability.delivery == AbilityDef.Delivery.WARD:
+		if CombatAuthority._stands(ar.ability):
 			k = clampf(ar.timer / maxf(ar.ability.ward_duration, 0.01), 0.0, 1.0)  # time left
 		fill.scale = Vector3(maxf(k, 0.01), 1, maxf(k, 0.01))
 	_update_tells()
