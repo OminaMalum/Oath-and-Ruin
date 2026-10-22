@@ -6,6 +6,7 @@
 script = ExtResource("1_item")
 id = &"ember_edge"
 display_name = "Ember Edge"
+short_name = "Edge"
 description = "+12% damage"
 cost = 800
 damage = 0.12

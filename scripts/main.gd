@@ -16,6 +16,7 @@ extends Node3D
 ##   --champion=ID                      ruinscribe | oathwarden | ashrunner (match and court)
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
 ##   --shop                             open the shop panel (screenshots)
+##   --scoreboard                       show the scoreboard (screenshots)
 ##   --warp=S                           run without drawing until S seconds (needs --fixed-fps 60)
 ##   --follow=N                         spectate: follow champion N (0-2 Oath, 3-5 Ruin)
 ##   --camaudit                         spectate: measure camera obstruction and pops, print CAMAUDIT at the end
@@ -113,6 +114,7 @@ func _start_match() -> void:
 		rig.follow_unit_yaw = true
 	rig.audit = args.has("camaudit")
 	HumanController.shop_open = args.has("shop")
+	MatchHud.force_scoreboard = args.has("scoreboard")
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	var mh := MatchHud.new()
@@ -237,6 +239,7 @@ func _setup_presentation(local_unit: Unit) -> void:
 	# Respawn moves the champion across the map: cut to it instead of the
 	# camera flying 90 m over the walls (seen in the camera audit).
 	local_unit.respawned.connect(func() -> void: rig.snap_to_target())
+	local_unit.recalled.connect(func() -> void: rig.snap_to_target())
 	rig.snap_to_target()
 	rig.follow_unit_yaw = autoplay or args.has("netbot")
 	world_view = WorldView.new()

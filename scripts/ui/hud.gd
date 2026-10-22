@@ -34,6 +34,7 @@ func setup(a: CombatAuthority, p: Unit, r: CameraRig, b: SparringBot) -> void:
 	p.cast_rejected.connect(func(_slot: int, reason: String) -> void: notice(reason))
 	p.gold_earned.connect(func(g: float, at: Vector3) -> void:
 		_numbers.append({"pos": at + Vector3(0, 2.2, 0), "text": "+%d gold" % roundi(g), "t": 0.0, "gold": true, "life": 1.4}))
+	p.recall_cancelled.connect(func(reason: String) -> void: notice(reason))
 	p.item_bought.connect(func(it: ItemDef) -> void: notice("Bought %s: %s" % [it.display_name, it.description]))
 
 
@@ -254,6 +255,13 @@ func _draw() -> void:
 			lcol = Color(0.6, 0.6, 0.6)
 		_text(r.position + Vector2(0, 58), label, 26 if cd > 0.0 and not locked else FONT_SIZE, lcol, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 
+	if player.recall_timer > 0.0:
+		# Recall: a bar filling toward home above the ability bar.
+		var rr := Rect2(Vector2(c.x - 200, vs.y - 236), Vector2(400, 22))
+		var f := 1.0 - player.recall_timer / Unit.ECONOMY.recall_time
+		_text(Vector2(rr.position.x, rr.position.y - 10), "Recalling home  %.1f" % player.recall_timer, FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, rr.size.x)
+		draw_rect(rr.grow(2), Color(0, 0, 0, 0.7))
+		draw_rect(Rect2(rr.position, Vector2(rr.size.x * f, rr.size.y)), Palette.TEAL)
 	if _notice_t > 0.0:
 		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if player.is_stunned():
@@ -296,6 +304,7 @@ func _draw() -> void:
 			("R  %s (ultimate, level %d)" % [player.get_slot(3).display_name, Unit.ULT_LEVEL]) if player.get_slot(3) else "",
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			"B  shop at your fountain or while dead, then 1 to 4 to buy" if player.shop_point.is_finite() else "",
+			"T  recall home (stand still %d s)     Tab (hold)  scoreboard" % roundi(Unit.ECONOMY.recall_time) if player.shop_point.is_finite() else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  free the mouse",
 			("%s: %s" % [player.def.passive_name, player.def.passive_description]) if not player.def.passive_name.is_empty() else "",

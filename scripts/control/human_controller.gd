@@ -4,6 +4,7 @@ extends UnitController
 ## Q: for a ground-target ability, hold to preview where it lands and release
 ## to cast; for any other ability (dash, ward) Q casts on press.
 ## Right mouse: cast the ability immediately (no preview).
+## T: recall to the fountain (stand still; moving or casting cancels it).
 ## B: open or close the shop panel; while it is open, 1 to 4 buy an item.
 
 var rig: CameraRig
@@ -36,6 +37,8 @@ func get_command(unit: Unit) -> UnitCommand:
 	elif preview_slot == 1:
 		preview_slot = -1
 		c.buttons |= UnitCommand.BTN_ABILITY_1  # released: cast where the preview was
+	if Input.is_action_just_pressed("recall"):
+		c.buttons |= UnitCommand.BTN_RECALL
 	if Input.is_action_just_pressed("shop"):
 		shop_open = not shop_open
 	if shop_open:

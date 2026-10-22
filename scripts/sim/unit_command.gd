@@ -7,6 +7,8 @@ const BTN_ATTACK := 1
 const BTN_ABILITY_1 := 2
 const BTN_ABILITY_2 := 4
 const BTN_ABILITY_3 := 8
+## Start a recall to the own fountain (one tick press is enough).
+const BTN_RECALL := 16
 
 ## x = strafe right, y = forward, relative to aim_yaw. Length <= 1.
 var move: Vector2 = Vector2.ZERO
@@ -36,7 +38,7 @@ func to_dict() -> Dictionary:
 	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons, "t": target_id, "u": upgrade_choice, "i": buy_item}
 
 
-const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1 | BTN_ABILITY_2 | BTN_ABILITY_3
+const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1 | BTN_ABILITY_2 | BTN_ABILITY_3 | BTN_RECALL
 
 
 ## Rebuilds a command from untrusted data. Wrong types, NaN or infinite

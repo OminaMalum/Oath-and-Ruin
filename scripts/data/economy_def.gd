@@ -24,5 +24,8 @@ extends Resource
 ## Buy within this distance of the own fountain, or while dead.
 @export var shop_radius: float = 6.0
 @export var slots: int = 4
+## Recall (T): stand still this long to return to the fountain. Moving, any
+## cast, a hit or a stun cancels it.
+@export var recall_time: float = 4.0
 ## Index in this list is the item's number on the shop panel and on the wire.
 @export var items: Array[ItemDef] = []

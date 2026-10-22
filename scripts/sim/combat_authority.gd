@@ -213,6 +213,7 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 	target.health -= amount
 	target.last_attacker = source
 	target.last_attacked_at = time
+	target.cancel_recall("Recall cancelled: you were hit")
 	target.damaged.emit(amount, source)
 	unit_damaged.emit(target, amount, source)
 	if a != null and a.slow_amount > 0.0:

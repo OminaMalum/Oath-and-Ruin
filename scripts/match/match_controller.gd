@@ -123,7 +123,7 @@ func start() -> void:
 			champions.append(u)
 			if not (team == 0 and slot == 0 and human_slot):
 				u.controller = ChampionBot.new(authority, info, bot_seed * 100 + team * 10 + slot)
-			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0, "gold_earned": 0.0, "items": []}
+			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0, "gold_earned": 0.0, "items": [], "recalls": 0}
 			u.upgraded.connect(func(_slot: int, a: AbilityDef) -> void:
 				stats.champions[u.name].upgrade = String(a.id)
 				stats.champions[u.name].upgrade_at = snappedf(authority.time, 0.1)
@@ -131,6 +131,7 @@ func start() -> void:
 			u.leveled.connect(func(lv: int) -> void: stats.champions[u.name].level = lv)
 			u.shop_point = info.fountain(team)
 			u.gold = ECONOMY.start_gold
+			u.recalled.connect(func() -> void: stats.champions[u.name].recalls += 1)
 			u.item_bought.connect(func(it: ItemDef) -> void:
 				stats.champions[u.name].items.append({"item": String(it.id), "t": snappedf(authority.time, 0.1)}))
 

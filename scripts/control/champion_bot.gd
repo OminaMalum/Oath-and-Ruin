@@ -82,11 +82,16 @@ func _init(a: CombatAuthority, info: MatchInfo, seed_value: int) -> void:
 
 
 func get_command(unit: Unit) -> UnitCommand:
+	if not unit.alive:
+		# Dead: only shopping, as a player may; no bot state moves.
+		var buy := UnitCommand.new()
+		buy.buy_item = _next_buy(unit)
+		return buy
 	var c := _decide(unit)
 	# The move was decided relative to the wanted facing; keep it in world
 	# terms while the facing is rate limited, so the walk direction holds.
 	var world_move := move_to_world(c.move, c.aim_yaw)
-	if sep_enabled:
+	if sep_enabled and unit.recall_timer <= 0.0 and not c.pressed(UnitCommand.BTN_RECALL):
 		world_move = (world_move + _separation(unit)).limit_length(1.0)
 	# Turn rate limit: the facing moves toward the wanted yaw, never snaps.
 	if _has_yaw:
@@ -126,6 +131,13 @@ func _decide(unit: Unit) -> UnitCommand:
 		state = State.RETREAT  # inside a friendly ward it holds a little longer
 	if _route_idx > 0 and flat_distance(pos, fountain) < 4.0:
 		_route_idx = 0  # respawned at home: the old route no longer applies
+	if _wants_recall(unit, hp):
+		# Stand still and recall (the same T press a player makes); walking
+		# on would cancel it, so the bot only does this when nobody is near.
+		c.move = Vector2.ZERO
+		if unit.recall_timer <= 0.0:
+			c.buttons |= UnitCommand.BTN_RECALL
+		return c
 	if state == State.RETREAT and _route_idx > 0:
 		var back := _route_goal(unit, true)  # leave the ruins the way it came in
 		c.aim_yaw = yaw_towards(pos, back)
@@ -532,3 +544,32 @@ func _next_buy(unit: Unit) -> int:
 			continue
 		return i + 1 if unit.buy_problem(i + 1).is_empty() else 0
 	return 0
+
+
+## Recall when heading home hurt, or when the next item is affordable and
+## health is down, but only far from home, with no enemy champion within
+## RECALL_SAFE and no hit taken for a moment.
+const RECALL_SAFE := 14.0
+const RECALL_MIN_DISTANCE := 20.0
+func _wants_recall(unit: Unit, hp: float) -> bool:
+	if not unit.shop_point.is_finite() or unit.is_casting():
+		return false
+	if flat_distance(unit.global_position, match_info.fountain(unit.team)) < RECALL_MIN_DISTANCE:
+		return false
+	if _enemy_champion_within(unit, RECALL_SAFE) or authority.time - unit.last_attacked_at < 2.0:
+		return false
+	if state == State.RETREAT:
+		return true
+	return hp < 0.6 and _next_item_cost(unit) <= unit.gold and state == State.PUSH
+
+
+func _next_item_cost(unit: Unit) -> float:
+	for id in unit.def.item_build:
+		for it: ItemDef in Unit.ECONOMY.items:
+			if it.id == id and not unit.items.has(it):
+				return it.cost if unit.items.size() < Unit.ECONOMY.slots else INF
+	return INF
+
+
+func commands_while_dead() -> bool:
+	return true

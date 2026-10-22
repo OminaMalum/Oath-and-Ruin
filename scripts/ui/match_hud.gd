@@ -1,7 +1,7 @@
 class_name MatchHud
 extends Control
 ## Match layer over the combat HUD: clock, kills, structure health, a marker
-## on the next enemy structure, and the results screen.
+## on the next enemy structure, the scoreboard (hold Tab) and the results screen.
 
 var match_ctl: MatchController
 var rig: CameraRig
@@ -9,6 +9,8 @@ var _font: Font
 var _banner: String = ""
 var _banner_t: float = 0.0
 var _banner_col := Color.WHITE
+## Screenshots: keep the scoreboard up without Tab (--scoreboard).
+static var force_scoreboard: bool = false
 
 
 func setup(m: MatchController, r: CameraRig) -> void:
@@ -63,6 +65,52 @@ func _draw() -> void:
 		_text(Vector2(0, 128), _banner, 30, Color(_banner_col, clampf(_banner_t, 0.0, 1.0)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if match_ctl.over:
 		_results(vs)
+	elif force_scoreboard or Input.is_action_pressed("scoreboard"):
+		_scoreboard(vs)
+
+
+## Every champion in one table: level, kills, deaths, gold and items. Own
+## team first; enemy gold is not shown. Big type, one row per champion.
+func _scoreboard(vs: Vector2) -> void:
+	var me: Unit = rig.target if rig else null
+	var mine := me.team if me else 0
+	var row_h := 48.0
+	var w := 1040.0
+	var x := vs.x * 0.5 - w * 0.5
+	var h := 60.0 + row_h * 6 + 30.0
+	var y := vs.y * 0.5 - h * 0.5
+	draw_rect(Rect2(x - 2, y - 2, w + 4, h + 4), Palette.BRASS)
+	draw_rect(Rect2(x, y, w, h), Color(0.08, 0.07, 0.06, 0.94))
+	var cols := [[24, "Champion"], [300, "Level"], [400, "Kills"], [490, "Deaths"], [600, "Gold"], [710, "Items"]]
+	for col in cols:
+		_text(Vector2(x + col[0], y + 40), col[1], 22, Color(0.8, 0.77, 0.7), HORIZONTAL_ALIGNMENT_LEFT)
+	var row := 0
+	for team in [mine, 1 - mine]:
+		if row == 3:
+			draw_rect(Rect2(x + 16, y + 58 + row * row_h + 8, w - 32, 2), Color(0.4, 0.36, 0.3))
+		for u in match_ctl.champions:
+			if u.team != team:
+				continue
+			var ry := y + 60 + row * row_h + (14.0 if row >= 3 else 0.0)
+			var st: Dictionary = match_ctl.stats.champions.get(u.name, {})
+			var tc := Palette.team_color(team)
+			if u == me:
+				draw_rect(Rect2(x + 8, ry + 4, w - 16, row_h - 4), Color(1, 1, 1, 0.07))
+			var nm := u.def.display_name + ("  (you)" if u == me else "")
+			if not u.alive:
+				nm += "  %d s" % ceili(maxf(u.respawn_timer, 0.0))
+			_text(Vector2(x + 24, ry + 36), nm, 24, tc if u.alive else tc.darkened(0.35), HORIZONTAL_ALIGNMENT_LEFT, 270)
+			_text(Vector2(x + 300, ry + 36), str(u.level), 24, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT)
+			_text(Vector2(x + 400, ry + 36), str(st.get("kills", 0)), 24, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT)
+			_text(Vector2(x + 490, ry + 36), str(st.get("deaths", 0)), 24, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT)
+			if team == mine:
+				_text(Vector2(x + 600, ry + 36), str(floori(u.gold)), 24, Palette.GOLD, HORIZONTAL_ALIGNMENT_LEFT)
+			var names := PackedStringArray()
+			for it in u.items:
+				names.append(it.short_name)
+			_text(Vector2(x + 710, ry + 36), ", ".join(names) if names.size() > 0 else "none yet", 22,
+					Color(0.92, 0.9, 0.84) if names.size() > 0 else Color(0.55, 0.53, 0.5), HORIZONTAL_ALIGNMENT_LEFT, w - 730)
+			row += 1
 
 
 func _small_bar(r: Rect2, f: float, col: Color) -> void:

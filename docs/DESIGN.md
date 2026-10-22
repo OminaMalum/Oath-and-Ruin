@@ -228,6 +228,21 @@ Measured (24 seeds, 18 to 41, against the same seeds without gold): sides 12 to 
 (was 8.9), range 5.5 to 14.4 min, first bot purchase at 1.1 to 2.6 min, 2.9 items per champion by the end, about
 290 gold a minute.
 
+### Recall and scoreboard (added 2026-10-22)
+
+**T** starts a recall: stand still for 4 s (`recall_time` in `data/economy.tres`) and you are back at your
+fountain. Moving, pressing any ability, taking a hit or a stun cancels it, with a short reason on screen. It is a
+button on the UnitCommand like any other, so bots recall the same way: when retreating hurt, or when the next item
+is affordable and health is under 60%, but only 20 m or more from home, with no enemy champion within 14 m and no
+hit in the last 2 s. Bots also shop while dead, as a player can. The recall timer travels in snapshots (protocol
+version 3).
+
+**Tab** (hold) shows the scoreboard: each champion's level, kills, deaths, items, and gold for your own team.
+
+Measured (72 seeds, 18 to 89): about 6 recalls per bot per match, 3.2 items per champion, median match 9.3 to
+10.1 min per batch of 24 (8.5 before recall), Oath 42 / Ruin 30. That lean is within noise for 72 matches
+(earlier 60 seeds leaned the other way, 27 / 33) but is worth watching.
+
 ### Measured (headless soak, 48 seeds, after ultimates and passives)
 
 Two runs of 24 seeds. All 48 ended by a core falling, 6.5 to 14.3 min (median about 11). The objective was

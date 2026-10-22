@@ -39,7 +39,7 @@ func _run() -> void:
 		"test_second_slot_and_pierce", "test_stun", "test_knife_slow",
 		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
 		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember", "test_last_hit_xp",
-		"test_gold_and_shop", "test_items_change_stats", "test_bots_buy_items",
+		"test_gold_and_shop", "test_items_change_stats", "test_bots_buy_items", "test_recall",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
 	]
@@ -967,6 +967,57 @@ func test_bots_buy_items() -> void:
 	await secs(0.5)
 	for c in mc.champions:
 		check(c.items.size() >= 1 and c.items[0].id == c.def.item_build[0], "%s bot buys its first item (%s)" % [c.name, c.items[0].id if c.items.size() > 0 else "none"])
+
+
+func test_recall() -> void:
+	var mc := _match()
+	await ticks(2)
+	var me: Unit = mc.champions[0]
+	var sc := me.controller as ScriptedController
+	var home := me.spawn_transform.origin
+	var away := Vector3(2, 0, 0)
+	me.global_position = away
+	await ticks(1)
+	sc.command.buttons = UnitCommand.BTN_RECALL
+	await ticks(1)
+	sc.command.buttons = 0
+	check(me.recall_timer > 0.0, "T starts a recall")
+	await secs(Unit.ECONOMY.recall_time - 0.5)
+	check(UnitController.flat_distance(me.global_position, away) < 0.1, "still waiting before the time is up")
+	await secs(0.6)
+	check(me.recall_timer == 0.0 and UnitController.flat_distance(me.global_position, home) < 0.1, "home after %.0f s" % Unit.ECONOMY.recall_time)
+	# Moving cancels.
+	var reasons := []
+	me.recall_cancelled.connect(func(r: String) -> void: reasons.append(r))
+	me.global_position = away
+	await ticks(1)
+	sc.command.buttons = UnitCommand.BTN_RECALL
+	await ticks(1)
+	sc.command.buttons = 0
+	sc.command.move = Vector2(0, 1)
+	await ticks(2)
+	sc.command.move = Vector2.ZERO
+	check(me.recall_timer == 0.0 and reasons.size() == 1, "moving cancels the recall")
+	# A hit cancels.
+	sc.command.buttons = UnitCommand.BTN_RECALL
+	await ticks(1)
+	sc.command.buttons = 0
+	authority.apply_damage(mc.champions[3], me, 10.0, SCRIBE.basic_attack)
+	check(me.recall_timer == 0.0 and reasons.size() == 2, "a hit cancels the recall")
+	# Pressing an ability cancels.
+	sc.command.buttons = UnitCommand.BTN_RECALL
+	await ticks(1)
+	sc.command.buttons = UnitCommand.BTN_ATTACK
+	await ticks(1)
+	sc.command.buttons = 0
+	check(me.recall_timer == 0.0 and reasons.size() == 3, "an attack cancels the recall")
+	# The timer reaches network clients.
+	sc.command.buttons = UnitCommand.BTN_RECALL
+	await ticks(1)
+	sc.command.buttons = 0
+	var s: Array = SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([me]))).units[me.net_id]
+	check(absf(s[SnapshotCodec.RECALL] - me.recall_timer) < 0.01, "recall timer survives a snapshot")
+	check(UnitCommand.from_dict({"b": UnitCommand.BTN_RECALL}).pressed(UnitCommand.BTN_RECALL), "recall survives the command path")
 
 
 # --- Networking: prediction, snapshots, command queue ------------------------

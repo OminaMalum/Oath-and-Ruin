@@ -5,6 +5,8 @@ extends Resource
 
 @export var id: StringName
 @export var display_name: String = ""
+## One word for tight spots (the scoreboard).
+@export var short_name: String = ""
 ## One plain line for the shop panel.
 @export var description: String = ""
 @export var cost: int = 600

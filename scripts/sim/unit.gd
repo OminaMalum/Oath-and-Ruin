@@ -58,6 +58,11 @@ var shop_point: Vector3 = Vector3.INF
 ## From items: multiplies ability cooldowns (Q, E, R) and walking speed.
 var cooldown_mult: float = 1.0
 var speed_mult: float = 1.0
+## Recall home: counts down while the champion stands still; 0 when not recalling.
+signal recall_started
+signal recall_cancelled(reason: String)
+signal recalled
+var recall_timer: float = 0.0
 
 ## Progression (match rules feed xp; the unit applies levels and the pick).
 const LEVEL_XP: Array[float] = [0.0, 220.0, 500.0, 850.0, 1300.0]  # xp to reach levels 1..5
@@ -292,6 +297,8 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 		slow_timer -= dt
 		if slow_timer <= 0.0:
 			slow_amount = 0.0
+	if _step_recall(cmd, dt):
+		return
 
 	if cmd.upgrade_choice > 0:
 		choose_upgrade(cmd.upgrade_choice)
@@ -508,6 +515,49 @@ func start_dash(a: AbilityDef, target: Vector3) -> void:
 	dash_hit.clear()
 
 
+## Recall: a press starts it when the champion is free (not casting, not
+## stunned, has a shop). While it runs the unit holds still; a move or any
+## ability press cancels it. Returns true while recalling (the tick is used up).
+func _step_recall(cmd: UnitCommand, dt: float) -> bool:
+	if recall_timer <= 0.0:
+		if cmd.pressed(UnitCommand.BTN_RECALL) and shop_point.is_finite() and not is_casting() \
+				and stun_timer <= 0.0 and dash_timer <= 0.0:
+			if can_shop():
+				cast_rejected.emit(-1, "You are already home")
+				return false
+			recall_timer = ECONOMY.recall_time
+			buffered_slot = -1
+			recall_started.emit()
+		else:
+			return false
+	if cmd.move.length() > 0.1:
+		cancel_recall("Recall cancelled: you moved")
+		return false
+	if cmd.buttons & ~UnitCommand.BTN_RECALL != 0:
+		cancel_recall("Recall cancelled")
+		return false
+	aim_yaw = cmd.aim_yaw
+	rotation.y = aim_yaw
+	velocity = Vector3(0.0, 0.0 if is_on_floor() else velocity.y - GRAVITY * dt, 0.0)
+	move_and_slide()
+	recall_timer -= dt
+	if recall_timer <= 0.0:
+		recall_timer = 0.0
+		global_transform = spawn_transform
+		aim_yaw = spawn_transform.basis.get_euler().y
+		velocity = Vector3.ZERO
+		reset_physics_interpolation()
+		recalled.emit()
+	return true
+
+
+func cancel_recall(reason: String) -> void:
+	if recall_timer <= 0.0:
+		return
+	recall_timer = 0.0
+	recall_cancelled.emit(reason)
+
+
 func interrupt_cast() -> void:
 	dash_timer = 0.0
 	dash_ability = null
@@ -529,6 +579,7 @@ func apply_stun(duration: float) -> void:
 	if duration <= 0.0:
 		return
 	interrupt_cast()
+	cancel_recall("Recall cancelled: stunned")
 	stun_timer = maxf(stun_timer, duration)
 
 
@@ -548,6 +599,7 @@ func set_dead(killer: Unit) -> void:
 	alive = false
 	health = 0.0
 	interrupt_cast()
+	recall_timer = 0.0
 	slow_amount = 0.0
 	slow_timer = 0.0
 	stun_timer = 0.0

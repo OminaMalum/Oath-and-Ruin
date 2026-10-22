@@ -6,6 +6,7 @@
 script = ExtResource("1_item")
 id = &"oathbound_plate"
 display_name = "Oathbound Plate"
+short_name = "Plate"
 description = "+150 health"
 cost = 700
 health = 150.0
