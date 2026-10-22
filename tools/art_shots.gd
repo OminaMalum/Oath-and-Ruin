@@ -69,14 +69,24 @@ func _process(_delta: float) -> bool:
 	return false
 
 
+var _shown := {}
+
+
 func _next() -> void:
 	var k: String = _queue[0]
 	if k.begins_with("champ"):
-		# Behind and above a living Ruinscribe, the way a player sees it.
+		# Behind and above a living champion with a model (a different one each
+		# view when it can), the way a player sees it.
 		var best: Unit = null
 		for u: Unit in root.find_children("*", "Unit", true, false):
-			if u.def.id == &"ruinscribe" and u.alive and (best == null or absf(u.global_position.x) < absf(best.global_position.x)):
+			if u.def.kind != ChampionDef.Kind.CHAMPION or not u.alive or ChampionModel.path_for(u.def.id).is_empty():
+				continue
+			var fresh := not _shown.has(u.def.id)
+			var best_fresh := best != null and not _shown.has(best.def.id)
+			if best == null or (fresh and not best_fresh) or (fresh == best_fresh and absf(u.global_position.x) < absf(best.global_position.x)):
 				best = u
+		if best:
+			_shown[best.def.id] = true
 		if best:
 			var f := best.forward()
 			var at := best.global_position + Vector3(0, 1.0, 0)
