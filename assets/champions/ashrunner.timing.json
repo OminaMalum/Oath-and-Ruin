@@ -1,0 +1,10 @@
+{
+  "fps": 30.0,
+  "release": {
+    "ability_1": 0.0667,
+    "ability_2": 0.1667,
+    "ability_3": 0.1333,
+    "attack": 0.1333
+  },
+  "source": "ashrunner.blend"
+}

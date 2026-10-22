@@ -12,10 +12,12 @@ const DIR := "res://assets/champions/"
 ## material name: [texture set or "", tint, roughness, metallic, uv scale, (optional) bump only]
 const LOOKS := {
 	"Robe": ["poly_wool_herringbone", Color(1.5, 1.5, 1.5), 0.95, 0.0, 3.0],
+	"RobeDark": ["poly_wool_herringbone", Color(0.75, 0.75, 0.75), 0.95, 0.0, 3.0],
 	"RobeInner": ["", Color(0.03, 0.02, 0.025), 1.0, 0.0, 1.0],
 	"Team": ["poly_wool_herringbone", Color(0.95, 0.95, 0.95), 0.9, 0.0, 3.0],
 	"Leather": ["brown_leather", Color(0.85, 0.7, 0.6), 0.6, 0.0, 2.5],
 	"Cloth": ["hessian_230", Color(0.55, 0.5, 0.42), 0.95, 0.0, 3.0],
+	"ClothDark": ["hessian_230", Color(0.2, 0.19, 0.18), 0.95, 0.0, 3.0],
 	"Wood": ["bark_willow_02", Color(0.55, 0.42, 0.34), 0.8, 0.0, 1.2],
 	"Skin": ["", Color(0.66, 0.5, 0.42), 0.55, 0.0, 1.0],
 	"Brass": ["", Color(0.8, 0.6, 0.3), 0.32, 1.0, 1.0],
@@ -63,7 +65,7 @@ static func dress(root: Node, team: int, accent: Color, primary := Color(0.4, 0.
 			elif nm == "Eyes":
 				m = eyes
 			elif LOOKS.has(nm):
-				m = _make(LOOKS[nm], team_col if nm == "Team" else (primary if nm == "Robe" else Color.WHITE))
+				m = _make(LOOKS[nm], team_col if nm == "Team" else (primary if nm.begins_with("Robe") and nm != "RobeInner" else Color.WHITE))
 			else:
 				m = Palette.mat(Color(0.5, 0.5, 0.5))
 			made[nm] = m
