@@ -225,7 +225,7 @@ func _build_imported(path: String) -> void:
 	_model = (load(path) as PackedScene).instantiate()
 	_model.name = "Model"
 	_body.add_child(_model)
-	var d := ChampionModel.dress(_model, unit.team, unit.def.accent_color)
+	var d := ChampionModel.dress(_model, unit.team, unit.def.accent_color, unit.def.primary_color)
 	for m: StandardMaterial3D in d.materials:
 		_materials.append(m)
 	_focus_mat = d.glow

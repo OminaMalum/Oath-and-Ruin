@@ -2,15 +2,16 @@ class_name ChampionModel
 ## Dresses an imported champion model (assets/champions/<id>.glb, built to
 ## docs/ASSET_CONTRACT.md) in game materials. The model's material names say
 ## what each part is made of; this swaps them for CC0 textured materials, puts
-## the team colour on the "Team" parts and the champion's accent on "Glow".
+## the team colour on the "Team" parts, the champion's primary colour on
+## "Robe" and its accent on "Glow".
 ## Every material is a fresh copy, because the view fades and flashes them
 ## per unit.
 
 const DIR := "res://assets/champions/"
 
-## material name: [texture set or "", tint, roughness, metallic, uv scale]
+## material name: [texture set or "", tint, roughness, metallic, uv scale, (optional) bump only]
 const LOOKS := {
-	"Robe": ["poly_wool_herringbone", Color(0.6, 0.11, 0.1), 0.95, 0.0, 3.0],
+	"Robe": ["poly_wool_herringbone", Color(1.5, 1.5, 1.5), 0.95, 0.0, 3.0],
 	"RobeInner": ["", Color(0.03, 0.02, 0.025), 1.0, 0.0, 1.0],
 	"Team": ["poly_wool_herringbone", Color(0.95, 0.95, 0.95), 0.9, 0.0, 3.0],
 	"Leather": ["brown_leather", Color(0.85, 0.7, 0.6), 0.6, 0.0, 2.5],
@@ -20,6 +21,14 @@ const LOOKS := {
 	"Brass": ["", Color(0.8, 0.6, 0.3), 0.32, 1.0, 1.0],
 	"Paper": ["", Color(0.88, 0.82, 0.66), 0.9, 0.0, 1.0],
 	"Trim": ["", Color(0.86, 0.64, 0.3), 0.4, 0.7, 1.0],
+	"Steel": ["", Color(0.6, 0.62, 0.64), 0.34, 0.9, 1.0],
+	"Iron": ["", Color(0.2, 0.2, 0.22), 0.45, 0.85, 1.0],
+	# Woven hessian bumps read as rings of mail once it is metal.
+	"Mail": ["hessian_230", Color(0.38, 0.4, 0.43), 0.5, 0.85, 8.0, true],
+	"Bone": ["", Color(0.84, 0.79, 0.66), 0.6, 0.0, 1.0],
+	"Fur": ["poly_wool_herringbone", Color(0.42, 0.36, 0.3), 1.0, 0.0, 4.0],
+	"Feather": ["", Color(0.22, 0.2, 0.18), 0.8, 0.0, 1.0],
+	"Glass": ["", Color(1.0, 0.9, 0.7), 0.1, 0.0, 1.0],
 }
 const SETS := {
 	"poly_wool_herringbone": "poly_wool_herringbone", "brown_leather": "brown_leather", "hessian_230": "hessian_230",
@@ -34,7 +43,7 @@ static func path_for(id: StringName) -> String:
 
 ## Swaps the materials on every mesh under `root`. Returns
 ## {"materials": Array[StandardMaterial3D], "glow": StandardMaterial3D}.
-static func dress(root: Node, team: int, accent: Color) -> Dictionary:
+static func dress(root: Node, team: int, accent: Color, primary := Color(0.4, 0.12, 0.11)) -> Dictionary:
 	var mats: Array[StandardMaterial3D] = []
 	var glow := Palette.glow(accent, 1.4)
 	var eyes := Palette.glow(accent.lightened(0.35), 3.0)
@@ -54,7 +63,7 @@ static func dress(root: Node, team: int, accent: Color) -> Dictionary:
 			elif nm == "Eyes":
 				m = eyes
 			elif LOOKS.has(nm):
-				m = _make(LOOKS[nm], team_col if nm == "Team" else Color.WHITE)
+				m = _make(LOOKS[nm], team_col if nm == "Team" else (primary if nm == "Robe" else Color.WHITE))
 			else:
 				m = Palette.mat(Color(0.5, 0.5, 0.5))
 			made[nm] = m
@@ -73,10 +82,11 @@ static func _make(look: Array, team_tint: Color) -> StandardMaterial3D:
 	var set_id: String = look[0]
 	if not set_id.is_empty():
 		var base := "res://assets/env/textures/%s_" % SETS[set_id]
-		m.albedo_texture = load(base + "diff_1k.jpg")
+		if look.size() < 6 or not look[5]:
+			m.albedo_texture = load(base + "diff_1k.jpg")
 		m.normal_enabled = true
 		m.normal_texture = load(base + "nor_gl_1k.jpg")
-		m.normal_scale = 0.8
+		m.normal_scale = 1.4 if look.size() > 5 and look[5] else 0.8
 		m.roughness_texture = load(base + "arm_1k.jpg")
 		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
 		m.ao_enabled = true

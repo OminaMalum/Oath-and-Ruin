@@ -3,6 +3,7 @@ extends SceneTree
 ## xvfb-run -a -s "-screen 0 1280x960x24" godot --rendering-driver opengl3 --path . -s tools/model_shots.gd -- \
 ##   --model=res://assets/champions/ruinscribe.glb --out=/tmp/model [--team=0]
 ## Each shot: [file, clip, time in s (-1 = release), camera yaw degrees, distance]
+## --strip=CLIP[:N[:YAW]] instead shoots N frames spread over one clip (strip_00.png ...).
 
 const SHOTS := [
 	["front", "idle", 0.6, 25.0, 3.4],
@@ -29,6 +30,7 @@ var _cam: Camera3D
 var _i := 0
 var _wait := 0
 var _timing := {}
+var _shots: Array = SHOTS
 
 
 func _initialize() -> void:
@@ -39,6 +41,13 @@ func _initialize() -> void:
 			_model = a.get_slice("=", 1)
 		elif a.begins_with("--team="):
 			_team = int(a.get_slice("=", 1))
+		elif a.begins_with("--strip="):
+			var parts := a.get_slice("=", 1).split(":")
+			var n := int(parts[1]) if parts.size() > 1 else 8
+			var yaw := float(parts[2]) if parts.size() > 2 else 30.0
+			_shots = []
+			for i in n:
+				_shots.append(["strip_%02d" % i, parts[0], -2.0 - float(i) / float(maxi(n - 1, 1)), yaw, 3.8])
 	DirAccess.make_dir_recursive_absolute(_out)
 	var world := Node3D.new()
 	root.add_child(world)
@@ -51,7 +60,8 @@ func _initialize() -> void:
 	world.add_child(floor)
 	_inst = (load(_model) as PackedScene).instantiate()
 	world.add_child(_inst)
-	ChampionModel.dress(_inst, _team, Color(0.25, 0.8, 0.78))
+	var def := load("res://data/champions/%s.tres" % _model.get_file().get_basename()) as ChampionDef
+	ChampionModel.dress(_inst, _team, def.accent_color, def.primary_color)
 	_player = _inst.find_children("*", "AnimationPlayer", true, false)[0]
 	var tj := _model.get_basename() + ".timing.json"
 	if FileAccess.file_exists(tj):
@@ -64,10 +74,12 @@ func _initialize() -> void:
 
 
 func _setup() -> void:
-	var s: Array = SHOTS[_i]
+	var s: Array = _shots[_i]
 	var clip: String = s[1]
 	var t: float = s[2]
-	if t < 0.0:
+	if t <= -2.0:
+		t = (-2.0 - t) * _player.get_animation(clip).length
+	elif t < 0.0:
 		t = float(_timing.get(clip, 0.0))
 	_player.play(clip)
 	_player.seek(t, true)
@@ -84,11 +96,11 @@ func _process(_delta: float) -> bool:
 	_wait -= 1
 	if _wait > 0:
 		return false
-	var s: Array = SHOTS[_i]
+	var s: Array = _shots[_i]
 	root.get_viewport().get_texture().get_image().save_png("%s/%s.png" % [_out, s[0]])
 	print("saved ", s[0])
 	_i += 1
-	if _i >= SHOTS.size():
+	if _i >= _shots.size():
 		return true
 	_setup()
 	return false
