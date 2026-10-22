@@ -5,7 +5,8 @@ extends SceneTree
 ## View only: units are not in a sim, their public state is set by hand.
 
 const DEFS := ["res://data/champions/ruinscribe.tres", "res://data/champions/oathwarden.tres", "res://data/champions/ashrunner.tres",
-	"res://data/champions/lanternkeeper.tres", "res://data/champions/thornwright.tres", "res://data/champions/gravebinder.tres"]
+	"res://data/champions/lanternkeeper.tres", "res://data/champions/thornwright.tres", "res://data/champions/gravebinder.tres",
+	"res://data/champions/barrowking.tres", "res://data/champions/veilsinger.tres", "res://data/champions/stormscald.tres"]
 var out_dir := "/tmp/poses"
 var units: Array[Unit] = []
 

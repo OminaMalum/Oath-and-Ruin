@@ -100,6 +100,19 @@ var root_timer: float = 0.0
 ## Marked: takes mark_amount more damage from every source.
 var mark_amount: float = 0.0
 var mark_timer: float = 0.0
+## Taunt or charm: the unit's own command is replaced while the timer runs
+## (see _compelled). compel_point is the caster's position, kept fresh by the
+## server each tick and sent in snapshots, so a client predicts the same walk.
+enum Compel { NONE, TAUNT, CHARM }
+var compel: Compel = Compel.NONE
+var compel_timer: float = 0.0
+var compel_point: Vector3 = Vector3.ZERO
+var compel_source: Unit
+## Haste: basic attacks come this much sooner. Quick: moves this much faster.
+var haste_amount: float = 0.0
+var haste_timer: float = 0.0
+var quick_amount: float = 0.0
+var quick_timer: float = 0.0
 
 ## Lock-on target for homing abilities, chosen at cast start.
 var cast_target_unit: Unit
@@ -271,11 +284,11 @@ func cooldown_fraction(slot: int) -> float:
 
 ## The cooldown a cast from `slot` starts: items shorten abilities, not basics.
 func cooldown_for(slot: int, a: AbilityDef) -> float:
-	return a.cooldown * (cooldown_mult if slot > 0 else 1.0)
+	return a.cooldown * cooldown_mult if slot > 0 else a.cooldown / (1.0 + haste_amount)
 
 
 func current_move_speed() -> float:
-	var speed := def.move_speed * speed_mult * (1.0 - slow_amount)
+	var speed := def.move_speed * speed_mult * (1.0 + quick_amount) * (1.0 - slow_amount)
 	if is_casting():
 		var a := cast_ability()
 		speed *= a.move_mult_while_casting if a else 1.0
@@ -302,11 +315,7 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 		slow_timer -= dt
 		if slow_timer <= 0.0:
 			slow_amount = 0.0
-	root_timer = maxf(0.0, root_timer - dt)
-	if mark_timer > 0.0:
-		mark_timer -= dt
-		if mark_timer <= 0.0:
-			mark_amount = 0.0
+	_step_status(dt)
 	if _step_recall(cmd, dt):
 		return
 
@@ -320,6 +329,7 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 		velocity.y = 0.0 if is_on_floor() else velocity.y - GRAVITY * dt
 		move_and_slide()
 		return
+	cmd = _compelled(cmd)
 	aim_yaw = cmd.aim_yaw
 	aim_point = cmd.aim_point
 	rotation.y = aim_yaw
@@ -338,7 +348,7 @@ func step_motion(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> voi
 	var dir := Vector3(cmd.move.x, 0.0, -cmd.move.y).limit_length(1.0).rotated(Vector3.UP, aim_yaw)
 	move_dir = dir
 	var speed := current_move_speed()
-	var top_speed := def.move_speed * speed_mult
+	var top_speed := def.move_speed * speed_mult * (1.0 + quick_amount)
 	if root_timer > 0.0:
 		speed = 0.0
 	velocity.x = dir.x * speed
@@ -377,11 +387,7 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 		slow_timer -= dt
 		if slow_timer <= 0.0:
 			slow_amount = 0.0
-	root_timer = maxf(0.0, root_timer - dt)
-	if mark_timer > 0.0:
-		mark_timer -= dt
-		if mark_timer <= 0.0:
-			mark_amount = 0.0
+	_step_status(dt)
 	if stun_timer > 0.0:
 		stun_timer -= dt
 		velocity.x = 0.0
@@ -389,6 +395,7 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 		velocity.y = 0.0 if is_on_floor() else velocity.y - GRAVITY * dt
 		move_and_slide()
 		return
+	cmd = _compelled(cmd)
 	aim_yaw = cmd.aim_yaw
 	aim_point = cmd.aim_point
 	rotation.y = aim_yaw
@@ -416,6 +423,62 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 		elif a == null or cooldowns[buffered_slot] > buffer_timer:
 			buffered_slot = -1
 	step_motion(cmd, dt, null)
+
+
+## Status timers both the server and a predicting client count down.
+func _step_status(dt: float) -> void:
+	root_timer = maxf(0.0, root_timer - dt)
+	if mark_timer > 0.0:
+		mark_timer -= dt
+		if mark_timer <= 0.0:
+			mark_amount = 0.0
+	if haste_timer > 0.0:
+		haste_timer -= dt
+		if haste_timer <= 0.0:
+			haste_amount = 0.0
+	if quick_timer > 0.0:
+		quick_timer -= dt
+		if quick_timer <= 0.0:
+			quick_amount = 0.0
+	if compel_timer > 0.0:
+		compel_timer -= dt
+		if compel_source != null and (not is_instance_valid(compel_source) or not compel_source.alive):
+			compel_timer = 0.0  # the caster died: free at once
+		elif compel_source != null:
+			compel_point = compel_source.global_position
+		if compel_timer <= 0.0:
+			_end_compel()
+
+
+func _end_compel() -> void:
+	compel = Compel.NONE
+	compel_timer = 0.0
+	compel_source = null
+
+
+## While taunted or charmed the unit's own command is ignored. Taunted: face
+## the caster, walk until in basic attack reach, hold the basic attack.
+## Charmed: walk straight away from the caster, no attacks or abilities.
+func _compelled(cmd: UnitCommand) -> UnitCommand:
+	if compel_timer <= 0.0 or compel == Compel.NONE:
+		return cmd
+	var c := UnitCommand.new()
+	c.buy_item = cmd.buy_item
+	var to := Vector3(compel_point.x - global_position.x, 0.0, compel_point.z - global_position.z)
+	if to.length() < 0.05:
+		to = forward()
+	var d := to.normalized() if compel == Compel.TAUNT else -to.normalized()
+	c.aim_yaw = atan2(-d.x, -d.z)
+	if compel == Compel.TAUNT:
+		c.aim_point = compel_point
+		c.buttons = UnitCommand.BTN_ATTACK
+		var reach := def.basic_attack.range * 0.8 if def.basic_attack else 2.0
+		if to.length() > reach:
+			c.move = Vector2(0.0, 1.0)
+	else:
+		c.aim_point = global_position + d * 5.0
+		c.move = Vector2(0.0, 1.0)
+	return c
 
 
 func _update_buffer(cmd: UnitCommand, dt: float) -> void:
@@ -487,6 +550,8 @@ func clamp_target(a: AbilityDef, point: Vector3) -> Vector3:
 		flat = flat.limit_length(a.range)
 	elif a.delivery == AbilityDef.Delivery.WARD:
 		return Vector3(from.x, from.y, from.z)
+	elif a.delivery == AbilityDef.Delivery.WALL:
+		flat = flat.limit_length(a.range)
 	elif a.delivery == AbilityDef.Delivery.DASH:
 		# Dashes go the way the unit is moving (WASD), forward when standing.
 		var d := move_dir if move_dir.length() > 0.1 else forward()
@@ -618,6 +683,30 @@ func apply_mark(amount: float, duration: float) -> void:
 		mark_timer = maxf(mark_timer, duration)
 
 
+## Taunt or charm from `source`: interrupts the current cast, longest wins.
+func apply_compel(kind: Compel, source: Unit, duration: float) -> void:
+	if duration <= 0.0 or duration < compel_timer:
+		return
+	interrupt_cast()
+	cancel_recall("Recall cancelled: taunted" if kind == Compel.TAUNT else "Recall cancelled: charmed")
+	compel = kind
+	compel_timer = duration
+	compel_source = source
+	compel_point = source.global_position
+
+
+func apply_haste(amount: float, duration: float) -> void:
+	if amount >= haste_amount or haste_timer <= 0.0:
+		haste_amount = amount
+		haste_timer = maxf(haste_timer, duration)
+
+
+func apply_quick(amount: float, duration: float) -> void:
+	if amount >= quick_amount or quick_timer <= 0.0:
+		quick_amount = amount
+		quick_timer = maxf(quick_timer, duration)
+
+
 ## Drag the unit to `to` over `time` seconds (a pull). Uses the dash motion
 ## with no dash ability, so it hits nothing and walls still stop it.
 func displace(to: Vector3, time: float = 0.25) -> void:
@@ -629,9 +718,9 @@ func displace(to: Vector3, time: float = 0.25) -> void:
 	dash_ability = null
 
 
-## Rooted, slowed or stunned: what a TITHE passive punishes.
+## Rooted, slowed, stunned, taunted or charmed: what a TITHE passive punishes.
 func is_impaired() -> bool:
-	return root_timer > 0.0 or slow_timer > 0.0 or stun_timer > 0.0
+	return root_timer > 0.0 or slow_timer > 0.0 or stun_timer > 0.0 or compel_timer > 0.0
 
 
 func apply_slow(amount: float, duration: float) -> void:
@@ -652,6 +741,11 @@ func set_dead(killer: Unit) -> void:
 	root_timer = 0.0
 	mark_amount = 0.0
 	mark_timer = 0.0
+	haste_amount = 0.0
+	haste_timer = 0.0
+	quick_amount = 0.0
+	quick_timer = 0.0
+	_end_compel()
 	stun_timer = 0.0
 	respawn_timer = def.respawn_time
 	corpse_timer = 1.0

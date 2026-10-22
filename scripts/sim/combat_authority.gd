@@ -51,6 +51,8 @@ class SimArea:
 	var source: Unit
 	var ability: AbilityDef
 	var center: Vector3
+	## Flat unit vector from the caster to the centre at release (walls lie across it).
+	var dir: Vector3 = Vector3.FORWARD
 	var timer: float
 	var alive: bool = true
 
@@ -135,13 +137,15 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 			p.target = target_unit if a.homing else null
 			projectiles.append(p)
 			projectile_spawned.emit(p)
-		AbilityDef.Delivery.GROUND_AREA, AbilityDef.Delivery.WARD:
+		AbilityDef.Delivery.GROUND_AREA, AbilityDef.Delivery.WARD, AbilityDef.Delivery.WALL:
 			var ar := SimArea.new()
 			ar.id = _next_fx_id
 			_next_fx_id += 1
 			ar.source = caster
 			ar.ability = a
 			ar.center = Vector3(target.x, 0.0, target.z)
+			var d := Vector3(target.x - caster.global_position.x, 0.0, target.z - caster.global_position.z)
+			ar.dir = d.normalized() if d.length() > 0.1 else caster.forward()
 			ar.timer = area_lifetime(a)
 			areas.append(ar)
 			area_spawned.emit(ar)
@@ -155,7 +159,7 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 				var to := Vector3(u.global_position.x - caster.global_position.x, 0.0, u.global_position.z - caster.global_position.z)
 				if to.length() > a.range + u.def.radius:
 					continue
-				if to.length() > u.def.radius and absf(fwd.signed_angle_to(to, Vector3.UP)) > half:
+				if a.arc_degrees < 360.0 and to.length() > u.def.radius and absf(fwd.signed_angle_to(to, Vector3.UP)) > half:
 					continue
 				apply_damage(caster, u, a.damage, a)
 		AbilityDef.Delivery.DASH:
@@ -163,9 +167,19 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 			dash_started.emit(caster, a)
 
 
-## Ground areas burst after their delay; wards stand for their duration.
+## Ground areas burst after their delay; wards and walls stand for their duration.
 static func area_lifetime(a: AbilityDef) -> float:
-	return a.ward_duration if a.delivery == AbilityDef.Delivery.WARD else a.area_delay
+	return a.ward_duration if _stands(a) else a.area_delay
+
+
+static func _stands(a: AbilityDef) -> bool:
+	return a.delivery == AbilityDef.Delivery.WARD or a.delivery == AbilityDef.Delivery.WALL
+
+
+## The two flat end points of a wall.
+static func wall_ends(ar: SimArea) -> Array[Vector3]:
+	var side := Vector3(-ar.dir.z, 0.0, ar.dir.x) * (ar.ability.wall_length * 0.5)
+	return [ar.center - side, ar.center + side]
 
 
 ## Called by a dashing unit each tick with where it started the tick: every
@@ -227,11 +241,22 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 		target.apply_root(a.root_duration)
 	if a != null and a.mark_duration > 0.0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
 		target.apply_mark(a.mark_amount, a.mark_duration)
+	if a != null and (a.taunt_duration > 0.0 or a.charm_duration > 0.0) and _compellable(target):
+		if a.taunt_duration > 0.0:
+			target.apply_compel(Unit.Compel.TAUNT, source, a.taunt_duration)
+		else:
+			target.apply_compel(Unit.Compel.CHARM, source, a.charm_duration)
 	if target.health <= 0.0:
 		target.set_dead(source)
 		unit_died.emit(target, source)
 		_on_kill(source, target)
 	return true
+
+
+## Taunts and charms move champions and minions, never structures or the
+## neutral camp (it would walk off its post).
+static func _compellable(u: Unit) -> bool:
+	return u.def.kind == ChampionDef.Kind.CHAMPION or u.def.kind == ChampionDef.Kind.MINION
 
 
 ## Passive multipliers on one hit. INSCRIBE counts basic attack hits per
@@ -257,15 +282,24 @@ func passive_damage_factor(source: Unit, target: Unit, a: AbilityDef) -> float:
 
 
 ## LANTERN: allied champions near a living Lantern champion (itself too)
-## regain health every tick.
+## regain health every tick. ENCORE: the same circle moves faster.
+## BARROWBLOOD: the unit regains health while below half.
 func _step_passives(dt: float) -> void:
 	for src in units:
-		if not src.alive or src.def.passive != ChampionDef.Passive.LANTERN:
+		if not src.alive:
 			continue
-		for u in units:
-			if u.alive and u.team == src.team and u.def.kind == ChampionDef.Kind.CHAMPION \
-					and _flat(u.global_position, src.global_position) <= src.def.passive_range:
-				heal(u, src.def.passive_value * dt)
+		match src.def.passive:
+			ChampionDef.Passive.LANTERN, ChampionDef.Passive.ENCORE:
+				for u in units:
+					if u.alive and u.team == src.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+							and _flat(u.global_position, src.global_position) <= src.def.passive_range:
+						if src.def.passive == ChampionDef.Passive.LANTERN:
+							heal(u, src.def.passive_value * dt)
+						else:
+							u.apply_quick(src.def.passive_value, 0.25)
+			ChampionDef.Passive.BARROWBLOOD:
+				if src.health < src.max_health * 0.5:
+					heal(src, src.def.passive_value * dt)
 
 
 static func _flat(a: Vector3, b: Vector3) -> float:
@@ -311,6 +345,7 @@ func _step_projectiles(dt: float) -> void:
 			var hit := space.intersect_ray(q)
 			if not hit.is_empty():
 				wall_t = from.distance_to(hit.position) / maxf(step_len, 0.0001)
+		wall_t = minf(wall_t, _storm_wall_t(p.source, from, to))
 		# Earliest unit along the segment, tested on the ground plane against
 		# each unit's radius. Pure math, so it does not depend on physics timing.
 		var best: Unit = null
@@ -342,6 +377,24 @@ func _step_projectiles(dt: float) -> void:
 			if p.travelled >= a.range - 0.001:
 				_end_projectile(p, to)
 	projectiles = projectiles.filter(func(x: SimProjectile) -> bool: return x.alive)
+
+
+## First t in [0,1] where the flat segment crosses a standing wall raised by
+## an enemy of `source`, or 2 for none. Homing tower shots are not checked.
+func _storm_wall_t(source: Unit, from: Vector3, to: Vector3) -> float:
+	var best := 2.0
+	for ar in areas:
+		if not ar.alive or ar.ability.delivery != AbilityDef.Delivery.WALL or not is_instance_valid(ar.source) \
+				or not are_enemies(ar.source, source):
+			continue
+		var e := wall_ends(ar)
+		var hit: Variant = Geometry2D.segment_intersects_segment(Vector2(from.x, from.z), Vector2(to.x, to.z),
+				Vector2(e[0].x, e[0].z), Vector2(e[1].x, e[1].z))
+		if hit != null:
+			var d := Vector2(to.x - from.x, to.z - from.z).length()
+			var t := (hit as Vector2).distance_to(Vector2(from.x, from.z)) / maxf(d, 0.0001)
+			best = minf(best, t)
+	return best
 
 
 ## Homing shots fly at the target's chest and can only hit that target.
@@ -403,9 +456,18 @@ func _step_areas(dt: float) -> void:
 				if u.alive and are_enemies(ar.source, u) and u.def.kind != ChampionDef.Kind.STRUCTURE \
 						and _flat(u.global_position, ar.center) <= ar.ability.area_radius + u.def.radius:
 					u.apply_slow(ar.ability.enemy_slow, 0.25)
-		if ar.timer <= 0.0 and ar.ability.delivery == AbilityDef.Delivery.WARD:
+		if ar.ability.delivery == AbilityDef.Delivery.WARD and (ar.ability.ally_haste > 0.0 or ar.ability.ally_quick > 0.0) \
+				and is_instance_valid(ar.source):
+			for u in units:
+				if u.alive and u.team == ar.source.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+						and _flat(u.global_position, ar.center) <= ar.ability.area_radius + u.def.radius:
+					if ar.ability.ally_haste > 0.0:
+						u.apply_haste(ar.ability.ally_haste, 0.25)
+					if ar.ability.ally_quick > 0.0:
+						u.apply_quick(ar.ability.ally_quick, 0.25)
+		if ar.timer <= 0.0 and _stands(ar.ability):
 			ar.alive = false
-			area_detonated.emit(ar)  # a ward simply ends
+			area_detonated.emit(ar)  # a ward or wall simply ends
 		elif ar.timer <= 0.0:
 			ar.alive = false
 			_burst(ar)
@@ -433,7 +495,11 @@ func _burst(ar: SimArea) -> void:
 			if a.ally_heal > 0.0 and u.def.kind == ChampionDef.Kind.CHAMPION:
 				heal(u, a.ally_heal)
 			continue
-		var hurt := apply_damage(ar.source, u, a.damage, a) if src_ok and a.damage > 0.0 else true
+		var dmg := a.damage
+		if src_ok and ar.source.def.passive == ChampionDef.Passive.STORMEYE \
+				and _flat(u.global_position, ar.center) <= a.area_radius * 0.4 + u.def.radius:
+			dmg *= 1.0 + ar.source.def.passive_value
+		var hurt := apply_damage(ar.source, u, dmg, a) if src_ok and dmg > 0.0 else true
 		if a.pull_distance > 0.0 and u.alive and hurt and u.def.kind != ChampionDef.Kind.STRUCTURE:
 			var to := ar.center - u.global_position
 			to.y = 0.0
@@ -447,6 +513,7 @@ func _burst(ar: SimArea) -> void:
 		b.source = ar.source
 		b.ability = a.leaves
 		b.center = ar.center
+		b.dir = ar.dir
 		b.timer = area_lifetime(b.ability)
 		_new_areas.append(b)
 		area_spawned.emit(b)

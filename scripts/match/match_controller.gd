@@ -15,10 +15,13 @@ const RUNNER := preload("res://data/champions/ashrunner.tres")
 const LANTERN := preload("res://data/champions/lanternkeeper.tres")
 const THORN := preload("res://data/champions/thornwright.tres")
 const GRAVE := preload("res://data/champions/gravebinder.tres")
+const BARROW := preload("res://data/champions/barrowking.tres")
+const VEIL := preload("res://data/champions/veilsinger.tres")
+const STORM := preload("res://data/champions/stormscald.tres")
 ## Every playable champion. A match draws three of them (the player's pick
 ## first) and both teams field the same three, so neither side gets the
 ## better draft. Slot 0 holds the lane; slots 1 and 2 may go for the objective.
-const ROSTER: Array[ChampionDef] = [SCRIBE, WARDEN, RUNNER, LANTERN, THORN, GRAVE]
+const ROSTER: Array[ChampionDef] = [SCRIBE, WARDEN, RUNNER, LANTERN, THORN, GRAVE, BARROW, VEIL, STORM]
 const TOWER := preload("res://data/units/tower.tres")
 const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")

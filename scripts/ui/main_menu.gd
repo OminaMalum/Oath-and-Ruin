@@ -47,7 +47,8 @@ func _ready() -> void:
 	var row := grid
 	var group := ButtonGroup.new()
 	for c in [["Ruinscribe", "Ranged caster", &"ruinscribe"], ["Oathwarden", "Frontline", &"oathwarden"], ["Ashrunner", "Skirmisher", &"ashrunner"],
-			["Lanternkeeper", "Support", &"lanternkeeper"], ["Thornwright", "Marksman", &"thornwright"], ["Gravebinder", "Controller", &"gravebinder"]]:
+			["Lanternkeeper", "Support", &"lanternkeeper"], ["Thornwright", "Marksman", &"thornwright"], ["Gravebinder", "Controller", &"gravebinder"],
+			["Barrowking", "Frontline", &"barrowking"], ["Veilsinger", "Support", &"veilsinger"], ["Stormscald", "Spellcaster", &"stormscald"]]:
 		var b := Button.new()
 		b.toggle_mode = true
 		b.button_group = group

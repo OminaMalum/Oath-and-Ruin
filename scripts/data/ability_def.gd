@@ -7,8 +7,9 @@ extends Resource
 ## PROJECTILE flies from the muzzle. GROUND_AREA bursts at a point after a delay.
 ## MELEE_ARC hits every enemy in a cone in front at release. DASH carries the
 ## caster along its move direction and hits enemies it passes through. WARD
-## plants a circle on the caster that shields allied champions inside.
-enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
+## plants a circle on the caster that shields allied champions inside. WALL
+## raises a line across the aim at a ground point that stops enemy shots.
+enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD, WALL }
 
 @export var id: StringName
 @export var display_name: String = ""
@@ -70,6 +71,10 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 ## Mark: the target takes this much more damage from everyone (0.25 = 25%).
 @export var mark_amount: float = 0.0
 @export var mark_duration: float = 0.0
+## Taunt: the target must walk to the caster and basic attack it, nothing else.
+@export var taunt_duration: float = 0.0
+## Charm: the target walks straight away from the caster and cannot act.
+@export var charm_duration: float = 0.0
 
 @export_group("Melee arc")
 ## Full width of the cone in degrees (120 = 60 each side of the aim).
@@ -88,6 +93,14 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 @export var heal_per_second: float = 0.0
 ## Slow on enemies standing inside (0.35 = 35%), kept up while they stay.
 @export var enemy_slow: float = 0.0
+## Allied champions inside attack faster (0.35 = basic attacks come 35% sooner).
+@export var ally_haste: float = 0.0
+## Allied champions inside move faster (0.2 = 20%).
+@export var ally_quick: float = 0.0
+
+@export_group("Wall")
+## Length of a WALL across the aim (ward_duration sets how long it stands).
+@export var wall_length: float = 7.0
 
 @export_group("Upgrades")
 ## The two versions offered at UPGRADE_LEVEL (AbilityDef resources); picking

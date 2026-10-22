@@ -2,7 +2,7 @@ class_name ChampionDef
 extends Resource
 ## Base stats and kit for a champion (or any unit that uses the same rules).
 
-enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER, CLERIC, RANGER, WARLOCK }
+enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER, CLERIC, RANGER, WARLOCK, BARBARIAN, BARD, EVOKER }
 ## What rules apply: who can be targeted by whom, who respawns, who moves.
 enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 ## Passive rules, resolved by the CombatAuthority. INSCRIBE: every third basic
@@ -12,8 +12,11 @@ enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 ## LANTERN: allied champions within passive_range (and this one) regain
 ## passive_value health per second. LONGSHOT: basic attacks deal passive_value
 ## more to targets beyond passive_range. TITHE: passive_value more damage to
-## enemies that are rooted, slowed or stunned.
-enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE }
+## enemies that are rooted, slowed or stunned. BARROWBLOOD: below half health
+## this unit regains passive_value health per second. ENCORE: allied champions
+## within passive_range (and this one) move passive_value faster. STORMEYE:
+## ground area bursts deal passive_value more to targets near their centre.
+enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE, BARROWBLOOD, ENCORE, STORMEYE }
 
 @export var id: StringName
 @export var display_name: String = ""

@@ -15,6 +15,9 @@ const RUNNER := preload("res://data/champions/ashrunner.tres")
 const LANTERN := preload("res://data/champions/lanternkeeper.tres")
 const THORN := preload("res://data/champions/thornwright.tres")
 const GRAVE := preload("res://data/champions/gravebinder.tres")
+const BARROW := preload("res://data/champions/barrowking.tres")
+const VEIL := preload("res://data/champions/veilsinger.tres")
+const STORM := preload("res://data/champions/stormscald.tres")
 const DT := 1.0 / 60.0
 
 var failures: int = 0
@@ -45,6 +48,8 @@ func _run() -> void:
 		"test_gold_and_shop", "test_items_change_stats", "test_bots_buy_items", "test_recall",
 		"test_batch_b_data", "test_root", "test_pull", "test_bramble_field", "test_mark",
 		"test_lantern_heals", "test_dawnlight", "test_longshot", "test_tithe",
+		"test_batch_c_data", "test_taunt", "test_charm", "test_war_song", "test_encore", "test_storm_wall",
+		"test_tempest", "test_barrow_blood", "test_kings_wrath",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
 	]
@@ -1049,7 +1054,11 @@ func _cast(u: Unit, slot: int, at: Vector3, wait: float) -> void:
 
 
 func test_batch_b_data() -> void:
-	for def: ChampionDef in [LANTERN, THORN, GRAVE]:
+	_kit_data([LANTERN, THORN, GRAVE])
+
+
+func _kit_data(defs: Array) -> void:
+	for def: ChampionDef in defs:
 		check(def.abilities.size() == 3 and def.get_slot(3).is_ultimate, "%s has Q, E and an ultimate R" % def.id)
 		check(def.get_slot(1).upgrades.size() == 2, "%s Q offers two upgrades" % def.id)
 		check(def.passive != ChampionDef.Passive.NONE and not def.passive_name.is_empty(), "%s has a passive" % def.id)
@@ -1177,6 +1186,143 @@ func test_tithe() -> void:
 	await secs(0.5)
 	await _cast(me, 0, foe.global_position, 0.8)
 	check(is_equal_approx(h - foe.health, bolt.damage * (1.0 + GRAVE.passive_value)), "Soul Tithe: a slowed target takes %d%% more" % roundi(GRAVE.passive_value * 100.0))
+
+
+# --- Batch C: Barrowking, Veilsinger, Stormscald -------------------------------
+
+func test_batch_c_data() -> void:
+	_kit_data([BARROW, VEIL, STORM])
+
+
+func test_taunt() -> void:
+	var me := spawn(BARROW, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -4))
+	await ticks(2)
+	await _cast(me, 1, me.global_position, 0.6)
+	aim(foe, Vector3(0, 0, -20))
+	cmd(foe).move = Vector2(0, 1)  # trying to walk away
+	var roar := BARROW.get_slot(1)
+	check(foe.compel == Unit.Compel.TAUNT and foe.compel_timer > 0.0, "the roar taunts an enemy in reach")
+	check(is_equal_approx(foe.health, SCRIBE.max_health - roar.damage), "and deals %.0f" % roar.damage)
+	check(absf(wrapf(foe.aim_yaw - atan2(-(me.global_position.x - foe.global_position.x), -(me.global_position.z - foe.global_position.z)), -PI, PI)) < 0.1, "a taunted champion faces the Barrowking")
+	await secs(0.6)
+	check(me.health < BARROW.max_health, "and attacks it instead of walking away (%.0f)" % me.health)
+	await secs(1.0)
+	check(foe.compel_timer <= 0.0 and foe.compel == Unit.Compel.NONE, "the taunt ends")
+	var d0 := UnitController.flat_distance(foe.global_position, me.global_position)
+	await secs(0.4)
+	check(UnitController.flat_distance(foe.global_position, me.global_position) > d0 + 1.0, "then it walks away again")
+	var s: Array = SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([foe]))).units[foe.net_id]
+	foe.apply_compel(Unit.Compel.TAUNT, me, 1.0)
+	s = SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([foe]))).units[foe.net_id]
+	check(s[SnapshotCodec.COMPEL] == Unit.Compel.TAUNT and absf(s[SnapshotCodec.COMPEL_TIMER] - foe.compel_timer) < 0.01 \
+			and UnitController.flat_distance(s[SnapshotCodec.COMPEL_POINT], me.global_position) < 0.02, "a taunt survives a snapshot")
+
+
+func test_charm() -> void:
+	var me := spawn(VEIL, 0, Vector3.ZERO)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	aim(foe, me.global_position)
+	cmd(foe).move = Vector2(0, 1)  # walking in to fight
+	cmd(foe).buttons = UnitCommand.BTN_ATTACK
+	aim(me, foe.global_position)
+	cmd(me).buttons = UnitCommand.ability_button(2)
+	await ticks(1)
+	cmd(me).buttons = 0
+	var lure := VEIL.get_slot(2)
+	for i in 60:
+		await ticks(1)
+		if foe.compel_timer > 0.0:
+			break
+	check(foe.compel == Unit.Compel.CHARM, "the lure charms the first enemy hit")
+	var d0 := UnitController.flat_distance(foe.global_position, me.global_position)
+	await secs(0.5)
+	check(UnitController.flat_distance(foe.global_position, me.global_position) > d0 + 1.5, "a charmed champion walks away")
+	check(not foe.is_casting(), "and cannot attack")
+	await secs(lure.charm_duration)
+	check(foe.compel == Unit.Compel.NONE, "the charm ends")
+
+
+func test_war_song() -> void:
+	var me := spawn(VEIL, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(2, 0, 0))
+	var far := spawn(SCRIBE, 0, Vector3(15, 0, 0))
+	await ticks(2)
+	await _cast(me, 1, me.global_position, 0.6)
+	var song := VEIL.get_slot(1)
+	check(is_equal_approx(ally.haste_amount, song.ally_haste), "War Song: an ally inside attacks %d%% faster" % roundi(song.ally_haste * 100.0))
+	check(is_equal_approx(ally.cooldown_for(0, SCRIBE.basic_attack), SCRIBE.basic_attack.cooldown / (1.0 + song.ally_haste)), "its basic attack interval is shorter")
+	check(is_equal_approx(ally.cooldown_for(1, SCRIBE.get_slot(1)), SCRIBE.get_slot(1).cooldown), "abilities are not sped up")
+	check(far.haste_amount == 0.0, "an ally outside is not")
+	await secs(song.ward_duration)
+	check(ally.haste_amount == 0.0, "the haste ends with the song")
+
+
+func test_encore() -> void:
+	var me := spawn(VEIL, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(5, 0, 0))
+	var far := spawn(SCRIBE, 0, Vector3(20, 0, 0))
+	await ticks(3)
+	check(is_equal_approx(ally.quick_amount, VEIL.passive_value) and is_equal_approx(me.quick_amount, VEIL.passive_value), "Encore: allies within %.0f m and the singer move faster" % VEIL.passive_range)
+	check(far.quick_amount == 0.0, "an ally far away does not")
+	var x0 := ally.global_position.x
+	cmd(ally).aim_yaw = -PI * 0.5  # face +X
+	cmd(ally).move = Vector2(0, 1)
+	await secs(0.5)
+	var moved := ally.global_position.x - x0
+	check(absf(moved - SCRIBE.move_speed * (1.0 + VEIL.passive_value) * 0.5) < 0.15, "it walks %.2f m in 0.5 s" % moved)
+
+
+func test_storm_wall() -> void:
+	var me := spawn(STORM, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -14))
+	await ticks(2)
+	await _cast(me, 2, foe.global_position, 0.5)
+	check(authority.areas.any(func(a: CombatAuthority.SimArea) -> bool: return a.ability.delivery == AbilityDef.Delivery.WALL), "the storm wall stands")
+	await _cast(foe, 0, me.global_position, 0.8)
+	check(me.health == STORM.max_health, "an enemy shot stops at the wall")
+	await _cast(me, 0, foe.global_position, 0.8)
+	check(foe.health < SCRIBE.max_health, "the caster's own shots pass through")
+	await secs(STORM.get_slot(2).ward_duration)
+	await _cast(foe, 0, me.global_position, 0.9)
+	check(me.health < STORM.max_health, "once it falls, shots hit again")
+
+
+func test_tempest() -> void:
+	var me := spawn(STORM, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -10))
+	var edge := spawn(DUMMY, 1, Vector3(3.2, 0, -10))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	var t := STORM.get_slot(3)
+	await _cast(me, 3, foe.global_position, t.cast_time + t.area_delay + 0.6 * 2 + 0.2)
+	var dmg := t.damage * me.damage_mult
+	check(absf(DUMMY.max_health - foe.health - 3.0 * dmg * (1.0 + STORM.passive_value)) < 1.0, "Tempest strikes three times, harder at the centre (%.0f)" % (DUMMY.max_health - foe.health))
+	check(absf(DUMMY.max_health - edge.health - 3.0 * dmg) < 1.0, "and plain at the edge (%.0f)" % (DUMMY.max_health - edge.health))
+
+
+func test_barrow_blood() -> void:
+	var me := spawn(BARROW, 0, Vector3.ZERO)
+	await ticks(2)
+	me.health = 300.0
+	await secs(1.0)
+	check(absf(me.health - 300.0 - BARROW.passive_value) < 0.5, "Barrow Blood: below half it regains %.0f a second" % BARROW.passive_value)
+	me.health = BARROW.max_health * 0.8
+	var h := me.health
+	await secs(1.0)
+	check(me.health == h, "not above half")
+
+
+func test_kings_wrath() -> void:
+	var me := spawn(BARROW, 0, Vector3.ZERO)
+	var behind := spawn(SCRIBE, 1, Vector3(0, 0, 3))
+	var far := spawn(SCRIBE, 1, Vector3(0, 0, -9))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	await _cast(me, 3, Vector3(0, 0, -5), BARROW.get_slot(3).cast_time + 0.05)
+	check(behind.health < SCRIBE.max_health and behind.is_stunned(), "King's Wrath hits and stuns all around, even behind")
+	check(far.health == SCRIBE.max_health, "but not beyond its reach")
 
 
 # --- Networking: prediction, snapshots, command queue ------------------------

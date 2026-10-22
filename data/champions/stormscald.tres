@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="1_ch"]
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="2_ab"]
+[ext_resource type="Resource" path="res://data/abilities/spark_bolt.tres" id="3_b"]
+[ext_resource type="Resource" path="res://data/abilities/called_lightning.tres" id="4_a"]
+[ext_resource type="Resource" path="res://data/abilities/storm_wall.tres" id="5_a"]
+[ext_resource type="Resource" path="res://data/abilities/tempest.tres" id="6_a"]
+
+[resource]
+script = ExtResource("1_ch")
+id = &"stormscald"
+display_name = "Stormscald"
+role = "Spellcaster"
+look = 15
+max_health = 530.0
+move_speed = 6.1
+fountain_heal = 80.0
+basic_attack = ExtResource("3_b")
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a")])
+passive = 9
+passive_name = "Eye of the Storm"
+passive_description = "Ground strikes deal 20% more to enemies near their centre."
+passive_value = 0.2
+passive_range = 0.0
+primary_color = Color(0.24, 0.28, 0.36, 1)
+accent_color = Color(0.8, 0.9, 1.0, 1)
+item_build = Array[StringName]([&"ember_edge", &"ash_hourglass", &"wayfarer_greaves", &"oathbound_plate"])

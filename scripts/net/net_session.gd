@@ -144,7 +144,7 @@ func start_server(p: int) -> Error:
 	authority.area_spawned.connect(func(ar: CombatAuthority.SimArea) -> void:
 		var from := ar.source.global_position
 		log_line("area source=%d dist=%.2f" % [ar.source.net_id, Vector2(ar.center.x - from.x, ar.center.z - from.z).length()])
-		_broadcast(ev_area.bind(ar.id, ar.source.net_id, ar.ability.resource_path, ar.center)))
+		_broadcast(ev_area.bind(ar.id, ar.source.net_id, ar.ability.resource_path, ar.center, ar.dir)))
 	authority.area_detonated.connect(func(ar: CombatAuthority.SimArea) -> void:
 		_broadcast(ev_area_end.bind(ar.id)))
 	authority.unit_damaged.connect(func(t: Unit, amount: float, src: Unit) -> void:
@@ -531,7 +531,7 @@ func ev_projectile_end(id: int, at: Vector3) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func ev_area(id: int, src: int, ability_path: String, center: Vector3) -> void:
+func ev_area(id: int, src: int, ability_path: String, center: Vector3, dir: Vector3) -> void:
 	var u := authority.find_unit(src)
 	if u == null:
 		return
@@ -540,6 +540,7 @@ func ev_area(id: int, src: int, ability_path: String, center: Vector3) -> void:
 	ar.source = u
 	ar.ability = load(ability_path)
 	ar.center = center
+	ar.dir = dir
 	ar.timer = CombatAuthority.area_lifetime(ar.ability)
 	_fx[id] = ar
 	authority.area_spawned.emit(ar)
