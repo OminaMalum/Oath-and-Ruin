@@ -188,7 +188,7 @@ func _team_ring(r: float) -> void:
 	ring.mesh = tm
 	ring.material_override = Palette.ground_decal(Palette.team_color(unit.team), 0.7)
 	ring.scale = Vector3(1, 0.05, 1)
-	ring.position = Vector3(0, 0.03, 0)
+	ring.position = Vector3(0, 0.03 + Palette.DECAL_LIFT, 0)
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(ring)
 
@@ -343,7 +343,7 @@ func _build_tower() -> void:
 	t.ring_segments = 4
 	ring.mesh = t
 	ring.scale = Vector3(1, 0.05, 1)
-	ring.position.y = 0.03
+	ring.position.y = 0.03 + Palette.DECAL_LIFT
 	ring.material_override = Palette.ground_decal(col, 0.35)
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	ring.name = "RangeRing"

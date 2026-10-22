@@ -183,7 +183,9 @@ func _art_section(s: float, z0: float, z1: float) -> void:
 	var tile := 1.5
 	var cols := int((LANE_HALF * 2.0 - 1.0) / tile)
 	var rows := int((z1 - z0) / tile)
-	_deco(BoxMesh.new(), joint, Vector3(0, 0.015, s * (z0 + z1) * 0.5), Vector3(cols * tile, 0.01, rows * tile))
+	# The joint plane's top sits 1 cm above the lane floor (top at 0.02):
+	# level with it, the two faces z-fought and flickered through the gaps.
+	_deco(BoxMesh.new(), joint, Vector3(0, 0.025, s * (z0 + z1) * 0.5), Vector3(cols * tile, 0.01, rows * tile))
 	for i in cols:
 		for j in rows:
 			if rng.randf() < 0.08:
@@ -195,17 +197,17 @@ func _art_section(s: float, z0: float, z1: float) -> void:
 			var m: Material = _stone_mats[rng.randi() % 3]
 			if rng.randf() < 0.12:
 				m = dark  # a scorched or wet slab
-			_deco(BoxMesh.new(), m, Vector3(x, h * 0.5 + 0.02, s * z), Vector3(tile - gap, h, tile - gap),
+			_deco(BoxMesh.new(), m, Vector3(x, h * 0.5 + 0.03, s * z), Vector3(tile - gap, h, tile - gap),
 				Vector3(0, rng.randf_range(-1.5, 1.5), 0))
 	# A worn ring round the tower foot and a cracked line across the lane.
 	var ring := TorusMesh.new()
 	ring.inner_radius = 3.2
 	ring.outer_radius = 3.5
 	ring.rings = 48
-	_deco(ring, dark, Vector3(0, 0.07, s * TOWER_Z), Vector3(1, 0.08, 1))
+	_deco(ring, dark, Vector3(0, 0.085, s * TOWER_Z), Vector3(1, 0.04, 1))  # just above the tallest slab
 	for k in 5:
 		var zc := z0 + rng.randf_range(1.0, z1 - z0 - 1.0)
-		_deco(BoxMesh.new(), joint, Vector3(rng.randf_range(-3.0, 3.0), 0.075, s * zc), Vector3(rng.randf_range(2.0, 5.0), 0.01, 0.06),
+		_deco(BoxMesh.new(), joint, Vector3(rng.randf_range(-3.0, 3.0), 0.085, s * zc), Vector3(rng.randf_range(2.0, 5.0), 0.01, 0.06),
 			Vector3(0, rng.randf_range(-25.0, 25.0), 0))
 	for side: float in [-1.0, 1.0]:
 		var xw: float = side * (LANE_HALF + 0.5)  # lane wall face is at 7.0; cap sits on the wall top

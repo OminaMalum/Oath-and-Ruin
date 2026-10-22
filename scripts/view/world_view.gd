@@ -153,7 +153,7 @@ func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
 	n.add_child(edge)
 	n.add_child(inner)
 	add_child(n)
-	n.global_position = ar.center + Vector3(0, 0.03, 0)
+	n.global_position = ar.center + Vector3(0, 0.03 + Palette.DECAL_LIFT, 0)
 	fill.scale = Vector3(0.01, 1, 0.01)
 	_areas[ar] = n
 
@@ -180,7 +180,7 @@ func _spawn_ward(ar: CombatAuthority.SimArea) -> void:
 	dome.scale = Vector3(1, 0.45, 1)
 	n.add_child(dome)
 	add_child(n)
-	n.global_position = ar.center + Vector3(0, 0.03, 0)
+	n.global_position = ar.center + Vector3(0, 0.03 + Palette.DECAL_LIFT, 0)
 	_areas[ar] = n
 
 
@@ -276,7 +276,7 @@ func _update_preview() -> void:
 		add_child(_preview)
 	_preview.visible = true
 	var p := viewer.clamp_target(a, hc.rig.get_aim_point(viewer))
-	_preview.global_position = Vector3(p.x, 0.05, p.z)
+	_preview.global_position = Vector3(p.x, 0.05 + Palette.DECAL_LIFT, p.z)
 
 
 ## Windup telegraphs: a lane on the ground for projectiles, a circle for
@@ -297,16 +297,16 @@ func _update_tells() -> void:
 			_tells[u] = tell
 		tell.visible = true
 		if a.delivery == AbilityDef.Delivery.MELEE_ARC:
-			tell.global_position = u.get_global_transform_interpolated().origin + Vector3(0, 0.04, 0)
+			tell.global_position = u.get_global_transform_interpolated().origin + Vector3(0, 0.04 + Palette.DECAL_LIFT, 0)
 			tell.rotation.y = u.aim_yaw
 		elif a.delivery == AbilityDef.Delivery.PROJECTILE or a.delivery == AbilityDef.Delivery.DASH:
 			var from := u.get_global_transform_interpolated().origin
 			var flat := Vector3(u.cast_target.x - from.x, 0, u.cast_target.z - from.z)
 			if flat.length() > 0.01:
-				tell.global_position = from + Vector3(0, 0.04, 0)
+				tell.global_position = from + Vector3(0, 0.04 + Palette.DECAL_LIFT, 0)
 				tell.look_at(tell.global_position + flat, Vector3.UP)
 		else:
-			tell.global_position = Vector3(u.cast_target.x, 0.04, u.cast_target.z)
+			tell.global_position = Vector3(u.cast_target.x, 0.04 + Palette.DECAL_LIFT, u.cast_target.z)
 
 
 ## Stun marker: a slow ring of small lights over a stunned unit's head.
@@ -366,7 +366,7 @@ func _on_melee_swung(caster: Unit, a: AbilityDef) -> void:
 	var m := Palette.ground_decal(caster.def.accent_color, 0.7)
 	var mi := _sector(a.range, a.arc_degrees, m)
 	add_child(mi)
-	mi.global_position = caster.global_position + Vector3(0, 0.06, 0)
+	mi.global_position = caster.global_position + Vector3(0, 0.06 + Palette.DECAL_LIFT, 0)
 	mi.rotation.y = caster.aim_yaw
 	_effects.append({"node": mi, "mat": m, "t": 0.0, "life": 0.2, "size": -1.0})
 

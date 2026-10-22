@@ -6,25 +6,28 @@ signal chosen(mode: String)
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Anchors and offsets together: set_anchors_preset alone kept the zero
+	# offsets, so the menu sat in the top left corner at any window size.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = Color(0.09, 0.08, 0.07)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
 	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER)
 	box.add_theme_constant_override("separation", 18)
 	box.custom_minimum_size = Vector2(520, 0)
-	box.position = Vector2(-260, -300)
-	add_child(box)
+	center.add_child(box)
 	var title := Label.new()
-	title.text = "Oath & Ruin"
+	title.text = "PactFall"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 56)
 	title.add_theme_color_override("font_color", Color(0.92, 0.84, 0.66))
 	box.add_child(title)
 	var sub := Label.new()
-	sub.text = "Working title. Prototype build."
+	sub.text = "Prototype build"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 20)
 	sub.add_theme_color_override("font_color", Color(0.75, 0.72, 0.65))

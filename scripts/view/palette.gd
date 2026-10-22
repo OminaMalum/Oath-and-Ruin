@@ -18,6 +18,10 @@ const TEAL := Color(0.25, 0.80, 0.78)
 const AMBER := Color(1.0, 0.62, 0.20)
 ## Gold counter and gold popups: a pale yellow, kept apart from the enemy amber.
 const GOLD := Color(1.0, 0.9, 0.42)
+## Height every ground decal (rings, telegraphs, swings) is lifted by, so it
+## sits above the flagstones near the towers (slab tops reach 0.08 m) instead
+## of flickering in and out between them.
+const DECAL_LIFT := 0.08
 
 ## Team colours for telegraphs and bars: allies teal, enemies amber.
 ## (Deliberately not a red and blue pair side by side.)
