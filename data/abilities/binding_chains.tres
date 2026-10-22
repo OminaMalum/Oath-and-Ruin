@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/long_chains.tres" id="4_up"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/iron_chains.tres" id="5_up"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"binding_chains"
+display_name = "Binding Chains"
+description = "Throw chains (15 m): the first enemy hit takes 70 damage and is rooted for 1.2 s (no walking or dashing, attacks still work). Counterplay: the chains are slow; sidestep them."
+delivery = 0
+damage = 70.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 10.0
+move_mult_while_casting = 0.4
+range = 15.0
+projectile_speed = 24.0
+projectile_radius = 0.4
+root_duration = 1.2
+upgrades = Array[Resource]([ExtResource("4_up"), ExtResource("5_up")])

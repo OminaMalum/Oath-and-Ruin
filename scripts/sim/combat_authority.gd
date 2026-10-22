@@ -114,6 +114,7 @@ func step(dt: float) -> void:
 				remove_unit(u)
 	_step_projectiles(dt)
 	_step_areas(dt)
+	_step_passives(dt)
 
 
 func are_enemies(a: Unit, b: Unit) -> bool:
@@ -210,6 +211,8 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 	if source.def.kind == ChampionDef.Kind.CHAMPION:
 		amount *= source.damage_mult
 	amount *= passive_damage_factor(source, target, a)
+	if target.mark_timer > 0.0:
+		amount *= 1.0 + target.mark_amount
 	target.health -= amount
 	target.last_attacker = source
 	target.last_attacked_at = time
@@ -220,6 +223,10 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 		target.apply_slow(a.slow_amount, a.slow_duration)
 	if a != null and a.stun_duration > 0.0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
 		target.apply_stun(a.stun_duration)
+	if a != null and a.root_duration > 0.0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
+		target.apply_root(a.root_duration)
+	if a != null and a.mark_duration > 0.0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
+		target.apply_mark(a.mark_amount, a.mark_duration)
 	if target.health <= 0.0:
 		target.set_dead(source)
 		unit_died.emit(target, source)
@@ -240,7 +247,29 @@ func passive_damage_factor(source: Unit, target: Unit, a: AbilityDef) -> float:
 		source.hit_streak[target.net_id] = n
 	if target.def.passive == ChampionDef.Passive.RESOLVE and target.health < target.max_health * 0.5:
 		f *= 1.0 - target.def.passive_value
+	if source.def.passive == ChampionDef.Passive.LONGSHOT and a != null and a == source.def.basic_attack \
+			and target.def.kind != ChampionDef.Kind.STRUCTURE \
+			and Vector2(target.global_position.x - source.global_position.x, target.global_position.z - source.global_position.z).length() > source.def.passive_range:
+		f *= 1.0 + source.def.passive_value
+	if source.def.passive == ChampionDef.Passive.TITHE and target.def.kind != ChampionDef.Kind.STRUCTURE and target.is_impaired():
+		f *= 1.0 + source.def.passive_value
 	return f
+
+
+## LANTERN: allied champions near a living Lantern champion (itself too)
+## regain health every tick.
+func _step_passives(dt: float) -> void:
+	for src in units:
+		if not src.alive or src.def.passive != ChampionDef.Passive.LANTERN:
+			continue
+		for u in units:
+			if u.alive and u.team == src.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+					and _flat(u.global_position, src.global_position) <= src.def.passive_range:
+				heal(u, src.def.passive_value * dt)
+
+
+static func _flat(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
 
 
 ## EMBER: a champion kill resets the killer's slot 1 and heals it.
@@ -368,16 +397,56 @@ func _step_areas(dt: float) -> void:
 				if u.alive and u.team == ar.source.team and u.def.kind == ChampionDef.Kind.CHAMPION \
 						and Vector2(u.global_position.x - ar.center.x, u.global_position.z - ar.center.z).length() <= ar.ability.area_radius + u.def.radius:
 					heal(u, ar.ability.heal_per_second * dt)
+		if ar.ability.delivery == AbilityDef.Delivery.WARD and ar.ability.enemy_slow > 0.0 \
+				and is_instance_valid(ar.source):
+			for u in units:
+				if u.alive and are_enemies(ar.source, u) and u.def.kind != ChampionDef.Kind.STRUCTURE \
+						and _flat(u.global_position, ar.center) <= ar.ability.area_radius + u.def.radius:
+					u.apply_slow(ar.ability.enemy_slow, 0.25)
 		if ar.timer <= 0.0 and ar.ability.delivery == AbilityDef.Delivery.WARD:
 			ar.alive = false
 			area_detonated.emit(ar)  # a ward simply ends
 		elif ar.timer <= 0.0:
 			ar.alive = false
-			for u in units:
-				if not u.alive:
-					continue
-				var d := Vector2(u.global_position.x - ar.center.x, u.global_position.z - ar.center.z).length()
-				if d <= ar.ability.area_radius + u.def.radius:
-					apply_damage(ar.source, u, ar.ability.damage, ar.ability)
+			_burst(ar)
 			area_detonated.emit(ar)
 	areas = areas.filter(func(x: SimArea) -> bool: return x.alive)
+	areas.append_array(_new_areas)
+	_new_areas.clear()
+
+
+var _new_areas: Array[SimArea] = []
+
+
+## A ground area bursts: damage (and its effects) on everyone inside, then
+## the extras: pull enemies toward the centre, heal allied champions, and
+## leave a second area behind.
+func _burst(ar: SimArea) -> void:
+	var a := ar.ability
+	var src_ok := is_instance_valid(ar.source)
+	for u: Unit in units.duplicate():
+		if not u.alive:
+			continue
+		if _flat(u.global_position, ar.center) > a.area_radius + u.def.radius:
+			continue
+		if src_ok and not are_enemies(ar.source, u):
+			if a.ally_heal > 0.0 and u.def.kind == ChampionDef.Kind.CHAMPION:
+				heal(u, a.ally_heal)
+			continue
+		var hurt := apply_damage(ar.source, u, a.damage, a) if src_ok and a.damage > 0.0 else true
+		if a.pull_distance > 0.0 and u.alive and hurt and u.def.kind != ChampionDef.Kind.STRUCTURE:
+			var to := ar.center - u.global_position
+			to.y = 0.0
+			var dist := minf(a.pull_distance, maxf(to.length() - 0.6, 0.0))
+			if dist > 0.05:
+				u.displace(u.global_position + to.normalized() * dist)
+	if a.leaves is AbilityDef and src_ok:
+		var b := SimArea.new()
+		b.id = _next_fx_id
+		_next_fx_id += 1
+		b.source = ar.source
+		b.ability = a.leaves
+		b.center = ar.center
+		b.timer = area_lifetime(b.ability)
+		_new_areas.append(b)
+		area_spawned.emit(b)

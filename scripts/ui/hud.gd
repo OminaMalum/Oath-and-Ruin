@@ -119,8 +119,9 @@ func _draw() -> void:
 				box.position.y -= 34
 			placed.append(box)
 			p = box.position + Vector2(w * 0.5, 22)
-		if u.is_stunned():
-			_text(p + Vector2(-100, 26), "stunned", SMALL, Color(1.0, 0.5, 0.4), HORIZONTAL_ALIGNMENT_CENTER, 200)
+		var tag := "stunned" if u.is_stunned() else ("rooted" if u.root_timer > 0.0 else ("marked" if u.mark_timer > 0.0 else ""))
+		if not tag.is_empty():
+			_text(p + Vector2(-100, 26), tag, SMALL, Color(1.0, 0.5, 0.4) if tag == "stunned" else Color(0.95, 0.85, 0.55), HORIZONTAL_ALIGNMENT_CENTER, 200)
 		var col := Palette.ALLY if u.team == player.team else (Palette.NEUTRAL if u.team >= 2 else Palette.ENEMY)
 		_bar(Rect2(p - Vector2(w * 0.5, 0), Vector2(w, 6 if minion else (12 if champ else 10))), u.health / u.max_health, col)
 		# Names only for champions, structures and big units, and only up close.
@@ -266,6 +267,10 @@ func _draw() -> void:
 		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if player.is_stunned():
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Stunned", FONT_SIZE, Color(1.0, 0.45, 0.35), HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	elif player.root_timer > 0.0:
+		_text(Vector2(hb.position.x, hb.position.y - 10), "Rooted: you can attack but not move", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	elif player.mark_timer > 0.0:
+		_text(Vector2(hb.position.x, hb.position.y - 10), "Marked: you take more damage", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.slow_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Slowed", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 

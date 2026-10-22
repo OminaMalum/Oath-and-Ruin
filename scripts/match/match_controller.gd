@@ -12,9 +12,13 @@ signal announce(text: String, team: int)
 const SCRIBE := preload("res://data/champions/ruinscribe.tres")
 const WARDEN := preload("res://data/champions/oathwarden.tres")
 const RUNNER := preload("res://data/champions/ashrunner.tres")
-## Each team fields one of each role. Slot 0 holds the lane; slots 1 and 2
-## may go for the objective.
-const ROSTER: Array[ChampionDef] = [SCRIBE, WARDEN, RUNNER]
+const LANTERN := preload("res://data/champions/lanternkeeper.tres")
+const THORN := preload("res://data/champions/thornwright.tres")
+const GRAVE := preload("res://data/champions/gravebinder.tres")
+## Every playable champion. A match draws three of them (the player's pick
+## first) and both teams field the same three, so neither side gets the
+## better draft. Slot 0 holds the lane; slots 1 and 2 may go for the objective.
+const ROSTER: Array[ChampionDef] = [SCRIBE, WARDEN, RUNNER, LANTERN, THORN, GRAVE]
 const TOWER := preload("res://data/units/tower.tres")
 const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")
@@ -64,6 +68,9 @@ var make_view: Callable
 var human_slot: bool = true          # team 0 slot 0 is the player
 var human_pick: StringName = &"ruinscribe"  # champion the player chose
 var bot_seed: int = 1
+## Fixed lineup (champion ids, slot order) instead of a draw; tests and --lineup.
+var lineup_ids: Array[StringName] = []
+var _lineup: Array[ChampionDef] = []
 
 var champions: Array[Unit] = []
 var structures: Array[Unit] = []
@@ -136,17 +143,35 @@ func start() -> void:
 				stats.champions[u.name].items.append({"item": String(it.id), "t": snappedf(authority.time, 0.1)}))
 
 
-## The player's pick goes first on their team (slot 0), the others follow.
-func team_roster(team: int) -> Array[ChampionDef]:
-	var r: Array[ChampionDef] = ROSTER.duplicate()
-	if team == 0 and human_slot:
-		for i in r.size():
-			if r[i].id == human_pick:
-				var d: ChampionDef = r[i]
-				r.remove_at(i)
-				r.push_front(d)
-				break
-	return r
+## The match lineup, the same for both teams: the player's pick in slot 0,
+## then two more drawn from the roster by the match seed.
+func team_roster(_team: int) -> Array[ChampionDef]:
+	if _lineup.is_empty():
+		_lineup = _draw_lineup()
+	return _lineup.duplicate()
+
+
+func _draw_lineup() -> Array[ChampionDef]:
+	var out: Array[ChampionDef] = []
+	if not lineup_ids.is_empty():
+		for id in lineup_ids:
+			for d in ROSTER:
+				if d.id == id and not out.has(d):
+					out.append(d)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = bot_seed * 7919 + 13
+	var pool: Array[ChampionDef] = ROSTER.duplicate()
+	if out.is_empty() and human_slot:
+		for d in pool:
+			if d.id == human_pick:
+				out.append(d)
+	if out.is_empty():
+		out.append(pool[rng.randi() % pool.size()])
+	while out.size() < 3:
+		var d: ChampionDef = pool[rng.randi() % pool.size()]
+		if not out.has(d):
+			out.append(d)
+	return out
 
 
 func player() -> Unit:

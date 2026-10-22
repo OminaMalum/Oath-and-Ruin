@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"quick_draw"
+display_name = "Quick Draw"
+description = "Upgrade: a faster draw (0.55 s), 100 damage."
+delivery = 0
+damage = 100.0
+pierce = true
+cast_time = 0.55
+recovery = 0.2
+cooldown = 9.0
+move_mult_while_casting = 0.2
+range = 28.0
+projectile_speed = 55.0
+projectile_radius = 0.35

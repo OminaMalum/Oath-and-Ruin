@@ -2,14 +2,18 @@ class_name ChampionDef
 extends Resource
 ## Base stats and kit for a champion (or any unit that uses the same rules).
 
-enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER }
+enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER, CLERIC, RANGER, WARLOCK }
 ## What rules apply: who can be targeted by whom, who respawns, who moves.
 enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 ## Passive rules, resolved by the CombatAuthority. INSCRIBE: every third basic
 ## attack hit on the same target deals passive_value more (0.5 = +50%).
 ## RESOLVE: below half health this unit takes passive_value less damage.
 ## EMBER: a champion kill resets slot 1 and heals passive_value of max health.
-enum Passive { NONE, INSCRIBE, RESOLVE, EMBER }
+## LANTERN: allied champions within passive_range (and this one) regain
+## passive_value health per second. LONGSHOT: basic attacks deal passive_value
+## more to targets beyond passive_range. TITHE: passive_value more damage to
+## enemies that are rooted, slowed or stunned.
+enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE }
 
 @export var id: StringName
 @export var display_name: String = ""
@@ -35,6 +39,8 @@ enum Passive { NONE, INSCRIBE, RESOLVE, EMBER }
 @export var passive_name: String = ""
 @export_multiline var passive_description: String = ""
 @export var passive_value: float = 0.0
+## Distance the passive works over (LANTERN aura, LONGSHOT threshold), metres.
+@export var passive_range: float = 0.0
 ## Item ids in the order bots buy them (see data/economy.tres).
 @export var item_build: Array[StringName] = []
 

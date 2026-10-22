@@ -95,6 +95,11 @@ var buffer_timer: float = 0.0
 
 var slow_amount: float = 0.0
 var slow_timer: float = 0.0
+## Rooted: no walking or dashing; attacks and casts still work.
+var root_timer: float = 0.0
+## Marked: takes mark_amount more damage from every source.
+var mark_amount: float = 0.0
+var mark_timer: float = 0.0
 
 ## Lock-on target for homing abilities, chosen at cast start.
 var cast_target_unit: Unit
@@ -297,6 +302,11 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 		slow_timer -= dt
 		if slow_timer <= 0.0:
 			slow_amount = 0.0
+	root_timer = maxf(0.0, root_timer - dt)
+	if mark_timer > 0.0:
+		mark_timer -= dt
+		if mark_timer <= 0.0:
+			mark_amount = 0.0
 	if _step_recall(cmd, dt):
 		return
 
@@ -329,6 +339,8 @@ func step_motion(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> voi
 	move_dir = dir
 	var speed := current_move_speed()
 	var top_speed := def.move_speed * speed_mult
+	if root_timer > 0.0:
+		speed = 0.0
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	if dash_timer > 0.0:
@@ -365,6 +377,11 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 		slow_timer -= dt
 		if slow_timer <= 0.0:
 			slow_amount = 0.0
+	root_timer = maxf(0.0, root_timer - dt)
+	if mark_timer > 0.0:
+		mark_timer -= dt
+		if mark_timer <= 0.0:
+			mark_amount = 0.0
 	if stun_timer > 0.0:
 		stun_timer -= dt
 		velocity.x = 0.0
@@ -506,6 +523,9 @@ func _advance_cast(dt: float, authority: CombatAuthority) -> void:
 
 
 func start_dash(a: AbilityDef, target: Vector3) -> void:
+	if root_timer > 0.0:
+		cast_rejected.emit(-1, "Rooted: you cannot dash")
+		return  # the cast is spent, the dash does not happen
 	var dir := Vector3(target.x - global_position.x, 0.0, target.z - global_position.z)
 	if dir.length() < 0.1:
 		dir = forward()
@@ -587,6 +607,33 @@ func is_stunned() -> bool:
 	return stun_timer > 0.0
 
 
+func apply_root(duration: float) -> void:
+	if duration > 0.0:
+		root_timer = maxf(root_timer, duration)
+
+
+func apply_mark(amount: float, duration: float) -> void:
+	if duration > 0.0 and (amount >= mark_amount or mark_timer <= 0.0):
+		mark_amount = amount
+		mark_timer = maxf(mark_timer, duration)
+
+
+## Drag the unit to `to` over `time` seconds (a pull). Uses the dash motion
+## with no dash ability, so it hits nothing and walls still stop it.
+func displace(to: Vector3, time: float = 0.25) -> void:
+	var d := Vector3(to.x - global_position.x, 0.0, to.z - global_position.z)
+	if d.length() < 0.05:
+		return
+	dash_velocity = d / time
+	dash_timer = time
+	dash_ability = null
+
+
+## Rooted, slowed or stunned: what a TITHE passive punishes.
+func is_impaired() -> bool:
+	return root_timer > 0.0 or slow_timer > 0.0 or stun_timer > 0.0
+
+
 func apply_slow(amount: float, duration: float) -> void:
 	# Strongest slow wins; durations do not stack.
 	if amount >= slow_amount or slow_timer <= 0.0:
@@ -602,6 +649,9 @@ func set_dead(killer: Unit) -> void:
 	recall_timer = 0.0
 	slow_amount = 0.0
 	slow_timer = 0.0
+	root_timer = 0.0
+	mark_amount = 0.0
+	mark_timer = 0.0
 	stun_timer = 0.0
 	respawn_timer = def.respawn_time
 	corpse_timer = 1.0

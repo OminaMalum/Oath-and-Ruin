@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/wide_lantern.tres" id="4_up"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/bright_lantern.tres" id="5_up"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"lantern_light"
+display_name = "Lantern Light"
+description = "Set the lantern down: a 3.6 m circle for 4 s that heals allied champions inside 30 health a second. Counterplay: pull them out of the light, or burst through it."
+delivery = 4
+cast_time = 0.3
+recovery = 0.1
+cooldown = 12.0
+move_mult_while_casting = 0.0
+range = 0.0
+area_radius = 3.6
+ward_duration = 4.0
+ward_reduction = 0.0
+heal_per_second = 30.0
+upgrades = Array[Resource]([ExtResource("4_up"), ExtResource("5_up")])

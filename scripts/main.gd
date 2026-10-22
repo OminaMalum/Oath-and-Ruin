@@ -13,7 +13,8 @@ extends Node3D
 ##   --netbot=MODE                      client test driver: attack | strafe | idle | cheat
 ##   --bot                              dummies fight back from the start
 ##   --quit-after-secs=S                exit after S seconds
-##   --champion=ID                      ruinscribe | oathwarden | ashrunner (match and court)
+##   --champion=ID                      any id in data/champions (match and court)
+##   --lineup=A,B,C                     match: these three champions on both teams
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
 ##   --shop                             open the shop panel (screenshots)
 ##   --scoreboard                       show the scoreboard (screenshots)
@@ -94,6 +95,9 @@ func _start_match() -> void:
 	match_ctl.human_slot = not (args.has("spectate") or autoplay)
 	match_ctl.human_pick = Session.champion
 	match_ctl.bot_seed = int(args.get("seed", "1"))
+	if args.has("lineup"):
+		for id in (args.lineup as String).split(","):
+			match_ctl.lineup_ids.append(StringName(id))
 	var headless := DisplayServer.get_name() == "headless"
 	if not headless:
 		match_ctl.make_view = func(u: Unit) -> void: u.add_child(UnitView.new(u))

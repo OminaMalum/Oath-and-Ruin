@@ -51,6 +51,13 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 @export var area_radius: float = 2.5
 ## Time the telegraph is visible on the ground before it detonates.
 @export var area_delay: float = 0.8
+## On the burst: every enemy hit is dragged up to this far toward the centre.
+@export var pull_distance: float = 0.0
+## On the burst: health for each allied champion inside.
+@export var ally_heal: float = 0.0
+## On the burst: a second area left where it landed (a WARD-delivery
+## AbilityDef, such as a slowing field). Resource-typed like `upgrades`.
+@export var leaves: Resource
 
 @export_group("Crowd control")
 ## Fraction of move speed removed (0.3 = 30% slow).
@@ -58,6 +65,11 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 @export var slow_duration: float = 0.0
 ## Stun: the target cannot move or act, and its cast is interrupted.
 @export var stun_duration: float = 0.0
+## Root: the target cannot walk or dash, but can still attack and cast.
+@export var root_duration: float = 0.0
+## Mark: the target takes this much more damage from everyone (0.25 = 25%).
+@export var mark_amount: float = 0.0
+@export var mark_duration: float = 0.0
 
 @export_group("Melee arc")
 ## Full width of the cone in degrees (120 = 60 each side of the aim).
@@ -74,6 +86,8 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD }
 @export var ward_reduction: float = 0.35
 ## Health per second for allied champions inside the ward (0 = none).
 @export var heal_per_second: float = 0.0
+## Slow on enemies standing inside (0.35 = 35%), kept up while they stay.
+@export var enemy_slow: float = 0.0
 
 @export_group("Upgrades")
 ## The two versions offered at UPGRADE_LEVEL (AbilityDef resources); picking
