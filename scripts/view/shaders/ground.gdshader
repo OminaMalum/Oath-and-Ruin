@@ -22,6 +22,8 @@ uniform sampler2D leaves_n : hint_normal, filter_linear_mipmap_anisotropic, repe
 uniform sampler2D leaves_arm : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float leaves_scale = 0.28;
 uniform sampler2D mask_noise : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D rune_strip : hint_default_transparent, filter_linear_mipmap, repeat_enable;
+uniform vec3 rune_col : source_color = vec3(0.72, 0.58, 0.92);
 
 uniform float lane_half = 6.4;
 uniform float base_z = 46.0;
@@ -104,6 +106,17 @@ void fragment() {
 	// forest ground at a distance, not sand.
 	float outside = max(smoothstep(21.0, 24.0, ax), smoothstep(81.0, 84.0, az));
 	col = mix(col, col * vec3(0.62, 0.7, 0.5), outside);
+	// Mid lane: an old ward circle of runes set into the cobbles, faintly lit.
+	// Flat in the floor shader, so it adds no geometry to the fighting space.
+	float rr = length(p);
+	float ang = atan(p.y, p.x) / 6.2831853 + 0.5;
+	vec2 ruv = vec2(ang * 5.0, (rr - 3.55) / 0.55);
+	float band = step(0.0, ruv.y) * step(ruv.y, 1.0);
+	float glyph = texture(rune_strip, ruv).a * band;
+	float rim = (1.0 - smoothstep(0.0, 0.05, abs(rr - 3.45))) + (1.0 - smoothstep(0.0, 0.05, abs(rr - 4.2)));
+	float ward = clamp(glyph + rim * 0.8, 0.0, 1.0);
+	col = mix(col, col * 0.5, ward * 0.7);
+	EMISSION = rune_col * ward * 0.45;
 	ALBEDO = col;
 	NORMAL_MAP = nrm;
 	NORMAL_MAP_DEPTH = 1.0;

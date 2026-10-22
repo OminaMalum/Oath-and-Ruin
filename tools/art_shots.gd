@@ -12,6 +12,8 @@ const VIEWS := {
 	"flank_east": [Vector3(15.0, 4.0, 30.0), Vector3(15.0, 1.0, 10.0)],
 	"base_oath": [Vector3(0, 14.0, 40.0), Vector3(0, 1.0, 60.0)],
 	"camp": [Vector3(-16.0, 9.0, 8.0), Vector3(-28.0, 0.5, 0.0)],
+	"lane_low": [Vector3(4.0, 2.4, 7.0), Vector3(0, 0.8, -1.0)],
+	"camp_close": [Vector3(-21.5, 3.2, 5.0), Vector3(-28.0, 1.2, 0.0)],
 	"overview": [Vector3(32.0, 48.0, 50.0), Vector3(0, 0, 8.0)],
 }
 

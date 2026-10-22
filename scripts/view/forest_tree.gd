@@ -8,14 +8,16 @@ const CROWNS := [
 	[Color(0.70, 0.52, 0.12), Color(0.96, 0.80, 0.34)],  # gold
 	[Color(0.55, 0.20, 0.09), Color(0.86, 0.40, 0.16)],  # rust
 	[Color(0.36, 0.38, 0.14), Color(0.66, 0.62, 0.26)],  # late green
+	[Color(0.38, 0.24, 0.62), Color(0.80, 0.66, 1.0)],   # spirit tree: amethyst, faintly lit
 ]
+const SPIRIT := 4
 
 static var _bark: StandardMaterial3D
 static var _leaf_shader: Shader
 static var _leaf_mats: Array[ShaderMaterial] = []
 
 
-static func add(parent: Node3D, base: Vector3, height: float, rng: RandomNumberGenerator) -> Node3D:
+static func add(parent: Node3D, base: Vector3, height: float, rng: RandomNumberGenerator, crown := -1) -> Node3D:
 	var root := Node3D.new()
 	root.position = base
 	root.rotation.y = rng.randf() * TAU
@@ -25,7 +27,7 @@ static func add(parent: Node3D, base: Vector3, height: float, rng: RandomNumberG
 	_cyl(root, r0 * 0.55, r0, trunk_h, Vector3(0, trunk_h * 0.5, 0), Vector3.ZERO, _bark_mat())
 	# Root flare so the trunk sits in the ground instead of on it.
 	_cyl(root, r0 * 0.9, r0 * 1.3, 0.35, Vector3(0, 0.12, 0), Vector3.ZERO, _bark_mat())
-	var leaf := _leaf_mat(rng.randi() % CROWNS.size())
+	var leaf := _leaf_mat(crown if crown >= 0 else rng.randi() % SPIRIT)
 	var top := Vector3(0, trunk_h, 0)
 	var limbs := 2 + rng.randi() % 2
 	for i in limbs:
@@ -121,5 +123,6 @@ static func _leaf_mat(i: int) -> ShaderMaterial:
 			m.set_shader_parameter("deep", c[0])
 			m.set_shader_parameter("lit", c[1])
 			m.set_shader_parameter("clumps", nt)
+			m.set_shader_parameter("glow", 0.9 if _leaf_mats.size() == SPIRIT else 0.0)
 			_leaf_mats.append(m)
 	return _leaf_mats[i]

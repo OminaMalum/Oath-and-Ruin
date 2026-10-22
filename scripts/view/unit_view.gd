@@ -71,12 +71,21 @@ func _ready() -> void:
 			_build_core()
 		ChampionDef.Look.SHRINEBEARER:
 			_build_shrinebearer()
-	unit.damaged.connect(func(_a: float, _s: Unit) -> void: _flash = 1.0)
+	unit.damaged.connect(func(_a: float, _s: Unit) -> void:
+		_flash = 1.0
+		if visible and unit.def.kind != ChampionDef.Kind.STRUCTURE:
+			Fx.hit(self, global_position + Vector3(0, unit.def.height * 0.6, 0), unit.def.kind == ChampionDef.Kind.CHAMPION))
 	unit.cast_released.connect(func(_slot: int, _a: AbilityDef, _t: Vector3) -> void: _recoil = 1.0)
 	if unit.def.kind == ChampionDef.Kind.STRUCTURE:
-		unit.died.connect(func(_k: Unit) -> void: _ruin())
+		unit.died.connect(func(_k: Unit) -> void:
+			Fx.collapse(self, global_position, Palette.team_color(unit.team), 7.0 if unit.def.look == ChampionDef.Look.TOWER else 3.6)
+			_ruin())
 	else:
-		unit.died.connect(func(_k: Unit) -> void: _death_t = 0.0)
+		unit.died.connect(func(_k: Unit) -> void:
+			_death_t = 0.0
+			if visible:
+				Fx.death(self, global_position, Palette.team_color(unit.team),
+					1.0 if unit.def.kind == ChampionDef.Kind.CHAMPION else 0.6))
 		unit.respawned.connect(func() -> void:
 			_death_t = -1.0
 			visible = true
@@ -276,42 +285,107 @@ func _build_dummy() -> void:
 	_focus = _part(_cyl(0.12, 0.12, 0.08, 16), _focus_mat, Vector3(0, 1.2, -0.43), Vector3(90, 0, 0))
 
 
-## Minions: short, team-coloured. Shieldbearers carry a big square shield,
-## slingers are slimmer with a hood. Both read as "small and many".
+## Minions: short and team coloured, so they read as "small and many".
+## Shieldbearers: helm with a team crest, mail shirt under a team tabard,
+## a round painted shield and a short sword. Casters: hooded robes, a team
+## scarf and a short staff whose crystal tip is the windup glow.
 func _build_minion(melee: bool) -> void:
 	var col := Palette.team_color(unit.team)
-	var cloth := Palette.mat(col.darkened(0.25))
-	var leather := Palette.mat(Palette.LEATHER)
-	var iron := Palette.mat(Palette.IRON, 0.5, 0.6)
-	var w := 0.34 if melee else 0.26
-	_part(_cyl(w * 0.8, w, 0.6), cloth, Vector3(0, 0.45, 0))
-	_part(_cyl(w * 0.7, w * 0.8, 0.35), leather, Vector3(0, 0.88, 0))
-	_part(_sphere(0.15), iron if melee else cloth, Vector3(0, 1.12, 0))
+	var cloth := Palette.mat(col.darkened(0.3), 0.95)
+	var bright := Palette.mat(col.darkened(0.05), 0.8)
+	var leather := Palette.mat(Palette.LEATHER, 0.8)
+	var dark := Palette.mat(Palette.LEATHER_DARK, 0.85)
+	var iron := Palette.mat(Palette.IRON.lightened(0.1), 0.42, 0.8)
+	var brass := Palette.mat(Palette.BRASS, 0.38, 0.85)
+	var skin := Palette.mat(Color(0.66, 0.52, 0.42))
+	var s := 1.0 if melee else 0.92
+	for x: float in [-0.09 * s, 0.09 * s]:
+		var hip := _pivot_at(Vector3(x, 0.48 * s, 0), "Hip")
+		_attach(_part(_cyl(0.065, 0.075, 0.46 * s, 8), dark, Vector3(x, 0.25 * s, 0)), hip)
+		_attach(_part(_box(Vector3(0.12, 0.07, 0.18)), leather, Vector3(x, 0.035, -0.03)), hip)  # boot
+		_legs.append(hip)
 	if melee:
-		_part(_box(Vector3(0.5, 0.6, 0.06)), Palette.mat(col.darkened(0.1)), Vector3(-0.25, 0.7, -0.3))
-		_part(_box(Vector3(0.06, 0.06, 0.6)), iron, Vector3(0.3, 0.8, -0.25))
+		_part(_cyl(0.19, 0.23, 0.42, 10), iron, Vector3(0, 0.7, 0))                       # mail shirt
+		_part(_box(Vector3(0.3, 0.5, 0.05)), bright, Vector3(0, 0.66, -0.2))             # tabard front
+		_part(_box(Vector3(0.3, 0.5, 0.05)), cloth, Vector3(0, 0.66, 0.2))
+		_part(_box(Vector3(0.44, 0.06, 0.38)), leather, Vector3(0, 0.5, 0))              # belt
+		_part(_cyl(0.07, 0.07, 0.02, 10), brass, Vector3(0, 0.75, -0.23), Vector3(90, 0, 0))  # tabard badge
+		_part(_sphere(0.11), skin, Vector3(0, 1.0, -0.02))
+		_part(_cyl(0.13, 0.14, 0.16, 10), iron, Vector3(0, 1.06, 0))                    # helm
+		_part(_sphere(0.135), iron, Vector3(0, 1.12, 0))
+		_part(_box(Vector3(0.03, 0.12, 0.03)), iron, Vector3(0, 1.0, -0.13))             # nasal guard
+		_part(_box(Vector3(0.05, 0.1, 0.26)), bright, Vector3(0, 1.27, 0.02))           # crest
+		_weapon_l = _pivot_at(Vector3(-0.24, 0.8, 0), "Shield")
+		_attach(_part(_cyl(0.27, 0.27, 0.05, 16), bright, Vector3(-0.3, 0.68, -0.18), Vector3(90, 20, 0)), _weapon_l)
+		_attach(_part(_cyl(0.29, 0.29, 0.03, 16), iron, Vector3(-0.3, 0.68, -0.16), Vector3(90, 20, 0)), _weapon_l)
+		_attach(_part(_sphere(0.07), brass, Vector3(-0.32, 0.68, -0.22)), _weapon_l)    # boss
+		_weapon_r = _pivot_at(Vector3(0.24, 0.8, 0), "Sword")
+		_attach(_part(_box(Vector3(0.04, 0.03, 0.5)), iron, Vector3(0.28, 0.7, -0.32)), _weapon_r)
+		_attach(_part(_box(Vector3(0.16, 0.03, 0.04)), brass, Vector3(0.28, 0.7, -0.07)), _weapon_r)
+		_swing = Swing.MAUL
+		_weapon_r_home = _weapon_r.position
+		_focus_mat = Palette.glow(col, 0.6)
+		_focus = _part(_sphere(0.035), _focus_mat, Vector3(0.28, 0.7, -0.05))
 	else:
-		_part(_cyl(0.0, 0.14, 0.22), cloth, Vector3(0, 1.28, 0.04), Vector3(-25, 0, 0))
-	_focus_mat = Palette.glow(col, 0.6)
-	_focus = _part(_sphere(0.06), _focus_mat, Vector3(0.2, 0.9, -0.2))
+		_skirt = _part(_cyl(0.13, 0.26, 0.62, 12), cloth, Vector3(0, 0.42, 0))         # robe
+		_part(_cyl(0.14, 0.17, 0.3, 10), cloth, Vector3(0, 0.82, 0))
+		_part(_box(Vector3(0.36, 0.1, 0.28)), bright, Vector3(0, 0.94, 0.02))           # scarf
+		_part(_box(Vector3(0.1, 0.4, 0.03)), bright, Vector3(0.07, 0.72, -0.16))        # scarf tail
+		_part(_box(Vector3(0.34, 0.05, 0.3)), leather, Vector3(0, 0.62, 0))             # sash
+		_part(_sphere(0.1), skin, Vector3(0, 1.04, -0.03))
+		_part(_sphere(0.135), cloth, Vector3(0, 1.08, 0.02))                            # hood
+		_part(_cyl(0.0, 0.1, 0.2, 8), cloth, Vector3(0, 1.18, 0.1), Vector3(-35, 0, 0))  # hood point
+		_arm = _pivot_at(Vector3(0.2, 0.85, 0), "Staff")
+		_attach(_part(_cyl(0.02, 0.025, 1.0, 6), Palette.mat(Palette.WOOD, 0.8), Vector3(0.24, 0.6, -0.12)), _arm)
+		_attach(_part(_cyl(0.05, 0.03, 0.08, 6), brass, Vector3(0.24, 1.1, -0.12)), _arm)
+		_swing = Swing.STAFF
+		_focus_mat = _crystal_mat(col, 1.2)
+		_focus = _part(_octahedron(0.05, 0.11, 0.07), _focus_mat, Vector3(0.24, 1.2, -0.12))
+		_focus.reparent(_arm, false)
+		_focus.position -= _arm.position
 
 
 ## Breaker: a broad, stooped bearer of a stone maul, joins waves once the
-## enemy tower has fallen. Bigger than a Shieldbearer so the threat reads.
+## enemy tower has fallen. Bigger than a Shieldbearer so the threat reads:
+## horned helm, heavy pauldrons, team war paint across the chest plate and
+## a rune-cut stone maul head that glows on the windup.
 func _build_breaker() -> void:
 	var col := Palette.team_color(unit.team)
-	var cloth := Palette.mat(col.darkened(0.3))
-	var leather := Palette.mat(Palette.LEATHER)
-	var iron := Palette.mat(Palette.IRON, 0.5, 0.6)
-	var stone := Palette.mat(Palette.STONE_DARK)
-	_part(_cyl(0.42, 0.55, 0.8), cloth, Vector3(0, 0.55, 0))
-	_part(_box(Vector3(1.0, 0.5, 0.7)), leather, Vector3(0, 1.15, 0.05))
-	_part(_box(Vector3(1.1, 0.12, 0.4)), iron, Vector3(0, 1.42, 0.05))
-	_part(_sphere(0.2), iron, Vector3(0, 1.55, -0.12))
-	_part(_box(Vector3(0.1, 0.1, 1.2)), leather, Vector3(0.5, 1.0, -0.4), Vector3(20, 0, 0))
-	_part(_box(Vector3(0.45, 0.45, 0.5)), stone, Vector3(0.5, 0.75, -0.95), Vector3(20, 0, 0))
+	var cloth := Palette.mat(col.darkened(0.3), 0.95)
+	var bright := Palette.mat(col.darkened(0.05), 0.8)
+	var leather := Palette.mat(Palette.LEATHER, 0.8)
+	var dark := Palette.mat(Palette.LEATHER_DARK, 0.85)
+	var iron := Palette.mat(Palette.IRON, 0.45, 0.8)
+	var brass := Palette.mat(Palette.BRASS, 0.38, 0.85)
+	var bone := Palette.mat(Color(0.82, 0.76, 0.62), 0.7)
+	var stone := Art.stone("slate", Color(0.75, 0.72, 0.68)).duplicate() as StandardMaterial3D
+	for x: float in [-0.2, 0.2]:
+		var hip := _pivot_at(Vector3(x, 0.62, 0.05), "Hip")
+		_attach(_part(_cyl(0.11, 0.13, 0.6, 8), dark, Vector3(x, 0.32, 0.05)), hip)
+		_attach(_part(_box(Vector3(0.2, 0.1, 0.28)), iron, Vector3(x, 0.05, 0.0)), hip)
+		_legs.append(hip)
+	_part(_cyl(0.32, 0.38, 0.35, 10), cloth, Vector3(0, 0.72, 0.05))                    # kilt
+	_part(_box(Vector3(0.8, 0.6, 0.55)), leather, Vector3(0, 1.12, 0.08), Vector3(14, 0, 0))   # torso
+	_part(_box(Vector3(0.62, 0.42, 0.06)), iron, Vector3(0, 1.15, -0.22), Vector3(14, 0, 0))   # chest plate
+	_part(_box(Vector3(0.5, 0.08, 0.02)), bright, Vector3(0, 1.2, -0.26), Vector3(14, 0, 18))  # war paint
+	_part(_box(Vector3(0.5, 0.08, 0.02)), bright, Vector3(0, 1.2, -0.26), Vector3(14, 0, -18))
+	for x: float in [-0.48, 0.48]:
+		_part(_sphere(0.22), iron, Vector3(x, 1.4, 0.05)).scale = Vector3(1.0, 0.7, 1.1)  # pauldrons
+	_part(_sphere(0.19), iron, Vector3(0, 1.55, -0.14))                                  # helm
+	for x: float in [-1.0, 1.0]:
+		_part(_cyl(0.015, 0.06, 0.4, 6), bone, Vector3(x * 0.22, 1.72, -0.14), Vector3(0, 0, -x * 50.0))  # horns
+	_weapon_l = _pivot_at(Vector3(-0.5, 1.2, -0.05), "Fist")
+	_attach(_part(_sphere(0.12), iron, Vector3(-0.52, 0.95, -0.2)), _weapon_l)
+	_weapon_r = _pivot_at(Vector3(0.5, 1.2, -0.1), "Maul")
+	_attach(_part(_box(Vector3(0.08, 0.08, 1.2)), Palette.mat(Palette.WOOD, 0.8), Vector3(0.5, 1.0, -0.45), Vector3(20, 0, 0)), _weapon_r)
+	_attach(_part(_box(Vector3(0.48, 0.42, 0.52)), stone, Vector3(0.5, 0.78, -1.0), Vector3(20, 0, 0)), _weapon_r)
+	_attach(_part(_box(Vector3(0.52, 0.08, 0.56)), brass, Vector3(0.5, 0.98, -0.94), Vector3(20, 0, 0)), _weapon_r)
+	_swing = Swing.MAUL
+	_weapon_r_home = _weapon_r.position
 	_focus_mat = Palette.glow(col, 0.8)
-	_focus = _part(_sphere(0.08), _focus_mat, Vector3(0, 1.2, -0.32))
+	_focus = _part(_box(Vector3(0.5, 0.06, 0.4)), _focus_mat, Vector3(0.5, 0.74, -1.27), Vector3(20, 0, 0))
+	_focus.reparent(_weapon_r, false)
+	_focus.position -= _weapon_r.position
 
 
 ## Warden Tower: a crystal shrine. A stepped flagstone base, four corner
@@ -329,6 +403,9 @@ func _build_tower() -> void:
 	_part(_box(Vector3(4.4, 0.45, 4.4)), slate, Vector3(0, 0.22, 0))
 	_part(_box(Vector3(3.7, 0.5, 3.7)), plaza, Vector3(0, 0.7, 0))
 	_part(_box(Vector3(2.9, 0.35, 2.9)), slate, Vector3(0, 1.12, 0))
+	# Team runes cut round the middle step, readable from every side.
+	for d: Vector3 in [Vector3.FORWARD, Vector3.BACK, Vector3.LEFT, Vector3.RIGHT]:
+		_attach(Runes.band(self, d * 1.85 + Vector3(0, 0.7, 0), d, 3.2, 0.28, col, randf()), _body)
 	for cx in [-1.55, 1.55]:
 		for cz in [-1.55, 1.55]:
 			_part(_cyl(0.2, 0.24, 1.9, 10), wall, Vector3(cx, 1.9, cz))
@@ -472,29 +549,77 @@ static func _octahedron(w: float, up: float, down: float) -> ArrayMesh:
 
 
 ## Shrinebearer: a huge shelled beast carrying a small ruined shrine on its
-## back. Wild it is moss and old brass; claimed it flies its team's banner.
+## back. The shell is built of overlapping plates with moss in the seams and
+## old runes cut into the rim; the shrine on top holds an amethyst crystal
+## (the windup glow). Wild it is moss and old brass; claimed it flies its
+## team's banner and its runes take the team colour.
 func _build_shrinebearer() -> void:
-	var shell := Palette.mat(Color(0.33, 0.36, 0.22), 0.7)
-	var hide := Palette.mat(Color(0.30, 0.25, 0.20))
-	var stone := Palette.mat(Palette.STONE_WARM)
-	var brass := Palette.mat(Palette.BRASS, 0.45, 0.8)
-	_part(_sphere(1.0), shell, Vector3(0, 1.5, 0.1)).scale = Vector3(1.7, 0.8, 2.0)
-	_part(_sphere(0.55), hide, Vector3(0, 1.1, -1.9))                       # head
-	_part(_cyl(0.02, 0.16, 0.9), brass, Vector3(0.3, 1.25, -2.45), Vector3(-70, 0, 0))   # horn
-	_part(_cyl(0.02, 0.16, 0.9), brass, Vector3(-0.3, 1.25, -2.45), Vector3(-70, 0, 0))
-	for lx in [-1.2, 1.2]:
-		for lz in [-1.0, 1.1]:
-			_part(_cyl(0.22, 0.28, 1.0), hide, Vector3(lx, 0.5, lz))
-	_part(_box(Vector3(1.2, 0.2, 1.2)), stone, Vector3(0, 2.3, 0.3))       # shrine floor
-	_part(_box(Vector3(0.25, 1.1, 0.25)), stone, Vector3(-0.45, 2.95, 0.3))
-	_part(_box(Vector3(0.25, 1.1, 0.25)), stone, Vector3(0.45, 2.95, 0.3))
-	_part(_box(Vector3(1.2, 0.25, 0.4)), stone, Vector3(0, 3.6, 0.3))
+	var shell := Palette.mat(Color(0.30, 0.33, 0.22), 0.65)
+	var plate := Palette.mat(Color(0.40, 0.40, 0.28), 0.6)
+	var hide := Palette.mat(Color(0.32, 0.26, 0.21), 0.9)
+	var belly := Palette.mat(Color(0.52, 0.45, 0.34), 0.9)
+	var moss := Palette.mat(Palette.MOSS, 0.95)
+	var brass := Palette.mat(Palette.BRASS.darkened(0.15), 0.45, 0.8)
+	var bone := Palette.mat(Color(0.82, 0.76, 0.62), 0.7)
+	var stone := Art.stone("wall", Color(0.95, 0.9, 0.82)).duplicate() as StandardMaterial3D
+	var slate := Art.stone("slate", Color(0.8, 0.78, 0.74)).duplicate() as StandardMaterial3D
+	var glow_col := Palette.team_color(unit.team) if unit.team <= 1 else Palette.NEUTRAL
+	# Shell: a main dome and a ring of plates round its rim.
+	_part(_sphere(1.0), shell, Vector3(0, 1.45, 0.1)).scale = Vector3(1.75, 0.85, 2.05)
+	_part(_sphere(0.9), belly, Vector3(0, 1.0, 0.1)).scale = Vector3(1.6, 0.4, 1.9)
+	for i in 10:
+		var a := TAU * i / 10.0
+		var pl := _part(_box(Vector3(0.75, 0.16, 0.6)), plate, Vector3(cos(a) * 1.5, 1.15, 0.1 + sin(a) * 1.75))
+		pl.rotation = Vector3(0, -a, deg_to_rad(-22.0))
+		var rune := _part(_box(Vector3(0.36, 0.08, 0.02)), Palette.glow(glow_col, 1.4), Vector3(cos(a) * 1.69, 1.1, 0.1 + sin(a) * 1.96))
+		rune.rotation = Vector3(0, -a + PI * 0.5, 0)
+	for i in 6:
+		var a := TAU * i / 6.0 + 0.3
+		_part(_sphere(0.35), moss, Vector3(cos(a) * 1.0, 1.95, 0.1 + sin(a) * 1.2)).scale = Vector3(1.2, 0.3, 1.0)
+	# Head: heavy brow, beak-like jaw, brass-capped horns and two small eyes.
+	_part(_sphere(0.55), hide, Vector3(0, 1.15, -1.95)).scale = Vector3(1.0, 0.85, 1.15)
+	_part(_box(Vector3(0.9, 0.2, 0.45)), plate, Vector3(0, 1.45, -2.05), Vector3(-12, 0, 0))   # brow plate
+	_part(_cyl(0.05, 0.32, 0.55, 8), bone, Vector3(0, 0.92, -2.5), Vector3(-80, 0, 0))     # beak
+	for x: float in [-1.0, 1.0]:
+		_part(_cyl(0.03, 0.15, 1.0, 8), bone, Vector3(x * 0.38, 1.55, -2.2), Vector3(-55, 0, x * -20.0))
+		_part(_cyl(0.06, 0.06, 0.12, 8), brass, Vector3(x * 0.52, 1.92, -2.55), Vector3(-55, 0, x * -20.0))
+		_part(_sphere(0.06), Palette.glow(glow_col, 2.0), Vector3(x * 0.28, 1.28, -2.42))
+	# Legs: thick columns with toe claws. The front pair steps with the walk.
+	for lx: float in [-1.2, 1.2]:
+		for lz: float in [-1.0, 1.15]:
+			var hip := _pivot_at(Vector3(lx, 1.0, lz), "Leg")
+			_attach(_part(_cyl(0.26, 0.32, 1.0, 10), hide, Vector3(lx, 0.5, lz)), hip)
+			for t in 3:
+				_attach(_part(_cyl(0.02, 0.07, 0.2, 6), bone, Vector3(lx + (t - 1) * 0.14, 0.06, lz - 0.32), Vector3(-75, 0, 0)), hip)
+			if lz < 0.0:
+				_legs.append(hip)
+	# Tail.
+	_part(_cyl(0.05, 0.3, 0.9, 8), hide, Vector3(0, 0.8, 2.3), Vector3(70, 0, 0))
+	# The shrine: a slab floor, four broken columns, a lintel, and the crystal.
+	_part(_box(Vector3(1.4, 0.22, 1.4)), slate, Vector3(0, 2.33, 0.3))
+	var heights := [1.25, 1.05, 0.7, 1.25]
+	var k := 0
+	for cx: float in [-0.5, 0.5]:
+		for cz: float in [-0.2, 0.8]:
+			var h: float = heights[k]
+			_part(_cyl(0.11, 0.13, h, 10), stone, Vector3(cx, 2.44 + h * 0.5, cz))
+			k += 1
+	_part(_box(Vector3(1.3, 0.2, 0.32)), stone, Vector3(0, 3.78, -0.2))
+	_part(_box(Vector3(1.2, 0.06, 0.06)), brass, Vector3(0, 3.66, -0.36))
+	for x: float in [-0.35, 0.0, 0.35]:
+		_part(_box(Vector3(0.02, 0.3, 0.02)), brass, Vector3(x, 3.45, -0.36))  # hanging chains
 	if unit.team <= 1:
-		var flag := Palette.mat(Palette.team_color(unit.team).darkened(0.2))
-		_part(_box(Vector3(0.05, 1.4, 0.05)), Palette.mat(Palette.WOOD), Vector3(0, 4.3, 0.6))
-		_part(_box(Vector3(0.7, 0.5, 0.04)), flag, Vector3(0.36, 4.75, 0.6))
-	_focus_mat = Palette.glow(Color(0.85, 0.75, 1.0), 1.5)
-	_focus = _part(_sphere(0.18), _focus_mat, Vector3(0, 2.9, 0.3))
+		var flag := Palette.mat(Palette.team_color(unit.team).darkened(0.2), 0.95)
+		_part(_box(Vector3(0.05, 1.6, 0.05)), Palette.mat(Palette.WOOD), Vector3(0.5, 4.3, 0.8))
+		_part(_box(Vector3(0.75, 0.55, 0.04)), flag, Vector3(0.12, 4.75, 0.8))
+	_focus_mat = _crystal_mat(glow_col.lightened(0.2), 1.5)
+	_focus = _part(_octahedron(0.2, 0.42, 0.3), _focus_mat, Vector3(0, 2.95, 0.3))
+	var light := OmniLight3D.new()
+	light.light_color = glow_col
+	light.light_energy = 1.4
+	light.omni_range = 6.0
+	light.position = Vector3(0, 3.0, 0.3)
+	_body.add_child(light)
 
 
 ## Destroyed structures stay as a dark broken stump, so the map remembers.

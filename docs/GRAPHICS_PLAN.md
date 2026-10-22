@@ -16,7 +16,7 @@ loud as SMITE.
 2. Floor dressing stays under `Palette.DECAL_LIFT` (8 cm). Never two coplanar floor faces. The floor is one
    surface with one shader, so there is nothing to flicker.
 3. Team colours (teal Oath, amber Ruin) only on things that belong to a team: crystals, banners, rings,
-   minions. The environment stays in stone, earth and autumn tones so team colour always pops.
+   minions. Wild magic is amethyst and old gold. The environment stays in stone, earth and autumn tones so team colour always pops.
 4. Light sources are warm and low (lanterns, braziers). Crystals carry the team light.
 5. Large type and contrast in UI stay as they are.
 
@@ -35,7 +35,7 @@ commercial game and is written into the manifest before it enters the repo.
 | Pass | What | Status |
 |---|---|---|
 | 1 | Ground (one blended surface), masonry walls with caps and plinths, sky and sun, fog, SSAO, trees, grass at wall feet, lanterns, braziers, props in flanks and bases, crystal shrine towers and cores | in this build |
-| 2 | Minions and the Shrinebearer: shaped meshes and materials instead of primitives; hit and death effects with particles | next |
+| 2 | Fantasy layer (Anthony 2026-10-22: "make it magical"): glowing rune bands on the lane walls and tower steps, a ward circle in mid lane, floating and growing amethyst crystals, spirit trees, floating islands over the valley, light motes. Minions, Breaker and Shrinebearer rebuilt. Hit sparks, death dust and wisps, structure collapse | in build art2 |
 | 3 | Champions: first modelled and rigged champion over the Ruinscribe template, through the asset contract checker | after pass 2 |
 | 4 | Spell effects: shaders for bolts, glyphs and the ward (trails, distortion, impact flashes) kept readable | |
 | 5 | Mood two: rain-wet night with lanterns (a second lighting preset), and a graphics quality menu | |

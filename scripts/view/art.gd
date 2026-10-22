@@ -81,6 +81,7 @@ static func ground() -> ShaderMaterial:
 	n.fractal_octaves = 4
 	nt.noise = n
 	m.set_shader_parameter("mask_noise", nt)
+	m.set_shader_parameter("rune_strip", Runes.strip())
 	_cache["ground"] = m
 	return m
 
@@ -138,7 +139,7 @@ static func environment(parent: Node) -> void:
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 1.08
+	env.adjustment_saturation = 1.15
 	var we := WorldEnvironment.new()
 	we.environment = env
 	parent.add_child(we)

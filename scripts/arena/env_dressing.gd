@@ -23,6 +23,7 @@ func build() -> void:
 	_lanterns()
 	_bases()
 	_camp()
+	_magic()
 	_grass_at_wall_feet()
 	_plant_grass()
 
@@ -106,6 +107,10 @@ func _trees() -> void:
 		var a := TAU * k / 34.0 + _rng.randf_range(-0.05, 0.05)
 		var e := Vector3(cos(a) * 46.0, 0, sin(a) * 100.0) * _rng.randf_range(1.0, 1.25)
 		spots.append(e)
+	# Spirit trees: amethyst crowns that glow faintly, behind the camp and
+	# beside each base, so the wild magic has a home.
+	for p: Vector3 in [Vector3(-40.0, 0, -6.0), Vector3(-41.0, 0, 7.0), Vector3(25.0, 0, 52.0), Vector3(-25.0, 0, -52.0)]:
+		ForestTree.add(_root, p, _rng.randf_range(9.0, 11.0), _rng, ForestTree.SPIRIT)
 	var i := 0
 	for p in spots:
 		ForestTree.add(_root, p, _rng.randf_range(5.0, 8.5) * (0.8 if i < 4 else 1.0), _rng)
@@ -169,6 +174,57 @@ func _camp() -> void:
 	Fire.add(_root, c + Vector3(-5.5, 0.25, 6.5), 0.9, 6.0, 1.4)
 	for p: Vector3 in [Vector3(-6.5, 0, -8.8), Vector3(6.0, 0, -8.9), Vector3(-6.8, 0, 0.5), Vector3(3.0, 0, 8.9)]:
 		_p("rock_moss_set_01", "rock_moss_set_01_rock0%d" % (1 + _rng.randi() % 6), c + p, -1.0, _rng.randf_range(0.45, 0.7))
+
+
+## The fantasy layer: a band of pale gold runes carved along both lane wall
+## faces, amethyst crystal clusters floating over the walls by the flank
+## gaps and in the camp, and drifting motes of light. Wild magic colours only
+## (gold, amethyst), so team colours stay on team things.
+func _magic() -> void:
+	var rune_col := Color(0.95, 0.66, 0.3)
+	for side: float in [-1.0, 1.0]:
+		# Runs of wall between the gaps.
+		var edges: Array[float] = [-LaneMapBuilder.BASE_Z]
+		for g: float in [-39.0, -9.0, 9.0, 39.0]:
+			edges.append_array([g - LaneMapBuilder.GAP_HALF, g + LaneMapBuilder.GAP_HALF])
+		edges.append(LaneMapBuilder.BASE_Z)
+		for i in range(0, edges.size(), 2):
+			var z0: float = edges[i] + 0.8
+			var z1: float = edges[i + 1] - 0.8
+			if z1 - z0 < 2.0:
+				continue
+			var face := Vector3(-side, 0, 0)
+			Runes.band(_root, Vector3(side * LaneMapBuilder.LANE_HALF, 1.65, (z0 + z1) * 0.5), face, z1 - z0, 0.3,
+				rune_col, _rng.randf())
+	var amethyst := Palette.NEUTRAL
+	for g: float in LaneMapBuilder.GAPS:
+		for zs: float in [-1.0, 1.0]:
+			for side: float in [-1.0, 1.0]:
+				var z := zs * (g + LaneMapBuilder.GAP_HALF + 1.2)
+				Magic.crystals(_root, Vector3(side * (LaneMapBuilder.LANE_HALF + LaneMapBuilder.WALL_IN) * 0.5, 4.6, z),
+					amethyst, 0.8, _rng)
+	var c := LaneMapBuilder.CAMP
+	for p: Vector3 in [Vector3(-6.0, 2.2, -7.5), Vector3(5.5, 2.6, 7.8), Vector3(-6.4, 2.0, 4.0)]:
+		Magic.crystals(_root, c + p, amethyst, 1.1, _rng)
+	# Crystal growths at the flank wall feet and round the camp.
+	for side: float in [-1.0, 1.0]:
+		for z: float in [-30.0, -17.0, 4.5, 21.0, 33.0]:
+			var x := side * (LaneMapBuilder.FLANK_OUT - 0.4) if int(z) % 2 == 0 else side * (LaneMapBuilder.WALL_IN + 0.4)
+			if side < 0.0 and absf(z) < 7.0:
+				continue
+			Magic.growth(_root, Vector3(x, 0, z * side), amethyst, _rng.randf_range(0.8, 1.2), _rng)
+	for p: Vector3 in [Vector3(-7.0, 0, 9.5), Vector3(6.8, 0, -9.6), Vector3(-7.2, 0, -3.0)]:
+		Magic.growth(_root, c + p, amethyst, 1.3, _rng)
+	# Floating islands out over the valley, the strongest sign that this is
+	# not our world. Far enough out to never meet the camera arm.
+	for k in 9:
+		var a := TAU * k / 9.0 + 0.3
+		var pos := Vector3(cos(a) * _rng.randf_range(65.0, 85.0), _rng.randf_range(14.0, 26.0), sin(a) * _rng.randf_range(110.0, 140.0))
+		Magic.island(_root, pos, _rng.randf_range(2.5, 4.5), amethyst if k % 3 else Color(0.55, 0.9, 0.85), _rng)
+	Magic.motes(_root, Vector3(0, 2.5, 0), Vector3(7.0, 2.0, 46.0), Color(1.0, 0.85, 0.55), 110)
+	for side: float in [-1.0, 1.0]:
+		Magic.motes(_root, Vector3(side * 15.0, 2.0, 0), Vector3(4.0, 1.8, 45.0), Color(0.8, 0.7, 1.0), 70)
+	Magic.motes(_root, c + Vector3(0, 2.0, 0), Vector3(7.0, 1.8, 9.0), Color(0.8, 0.7, 1.0), 50)
 
 
 ## Short grass against every wall foot inside the map.
