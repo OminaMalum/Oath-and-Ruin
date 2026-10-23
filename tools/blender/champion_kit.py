@@ -389,7 +389,7 @@ def rest_feet(rig):
 
 
 def limbs(rig, M, legs="Cloth", boots="Leather", hands="Skin", leg_r=(0.085, 0.075, 0.06, 0.055), boot_scale=1.0,
-          cuff="Leather"):
+          cuff="Leather", smooth=1):
     """Legs, boots and hands for the shared skeleton."""
     b = rig.data.bones
     for side in ("l", "r"):
@@ -400,13 +400,13 @@ def limbs(rig, M, legs="Cloth", boots="Leather", hands="Skin", leg_r=(0.085, 0.0
         k = Kit("Leg_" + side, M)
         k.tube([hip, hip.lerp(knee, 0.5), knee, knee.lerp(ankle, 0.5)], list(leg_r), legs, seg=10)
         k.tube([knee.lerp(ankle, 0.45), ankle + Vector((0, 0, 0.02))], [leg_r[2] * 1.1, leg_r[3] * 1.12], cuff, seg=10)
-        k.finish(rig, ["thigh_" + side, "shin_" + side], subsurf=1)
+        k.finish(rig, ["thigh_" + side, "shin_" + side], subsurf=smooth)
         f = Kit("Boot_" + side, M)
         bs = boot_scale
         f.tube([Vector((x, -0.05 * bs, 0.05)), Vector((x, 0.06 * bs, 0.045)), Vector((x, 0.15 * bs, 0.035))],
                [0.05 * bs, 0.048 * bs, 0.038 * bs], boots, seg=10)
         f.box(Vector((x, 0.04 * bs, 0.008)), (0.09 * bs, 0.24 * bs, 0.016), boots)
-        f.finish(rig, "foot_" + side, subsurf=1)
+        f.finish(rig, "foot_" + side, subsurf=smooth)
         if hands:
             hand(rig, M, side, hands)
 
@@ -428,7 +428,7 @@ def hand(rig, M, side, mname="Skin", fist=False):
     h.finish(rig, "hand_" + side)
 
 
-def sleeve(rig, M, side, mname, radii=(0.075, 0.068, 0.062, 0.06, 0.062), cuff=None, cuff_r=0.075):
+def sleeve(rig, M, side, mname, radii=(0.075, 0.068, 0.062, 0.06, 0.062), cuff=None, cuff_r=0.075, smooth=1):
     b = rig.data.bones
     sh = b["upper_arm_" + side].head_local
     el = b["forearm_" + side].head_local
@@ -439,7 +439,7 @@ def sleeve(rig, M, side, mname, radii=(0.075, 0.068, 0.062, 0.06, 0.062), cuff=N
     if cuff:
         dd = (wr - el).normalized()
         k.tube([wr - dd * 0.06, wr + dd * 0.005], [cuff_r, cuff_r * 1.04], cuff, seg=12, cap=False)
-    k.finish(rig, ["upper_arm_" + side, "forearm_" + side, "shoulder_" + side, "chest"], subsurf=1, solidify=0.006)
+    k.finish(rig, ["upper_arm_" + side, "forearm_" + side, "shoulder_" + side, "chest"], subsurf=smooth, solidify=0.006)
 
 
 def run_clip(rig, speed, upper, cycle=0.6, stance=0.2, hips_drop=0.09, lift=0.26, kick=0.22, step=1):

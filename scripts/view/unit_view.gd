@@ -62,7 +62,7 @@ func _ready() -> void:
 	_body = Node3D.new()
 	_body.name = "Body"
 	add_child(_body)
-	var glb := ChampionModel.path_for(unit.def.id) if unit.def.kind == ChampionDef.Kind.CHAMPION else ""
+	var glb := ChampionModel.path_for(unit.def.id) if unit.def.kind != ChampionDef.Kind.STRUCTURE else ""
 	if not glb.is_empty():
 		_build_imported(glb)
 	else:
@@ -237,8 +237,9 @@ func _build_imported(path: String) -> void:
 	_focus_mat = d.glow
 	_anim = _model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	_muzzle = _model.find_child("Muzzle", true, false) as Node3D
+	var champ := unit.def.kind == ChampionDef.Kind.CHAMPION
 	var focus := _model.find_child("Focus", true, false) as Node3D
-	if focus:
+	if focus and champ:
 		_focus_light = OmniLight3D.new()
 		_focus_light.light_color = unit.def.accent_color
 		_focus_light.light_energy = 0.5
@@ -250,8 +251,9 @@ func _build_imported(path: String) -> void:
 		var j: Variant = JSON.parse_string(FileAccess.get_file_as_string(tj))
 		if j is Dictionary:
 			_release = (j as Dictionary).get("release", {})
-	_team_ring(0.62)
-	if _muzzle:
+	if champ:
+		_team_ring(0.62)
+	if _muzzle and champ:
 		_gather = _gather_motes(unit.def.accent_color)
 		_muzzle.add_child(_gather)
 	_anim.play("idle")

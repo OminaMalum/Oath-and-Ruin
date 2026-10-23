@@ -8,6 +8,7 @@ class_name ChampionModel
 ## per unit.
 
 const DIR := "res://assets/champions/"
+const UNIT_DIR := "res://assets/units/"
 
 ## material name: [texture set or "", tint, roughness, metallic, uv scale, (optional) bump only]
 const LOOKS := {
@@ -24,22 +25,26 @@ const LOOKS := {
 	"Paper": ["", Color(0.88, 0.82, 0.66), 0.9, 0.0, 1.0],
 	"Trim": ["", Color(0.86, 0.64, 0.3), 0.4, 0.7, 1.0],
 	"Steel": ["", Color(0.6, 0.62, 0.64), 0.34, 0.9, 1.0],
-	"Iron": ["", Color(0.2, 0.2, 0.22), 0.45, 0.85, 1.0],
+	"Iron": ["", Color(0.3, 0.3, 0.33), 0.5, 0.75, 1.0],
 	# Woven hessian bumps read as rings of mail once it is metal.
 	"Mail": ["hessian_230", Color(0.38, 0.4, 0.43), 0.5, 0.85, 8.0, true],
 	"Bone": ["", Color(0.84, 0.79, 0.66), 0.6, 0.0, 1.0],
 	"Fur": ["poly_wool_herringbone", Color(0.42, 0.36, 0.3), 1.0, 0.0, 4.0],
 	"Feather": ["", Color(0.22, 0.2, 0.18), 0.8, 0.0, 1.0],
+	"Stone": ["castle_wall_slates", Color(0.7, 0.68, 0.66), 0.9, 0.0, 4.0],
 }
 const SETS := {
 	"poly_wool_herringbone": "poly_wool_herringbone", "brown_leather": "brown_leather", "hessian_230": "hessian_230",
-	"bark_willow_02": "bark_willow_02",
+	"bark_willow_02": "bark_willow_02", "castle_wall_slates": "castle_wall_slates",
 }
 
 
 static func path_for(id: StringName) -> String:
-	var p := "%s%s.glb" % [DIR, id]
-	return p if ResourceLoader.exists(p) else ""
+	for d in [DIR, UNIT_DIR]:
+		var p := "%s%s.glb" % [d, id]
+		if ResourceLoader.exists(p):
+			return p
+	return ""
 
 
 ## Swaps the materials on every mesh under `root`. Returns
@@ -63,6 +68,8 @@ static func dress(root: Node, team: int, accent: Color, primary := Color(0.4, 0.
 				m = glow
 			elif nm == "Eyes":
 				m = eyes
+			elif nm == "TeamGlow":
+				m = Palette.glow(team_col.lightened(0.35), 1.3)
 			elif nm == "Glass":
 				m = Palette.glow(accent.lightened(0.45), 0.8)
 			elif LOOKS.has(nm):

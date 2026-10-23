@@ -31,6 +31,7 @@ var _i := 0
 var _wait := 0
 var _timing := {}
 var _shots: Array = SHOTS
+var _size := 1.0  # the camera closes in on smaller units
 
 
 func _initialize() -> void:
@@ -60,8 +61,11 @@ func _initialize() -> void:
 	world.add_child(floor)
 	_inst = (load(_model) as PackedScene).instantiate()
 	world.add_child(_inst)
-	var def := load("res://data/champions/%s.tres" % _model.get_file().get_basename()) as ChampionDef
+	var id := _model.get_file().get_basename()
+	var dp := "res://data/champions/%s.tres" % id
+	var def := load(dp if ResourceLoader.exists(dp) else "res://data/units/%s.tres" % id) as ChampionDef
 	ChampionModel.dress(_inst, _team, def.accent_color, def.primary_color)
+	_size = clampf(def.height / 1.9, 0.5, 1.2)
 	_player = _inst.find_children("*", "AnimationPlayer", true, false)[0]
 	var tj := _model.get_basename() + ".timing.json"
 	if FileAccess.file_exists(tj):
@@ -86,8 +90,8 @@ func _setup() -> void:
 	_player.pause()
 	# The camera stays on the sun side and the model turns, so every view is lit.
 	_inst.rotation.y = PI + deg_to_rad(float(s[3]))
-	var d: float = s[4]
-	var look := Vector3(0, 1.1 if d > 2.0 else 1.62, 0)
+	var d: float = s[4] * _size
+	var look := Vector3(0, (1.1 if s[4] > 2.0 else 1.62) * _size, 0)
 	_cam.look_at_from_position(look + Vector3(d * 0.35, d * 0.22, d), look)
 	_wait = 6
 

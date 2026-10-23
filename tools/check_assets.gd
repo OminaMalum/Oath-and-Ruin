@@ -3,7 +3,8 @@ extends SceneTree
 ##
 ##   godot --headless --path . -s tools/check_assets.gd -- [FILES...] [--spec=DIR]
 ##
-## FILES are .glb or .gltf paths (default: every file in assets/champions/).
+## FILES are .glb or .gltf paths (default: every file in assets/champions/ and
+## assets/units/; minion models live in assets/units/ and check against data/units/).
 ## The champion is taken from the file name (ruinscribe.glb, or
 ## ruinscribe_v2.glb: the part before the first "_v"), the windup release
 ## times from FILE.timing.json next to it (tools/blender/export_champion.py
@@ -12,6 +13,8 @@ extends SceneTree
 ## Exit code = number of files with errors.
 
 const CHAMPIONS := "res://data/champions/"
+const UNITS := "res://data/units/"
+const MINIONS: Array[StringName] = [&"minion_melee", &"minion_caster", &"minion_breaker"]
 
 
 func _initialize() -> void:
@@ -30,10 +33,11 @@ func _run() -> void:
 		quit(_write_specs(spec_dir))
 		return
 	if files.is_empty():
-		var dir := ProjectSettings.globalize_path("res://assets/champions")
-		for f in DirAccess.get_files_at(dir):
-			if f.get_extension() in ["glb", "gltf"]:
-				files.append(dir.path_join(f))
+		for sub in ["res://assets/champions", "res://assets/units"]:
+			var dir := ProjectSettings.globalize_path(sub)
+			for f in DirAccess.get_files_at(dir):
+				if f.get_extension() in ["glb", "gltf"]:
+					files.append(dir.path_join(f))
 	if files.is_empty():
 		print("No models to check (put .glb files in assets/champions/).")
 		quit(0)
@@ -48,6 +52,8 @@ func _run() -> void:
 func _check_file(path: String) -> bool:
 	var id := path.get_file().get_basename().get_slice("_v", 0).to_lower()
 	var def_path := CHAMPIONS + id + ".tres"
+	if not ResourceLoader.exists(def_path):
+		def_path = UNITS + id + ".tres"
 	print("\n== %s (champion %s)" % [path, id])
 	if not ResourceLoader.exists(def_path):
 		print("ERROR no champion called '%s' in %s (name the file after the champion id)" % [id, CHAMPIONS])
@@ -85,6 +91,12 @@ func _write_specs(dir: String) -> int:
 		if def == null or def.kind != ChampionDef.Kind.CHAMPION:
 			continue
 		var out := dir.path_join(String(def.id) + ".json")
+		var fa := FileAccess.open(out, FileAccess.WRITE)
+		fa.store_string(JSON.stringify(AssetContract.spec(def), "  ", false) + "\n")
+		print("wrote " + out)
+	for id in MINIONS:
+		var def := load(UNITS + String(id) + ".tres") as ChampionDef
+		var out := dir.path_join(String(id) + ".json")
 		var fa := FileAccess.open(out, FileAccess.WRITE)
 		fa.store_string(JSON.stringify(AssetContract.spec(def), "  ", false) + "\n")
 		print("wrote " + out)
