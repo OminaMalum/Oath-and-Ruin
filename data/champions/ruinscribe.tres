@@ -6,6 +6,7 @@
 [ext_resource type="Resource" path="res://data/abilities/arcane_bolt.tres" id="3_q3762"]
 [ext_resource type="Resource" path="res://data/abilities/unmaking_word.tres" id="5_ult"]
 [ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_ea64g"]
+[ext_resource type="Resource" path="res://data/abilities/fold_step.tres" id="9_f"]
 
 [resource]
 script = ExtResource("4_ea64g")
@@ -16,7 +17,7 @@ max_health = 560.0
 move_speed = 6.2
 fountain_heal = 80.0
 basic_attack = ExtResource("3_q3762")
-abilities = Array[ExtResource("1_vd65r")]([ExtResource("2_aiors"), ExtResource("3_aiors"), ExtResource("5_ult")])
+abilities = Array[ExtResource("1_vd65r")]([ExtResource("2_aiors"), ExtResource("3_aiors"), ExtResource("5_ult"), ExtResource("9_f")])
 passive = 1
 passive_name = "Inscribed"
 passive_description = "Every third Arcane Bolt that lands on the same target hits for 50% more."

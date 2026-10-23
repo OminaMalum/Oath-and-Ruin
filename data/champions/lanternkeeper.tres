@@ -6,6 +6,7 @@
 [ext_resource type="Resource" path="res://data/abilities/lantern_light.tres" id="4_a"]
 [ext_resource type="Resource" path="res://data/abilities/ravens_mark.tres" id="5_a"]
 [ext_resource type="Resource" path="res://data/abilities/dawnlight.tres" id="6_a"]
+[ext_resource type="Resource" path="res://data/abilities/searing_light.tres" id="9_f"]
 
 [resource]
 script = ExtResource("1_ch")
@@ -17,7 +18,7 @@ max_health = 600.0
 move_speed = 6.1
 fountain_heal = 80.0
 basic_attack = ExtResource("3_b")
-abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a")])
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("9_f")])
 passive = 4
 passive_name = "Kindled"
 passive_description = "Allied champions within 7 m of the Lanternkeeper, and the Lanternkeeper, regain 4 health a second."

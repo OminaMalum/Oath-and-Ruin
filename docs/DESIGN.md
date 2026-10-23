@@ -352,6 +352,35 @@ structure damage. Deaths were 62 to 86 per champion. Zero script errors.
 - **Results**: Victory or Defeat, how and when it ended, then a table per team (level, kills and deaths, damage to
   champions, gold), structures and Shrinebearer claims, and Play again / Main menu buttons (F5 and M still work).
 
+## The fourth ability, F (added 2026-10-23)
+
+Every champion now has four abilities: Q, E, F and the ultimate R. F is a
+regular ability (no level lock, no upgrade). It lives in slot 4 so slot 3
+stays the ultimate everywhere. Each F reuses a mechanic the sim already has,
+so no new rules, only new numbers in .tres files.
+
+| Champion | F | What it is for |
+|---|---|---|
+| Ruinscribe | Fold Step: 6 m blink, no damage, 14 s | Escape for the squishy mage |
+| Oathwarden | Shield Rush: 6 m dash, 40 damage, 30% slow | Engage |
+| Ashrunner | Smoke Veil: 3.5 m cloud, allies 30% faster, 20% less damage | Team escape |
+| Lanternkeeper | Searing Light: slow beam, 40 damage, 0.6 s stun | Peel |
+| Thornwright | Hunter's Roll: 5 m roll, no damage, 10 s | Keep range |
+| Gravebinder | Withering Curse: piercing line, 60 damage, 30% slow | Zone |
+| Barrowking | Barrow Hide: 2.5 m, 35% less damage for 3 s | Frontline |
+| Veilsinger | Discord: 3 m circle, 50 damage, 35% slow | Poke |
+| Stormscald | Arc Bolt: piercing line, 80 damage, 9 s | Damage |
+
+The bar shows the slots in keyboard order: LMB, Q, E, F, R. Bots use F with
+the rules they already have: a damage dash to engage, a plain step only as an
+escape (a champion close, health under 45%), wards in a fight, stuns on a
+casting or fleeing champion. A model may leave out the `ability_4` clip; the
+asset contract only checks it when it is there.
+
+Measured (headless soak, 24 seeds, with F): every match ended, sides 12 to 12,
+median 10.5 min (5.9 to 12.6), 19 kills a match. Highest team kill share is
+Stormscald at 45%, all under the 55% line.
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

@@ -6,6 +6,7 @@
 [ext_resource type="Resource" path="res://data/abilities/twin_cut.tres" id="3_qx4h6"]
 [ext_resource type="Resource" path="res://data/abilities/ashfall.tres" id="5_ult"]
 [ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_opjgf"]
+[ext_resource type="Resource" path="res://data/abilities/smoke_veil.tres" id="9_f"]
 
 [resource]
 script = ExtResource("4_opjgf")
@@ -19,7 +20,7 @@ radius = 0.38
 height = 1.7
 fountain_heal = 80.0
 basic_attack = ExtResource("3_qx4h6")
-abilities = Array[ExtResource("1_6r2s1")]([ExtResource("2_pbhpc"), ExtResource("3_pbhpc"), ExtResource("5_ult")])
+abilities = Array[ExtResource("1_6r2s1")]([ExtResource("2_pbhpc"), ExtResource("3_pbhpc"), ExtResource("5_ult"), ExtResource("9_f")])
 passive = 3
 passive_name = "Ember"
 passive_description = "A champion kill resets Vault and heals 12% of max health."

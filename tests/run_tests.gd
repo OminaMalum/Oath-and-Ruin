@@ -50,6 +50,7 @@ func _run() -> void:
 		"test_lantern_heals", "test_dawnlight", "test_longshot", "test_tithe",
 		"test_batch_c_data", "test_taunt", "test_charm", "test_war_song", "test_encore", "test_storm_wall",
 		"test_tempest", "test_barrow_blood", "test_kings_wrath",
+		"test_fourth_ability_data", "test_fold_step", "test_searing_light", "test_smoke_veil",
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
@@ -1060,13 +1061,61 @@ func test_batch_b_data() -> void:
 
 func _kit_data(defs: Array) -> void:
 	for def: ChampionDef in defs:
-		check(def.abilities.size() == 3 and def.get_slot(3).is_ultimate, "%s has Q, E and an ultimate R" % def.id)
+		check(def.abilities.size() == 4 and def.get_slot(3).is_ultimate, "%s has Q, E, F and an ultimate R" % def.id)
 		check(def.get_slot(1).upgrades.size() == 2, "%s Q offers two upgrades" % def.id)
 		check(def.passive != ChampionDef.Passive.NONE and not def.passive_name.is_empty(), "%s has a passive" % def.id)
 		check(def.item_build.size() == 4, "%s has a bot item order" % def.id)
 		for slot in def.slot_count():
 			check(not def.get_slot(slot).description.is_empty(), "%s slot %d is described" % [def.id, slot])
 	await ticks(1)
+
+
+func test_fourth_ability_data() -> void:
+	check(UnitCommand.ability_button(4) == UnitCommand.BTN_ABILITY_4, "slot 4 has its own button (F)")
+	for def: ChampionDef in [SCRIBE, WARDEN, RUNNER, LANTERN, THORN, GRAVE, BARROW, VEIL, STORM]:
+		var f := def.get_slot(4)
+		check(f != null and not f.is_ultimate and not f.description.is_empty(), "%s has a described F ability" % def.id)
+		check(def.slot_count() == 5, "%s has five slots" % def.id)
+	await ticks(1)
+
+
+func test_fold_step() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	await ticks(2)
+	aim(me, Vector3(0, 0, -10))
+	cmd(me).move = Vector2(0, 1)
+	await ticks(2)
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_4
+	await ticks(1)
+	cmd(me).buttons = 0
+	cmd(me).move = Vector2.ZERO
+	var start := me.global_position
+	await secs(0.4)
+	var step := SCRIBE.get_slot(4)
+	var moved := Vector2(me.global_position.x - start.x, me.global_position.z - start.z).length()
+	check(absf(moved - step.dash_distance) < 0.6, "F: Fold Step carries %.1f m (%.2f m)" % [step.dash_distance, moved])
+	check(me.cooldowns[4] > 0.0 and me.cooldowns[1] <= 0.0, "only the F slot goes on cooldown")
+
+
+func test_searing_light() -> void:
+	var me := spawn(LANTERN, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	await _cast(me, 4, foe.global_position, 0.7)
+	var light := LANTERN.get_slot(4)
+	check(is_equal_approx(foe.health, DUMMY.max_health - light.damage), "Searing Light hits for %d" % roundi(light.damage))
+	check(foe.is_stunned(), "and stuns")
+
+
+func test_smoke_veil() -> void:
+	var me := spawn(RUNNER, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(2, 0, 0))
+	await ticks(2)
+	await _cast(me, 4, me.global_position, 0.4)
+	var veil := RUNNER.get_slot(4)
+	check(is_equal_approx(ally.quick_amount, veil.ally_quick), "Smoke Veil: an ally inside moves %d%% faster" % roundi(veil.ally_quick * 100.0))
+	await secs(veil.ward_duration)
+	check(ally.quick_amount == 0.0, "the speed ends with the smoke")
 
 
 func test_root() -> void:

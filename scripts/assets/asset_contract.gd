@@ -30,7 +30,9 @@ const MAX_STRIDE_RATE := 1.15
 const SOCKETS := ["Muzzle", "Overhead"]
 const LOOP_CLIPS := ["idle", "run"]
 const ONE_SHOT_CLIPS := ["death"]
-const SLOT_CLIPS := ["attack", "ability_1", "ability_2", "ability_3"]
+const SLOT_CLIPS := ["attack", "ability_1", "ability_2", "ability_3", "ability_4"]
+## Slots whose clip a model may leave out (F came after the first models).
+const OPTIONAL_SLOTS := [4]
 const FOOT_NAMES := [["foot_l", "foot.l", "leftfoot", "left_foot"], ["foot_r", "foot.r", "rightfoot", "right_foot"]]
 ## Timeline marker (Blender pose marker) where the effect is released.
 const RELEASE_MARKER := "release"
@@ -140,7 +142,8 @@ static func check(scene: Node, def: ChampionDef, timing: Dictionary = {}) -> Dic
 		if a == null:
 			continue
 		if not names.has(c):
-			errors.append("clip '%s' missing (for %s)" % [c, a.display_name])
+			if slot not in OPTIONAL_SLOTS:
+				errors.append("clip '%s' missing (for %s)" % [c, a.display_name])
 			continue
 		var anim := player.get_animation(names[c])
 		var release := -1.0

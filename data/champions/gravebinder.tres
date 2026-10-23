@@ -6,6 +6,7 @@
 [ext_resource type="Resource" path="res://data/abilities/binding_chains.tres" id="4_a"]
 [ext_resource type="Resource" path="res://data/abilities/grasping_earth.tres" id="5_a"]
 [ext_resource type="Resource" path="res://data/abilities/grave_pact.tres" id="6_a"]
+[ext_resource type="Resource" path="res://data/abilities/withering_curse.tres" id="9_f"]
 
 [resource]
 script = ExtResource("1_ch")
@@ -17,7 +18,7 @@ max_health = 590.0
 move_speed = 6.0
 fountain_heal = 80.0
 basic_attack = ExtResource("3_b")
-abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a")])
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("9_f")])
 passive = 6
 passive_name = "Soul Tithe"
 passive_description = "20% more damage to enemies that are rooted, slowed or stunned."

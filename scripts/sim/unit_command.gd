@@ -9,6 +9,8 @@ const BTN_ABILITY_2 := 4
 const BTN_ABILITY_3 := 8
 ## Start a recall to the own fountain (one tick press is enough).
 const BTN_RECALL := 16
+## The fourth ability (F). Its bit comes after recall, which was added first.
+const BTN_ABILITY_4 := 32
 
 ## x = strafe right, y = forward, relative to aim_yaw. Length <= 1.
 var move: Vector2 = Vector2.ZERO
@@ -29,16 +31,23 @@ func pressed(button: int) -> bool:
 	return buttons & button != 0
 
 
-## The button for an ability slot (1, 2 or 3).
+## The button for an ability slot (1 Q, 2 E, 3 R, 4 F).
 static func ability_button(slot: int) -> int:
-	return BTN_ABILITY_1 << (clampi(slot, 1, 3) - 1)
+	match slot:
+		2:
+			return BTN_ABILITY_2
+		3:
+			return BTN_ABILITY_3
+		4:
+			return BTN_ABILITY_4
+	return BTN_ABILITY_1
 
 
 func to_dict() -> Dictionary:
 	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons, "t": target_id, "u": upgrade_choice, "i": buy_item}
 
 
-const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1 | BTN_ABILITY_2 | BTN_ABILITY_3 | BTN_RECALL
+const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1 | BTN_ABILITY_2 | BTN_ABILITY_3 | BTN_RECALL | BTN_ABILITY_4
 
 
 ## Rebuilds a command from untrusted data. Wrong types, NaN or infinite

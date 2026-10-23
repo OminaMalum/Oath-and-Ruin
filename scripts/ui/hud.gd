@@ -194,7 +194,7 @@ func _draw() -> void:
 		if player.level < Unit.LEVEL_XP.size():
 			var lo := Unit.LEVEL_XP[player.level - 1]
 			var hi := Unit.LEVEL_XP[player.level]
-			_bar(Rect2(Vector2(hb.position.x + hb.size.x + 14, hb.position.y + 30), Vector2(120, 6)), (player.xp - lo) / (hi - lo), Palette.BRASS)
+			_bar(Rect2(Vector2(hb.position.x + hb.size.x + 14, hb.position.y + 26), Vector2(120, 6)), (player.xp - lo) / (hi - lo), Palette.BRASS)
 	var shop := HumanController.shop_open and player.shop_point.is_finite() and not following
 	if player.shop_point.is_finite():
 		# Gold, right above the level, in big pale yellow digits.
@@ -220,12 +220,16 @@ func _draw() -> void:
 
 	# Ability slots.
 	var q := player.get_slot(1)
-	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB", "E", "R"]
+	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB", "E", "R", "F"]
 	var slot_w := 150.0
-	var x0 := c.x - (slot_w * player.def.slot_count() + 12 * (player.def.slot_count() - 1)) * 0.5
-	for i in player.def.slot_count():
+	var n := player.def.slot_count()
+	var x0 := c.x - (slot_w * n + 12 * (n - 1)) * 0.5
+	# Drawn in keyboard order, so the ultimate (slot 3, R) sits last after F.
+	var order := [0, 1, 2, 4, 3] if n == 5 else range(n)
+	for pos in n:
+		var i: int = order[pos]
 		var a := player.get_slot(i)
-		var r := Rect2(Vector2(x0 + i * (slot_w + 12), vs.y - 92), Vector2(slot_w, 70))
+		var r := Rect2(Vector2(x0 + pos * (slot_w + 12), vs.y - 92), Vector2(slot_w, 70))
 		var cd := player.cooldowns[i] if player.alive else 0.0
 		var casting := player.cast_slot == i and player.is_casting()
 		var locked := a.is_ultimate and not player.ultimate_ready_level()
@@ -314,6 +318,7 @@ func _draw() -> void:
 			("Q hold and release, or right mouse  %s" if player.get_slot(1).delivery == AbilityDef.Delivery.GROUND_AREA \
 				else "Q or right mouse  %s") % player.get_slot(1).display_name,
 			("E  %s" % player.get_slot(2).display_name) if player.get_slot(2) else "",
+			("F  %s" % player.get_slot(4).display_name) if player.get_slot(4) else "",
 			("R  %s (ultimate, level %d)" % [player.get_slot(3).display_name, Unit.ULT_LEVEL]) if player.get_slot(3) else "",
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			"B  shop at your fountain or while dead, then 1 to 4 to buy" if player.shop_point.is_finite() else "",

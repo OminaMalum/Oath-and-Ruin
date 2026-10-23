@@ -164,9 +164,12 @@ func _decide(unit: Unit) -> UnitCommand:
 			c.aim_yaw = yaw_towards(pos, fountain)
 			c.move = world_to_move(dir.normalized(), c.aim_yaw)
 			# A dash is also an escape: use it when an enemy champion is close.
-			var q := unit.get_slot(1)
-			if q and q.delivery == AbilityDef.Delivery.DASH and unit.cooldowns[1] <= 0.0 and _enemy_champion_within(unit, 7.0):
-				c.buttons |= UnitCommand.BTN_ABILITY_1
+			if _enemy_champion_within(unit, 7.0):
+				for slot in range(1, unit.def.slot_count()):
+					var d := unit.get_slot(slot)
+					if d and d.delivery == AbilityDef.Delivery.DASH and not d.is_ultimate and unit.cooldowns[slot] <= 0.0:
+						c.buttons |= UnitCommand.ability_button(slot)
+						break
 		return c
 
 	# Step out of any hostile circle on the ground (it is visible to everyone).
@@ -344,7 +347,7 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 		# A storm wall against a ranged champion's shots, when it is losing the trade.
 		return champ and target.def.basic_attack and target.def.basic_attack.range > 5.0 \
 				and dist > 6.0 and dist <= target.def.basic_attack.range + 2.0 and hp < 0.7
-	if a.delivery == AbilityDef.Delivery.WARD and (a.ally_haste > 0.0 or a.ally_quick > 0.0):
+	if a.delivery == AbilityDef.Delivery.WARD and a.ally_haste > 0.0:
 		# A song: sing as soon as a champion fight starts close by.
 		return champ and dist <= 12.0
 	if a.stun_duration > 0.0:
@@ -366,6 +369,9 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 				return false
 			return hp < 0.8 or _hurt_ally_within(unit, a.area_radius)
 		AbilityDef.Delivery.DASH:
+			if a.damage <= 0.0:
+				# A plain step (no damage) is only an escape from a champion too close.
+				return champ and hp < 0.45 and dist < 6.0
 			# Gap close onto a champion just out of reach, when the fight looks good.
 			var t_hp := target.health / target.max_health
 			return champ and dist > unit.def.basic_attack.range + 0.5 and dist <= a.dash_distance + 1.0 \

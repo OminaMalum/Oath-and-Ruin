@@ -6,6 +6,7 @@
 [ext_resource type="Resource" path="res://data/abilities/shield_slam.tres" id="3_r0s6u"]
 [ext_resource type="Resource" path="res://data/abilities/unbroken_oath.tres" id="5_ult"]
 [ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_gn757"]
+[ext_resource type="Resource" path="res://data/abilities/shield_rush.tres" id="9_f"]
 
 [resource]
 script = ExtResource("4_gn757")
@@ -19,7 +20,7 @@ radius = 0.5
 height = 1.95
 fountain_heal = 80.0
 basic_attack = ExtResource("3_8um6y")
-abilities = Array[ExtResource("1_0iy75")]([ExtResource("2_r0s6u"), ExtResource("3_r0s6u"), ExtResource("5_ult")])
+abilities = Array[ExtResource("1_0iy75")]([ExtResource("2_r0s6u"), ExtResource("3_r0s6u"), ExtResource("5_ult"), ExtResource("9_f")])
 passive = 2
 passive_name = "Resolve"
 passive_description = "Below half health the Oathwarden takes 15% less damage."
