@@ -81,6 +81,21 @@ func _init(a: CombatAuthority, info: MatchInfo, seed_value: int) -> void:
 		_strafe_dir = float(env_dir)
 
 
+## Easy, Normal or Hard: slower or faster reactions and looser or tighter aim.
+## Damage, health and what the bot can see never change.
+func set_difficulty(level: int) -> void:
+	match level:
+		0:
+			reaction = 0.6
+			aim_error = 1.5
+		2:
+			reaction = 0.18
+			aim_error = 0.35
+		_:
+			reaction = 0.3
+			aim_error = 0.7
+
+
 func get_command(unit: Unit) -> UnitCommand:
 	if not unit.alive:
 		# Dead: only shopping, as a player may; no bot state moves.

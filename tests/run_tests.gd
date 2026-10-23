@@ -50,6 +50,7 @@ func _run() -> void:
 		"test_lantern_heals", "test_dawnlight", "test_longshot", "test_tithe",
 		"test_batch_c_data", "test_taunt", "test_charm", "test_war_song", "test_encore", "test_storm_wall",
 		"test_tempest", "test_barrow_blood", "test_kings_wrath",
+		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
 	]
@@ -1323,6 +1324,73 @@ func test_kings_wrath() -> void:
 	await _cast(me, 3, Vector3(0, 0, -5), BARROW.get_slot(3).cast_time + 0.05)
 	check(behind.health < SCRIBE.max_health and behind.is_stunned(), "King's Wrath hits and stuns all around, even behind")
 	check(far.health == SCRIBE.max_health, "but not beyond its reach")
+
+
+# --- Match loop: surrender, difficulty, saved settings ------------------------
+
+func test_surrender() -> void:
+	var mc := _match()
+	var result := [-2]
+	mc.match_over.connect(func(w: int) -> void: result[0] = w)
+	await ticks(2)
+	mc.surrender(0)
+	check(mc.over and mc.winner == 1 and result[0] == 1, "surrendering hands the match to the other team")
+	check(mc.stats.reason == "surrendered", "the result says why")
+	mc.surrender(1)
+	check(mc.winner == 1, "a second surrender after the end changes nothing")
+
+
+func test_difficulty() -> void:
+	for level in 3:
+		var mc := MatchController.new()
+		mc.human_slot = true
+		mc.difficulty = level
+		mc.bot_seed = 3
+		world.add_child(mc)
+		mc.setup(authority, world)
+		mc.start()
+		var enemy := mc.champions.filter(func(u: Unit) -> bool: return u.team == 1)[0] as Unit
+		var ally := mc.champions.filter(func(u: Unit) -> bool: return u.team == 0 and u.controller is ChampionBot)[0] as Unit
+		var eb := enemy.controller as ChampionBot
+		var ab := ally.controller as ChampionBot
+		check(is_equal_approx(ab.reaction, 0.3) and is_equal_approx(ab.aim_error, 0.7), "%s: allied bots stay Normal" % Settings.DIFFICULTY_NAMES[level])
+		if level == 0:
+			check(eb.reaction > 0.3 and eb.aim_error > 0.7, "Easy: enemy bots react slower and aim looser")
+		elif level == 2:
+			check(eb.reaction < 0.3 and eb.aim_error < 0.7, "Hard: enemy bots react faster and aim tighter")
+		else:
+			check(is_equal_approx(eb.reaction, 0.3), "Normal: enemy bots unchanged")
+		check(is_equal_approx(enemy.max_health, enemy.def.max_health), "difficulty never changes health")
+		mc.queue_free()
+		for u in mc.champions + mc.structures:
+			authority.remove_unit(u)
+		await ticks(1)
+
+
+func test_settings_saved() -> void:
+	var keep := [Settings.volume, Settings.mouse_sensitivity, Settings.difficulty, Settings.wins.duplicate(), Settings.losses.duplicate()]
+	Settings.volume = 0.35
+	Settings.mouse_sensitivity = 1.6
+	Settings.difficulty = 2
+	Settings.wins = [0, 0, 4]
+	Settings.losses = [0, 0, 1]
+	Settings.save()
+	Settings.volume = 1.0
+	Settings.mouse_sensitivity = 1.0
+	Settings.difficulty = 0
+	Settings._loaded = false
+	Settings.load_once()
+	check(is_equal_approx(Settings.volume, 0.35) and is_equal_approx(Settings.mouse_sensitivity, 1.6) and Settings.difficulty == 2, "settings come back after a restart")
+	check(Settings.record_text() == "Your record on Hard: 4 wins, 1 loss", "the record reads plainly (%s)" % Settings.record_text())
+	Settings.record(true)
+	check(Settings.wins[2] == 5, "a win is counted for the chosen difficulty")
+	Settings.volume = keep[0]
+	Settings.mouse_sensitivity = keep[1]
+	Settings.difficulty = keep[2]
+	Settings.wins.assign(keep[3])
+	Settings.losses.assign(keep[4])
+	Settings.save()
+	await ticks(1)
 
 
 # --- Networking: prediction, snapshots, command queue ------------------------

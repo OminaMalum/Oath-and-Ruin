@@ -14,6 +14,10 @@ extends Node3D
 ##   --bot                              dummies fight back from the start
 ##   --quit-after-secs=S                exit after S seconds
 ##   --champion=ID                      any id in data/champions (match and court)
+##   --seed=N                           match: bot seed (lineup and bot choices); random when left out
+##   --difficulty=0|1|2                 match: enemy bots Easy, Normal or Hard (default: the saved setting)
+##   --pause                            open the pause menu (screenshots)
+##   --settings                         menu: open the settings panel (screenshots)
 ##   --lineup=A,B,C                     match: these three champions on both teams
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
 ##   --shop                             open the shop panel (screenshots)
@@ -35,6 +39,7 @@ var hud: Hud
 var net: NetSession
 var world_view: WorldView
 var match_ctl: MatchController
+var pause_menu: PauseMenu
 
 var autoplay := false
 var args := {}
@@ -48,6 +53,8 @@ var _overview_at := -1.0
 
 
 func _ready() -> void:
+	Settings.load_once()
+	Settings.apply()
 	_parse_args()
 	if args.has("champion"):
 		Session.champion = StringName(args.champion)
@@ -94,7 +101,9 @@ func _start_match() -> void:
 	match_ctl.name = "Match"
 	match_ctl.human_slot = not (args.has("spectate") or autoplay)
 	match_ctl.human_pick = Session.champion
-	match_ctl.bot_seed = int(args.get("seed", "1"))
+	# From the menu every match draws a new seed: a new lineup and new teammates.
+	match_ctl.bot_seed = int(args.seed) if args.has("seed") else randi_range(1, 99999)
+	match_ctl.difficulty = clampi(int(args.get("difficulty", str(Settings.difficulty))), 0, 2)
 	if args.has("lineup"):
 		for id in (args.lineup as String).split(","):
 			match_ctl.lineup_ids.append(StringName(id))
@@ -124,6 +133,8 @@ func _start_match() -> void:
 	var mh := MatchHud.new()
 	layer.add_child(mh)
 	mh.setup(match_ctl, rig)
+	if match_ctl.human_slot and not args.has("seed"):
+		match_ctl.match_over.connect(func(w: int) -> void: Settings.record(w == 0))
 
 
 func _parse_args() -> void:
@@ -256,6 +267,12 @@ func _setup_presentation(local_unit: Unit) -> void:
 	hud.setup(authority, local_unit, rig, bot if net == null and match_ctl == null else null)
 	if DisplayServer.get_name() != "headless" and not rig.follow_unit_yaw:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	var top := CanvasLayer.new()
+	top.layer = 10
+	add_child(top)
+	pause_menu = PauseMenu.new()
+	pause_menu.setup(match_ctl, net == null)
+	top.add_child(pause_menu)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -297,6 +314,9 @@ func _process(delta: float) -> void:
 		return
 	_frames += 1
 	if _frames == _shot_frames:
+		if args.has("pause") and pause_menu:
+			pause_menu.open()
+			await get_tree().create_timer(0.3, true).timeout  # runs while paused
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_shot_path)
 		print("saved screenshot ", _shot_path)

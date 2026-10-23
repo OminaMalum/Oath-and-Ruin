@@ -319,7 +319,7 @@ func _draw() -> void:
 			"B  shop at your fountain or while dead, then 1 to 4 to buy" if player.shop_point.is_finite() else "",
 			"T  recall home (stand still %d s)     Tab (hold)  scoreboard" % roundi(Unit.ECONOMY.recall_time) if player.shop_point.is_finite() else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
-			"F2  hide this     Esc  free the mouse",
+			"F2  hide this     Esc  menu",
 			("%s: %s" % [player.def.passive_name, player.def.passive_description]) if not player.def.passive_name.is_empty() else "",
 		]
 		lines = lines.filter(func(l: String) -> bool: return not l.is_empty())
