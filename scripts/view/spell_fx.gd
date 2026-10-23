@@ -6,7 +6,8 @@ extends Node3D
 ## and impacts with a shockwave, a column of light and sparks. View only:
 ## it listens to the same authority signals and changes nothing in the sim.
 ## Colours are the caster's accent; the ally/enemy telegraph stays on top
-## as the thing to read.
+## as the thing to read. Kits with their own look (arrows, lightning, chains
+## and the rest) are built by KitLooks.
 
 const CIRCLE := preload("res://scripts/view/shaders/spell_circle.gdshader")
 const PILLAR := preload("res://scripts/view/shaders/spell_pillar.gdshader")
@@ -27,6 +28,8 @@ func setup(a: CombatAuthority, wv: WorldView) -> void:
 	a.projectile_ended.connect(_on_projectile_ended)
 	a.area_spawned.connect(_on_area_spawned)
 	a.area_detonated.connect(_on_area_detonated)
+	a.melee_swung.connect(_on_melee_swung)
+	a.dash_started.connect(_on_dash_started)
 
 
 static func _is_champion(u: Unit) -> bool:
@@ -43,6 +46,14 @@ func _on_projectile_spawned(p: CombatAuthority.SimProjectile) -> void:
 		return
 	var col := p.source.def.accent_color
 	var big := p.ability.pierce or p.ability.projectile_radius >= 0.2
+	var look := KitLooks.bolt_look(p.ability)
+	if look != "":
+		var d := KitLooks.build_bolt(look, host, col, p.ability, self)
+		d.host = host
+		d.big = big
+		d.look = look
+		_bolts[p] = d
+		return
 	var trail := _trail(col, big)
 	add_child(trail)
 	var glyph := Node3D.new()
@@ -82,9 +93,13 @@ func _on_projectile_ended(p: CombatAuthority.SimProjectile, at: Vector3) -> void
 	_bolts.erase(p)
 	if b.is_empty():
 		return
-	var trail: CPUParticles3D = b.trail
-	trail.emitting = false
-	get_tree().create_timer(trail.lifetime + 0.1).timeout.connect(trail.queue_free)
+	for key in ["trail", "extra_trail"]:
+		var trail: CPUParticles3D = b.get(key)
+		if trail and is_instance_valid(trail):
+			trail.emitting = false
+			get_tree().create_timer(trail.lifetime + 0.1).timeout.connect(trail.queue_free)
+	if b.has("links"):
+		(b.links as Node3D).queue_free()
 	var col := p.source.def.accent_color if is_instance_valid(p.source) else Color(0.6, 0.8, 0.8)
 	var big: bool = b.big
 	_shockwave(at, col, 1.4 if big else 0.8, 0.28, p.direction)
@@ -206,7 +221,18 @@ func _on_area_detonated(ar: CombatAuthority.SimArea) -> void:
 	var col := ar.source.def.accent_color if is_instance_valid(ar.source) else Color(0.6, 0.8, 0.8)
 	var r := ar.ability.area_radius
 	var big := ar.ability.is_ultimate
-	_pillar(ar.center, col, r * (0.55 if big else 0.45), 7.0 if big else 4.0, 0.6 if big else 0.4)
+	match KitLooks.area_look(ar.ability):
+		"lightning":
+			var l := KitLooks.lightning(self, ar.center, col, big)
+			_fading.append({"node": l.node, "mat": null, "t": 0.0, "life": 0.55 if big else 0.4, "kind": "tick", "tick": l.tick, "grow": 0.0})
+		"thorns", "rocks":
+			var h := KitLooks.spikes(self, ar.center, r, col, KitLooks.area_look(ar.ability) == "rocks")
+			_fading.append({"node": h, "mat": null, "t": 0.0, "life": 1.1 if big else 0.9, "kind": "spikes", "grow": 0.0})
+		"smoke":
+			KitLooks.grave_smoke(self, ar.center, r, col)
+			_pillar(ar.center, col.darkened(0.3), r * 0.35, 3.0, 0.35)
+		_:
+			_pillar(ar.center, col, r * (0.55 if big else 0.45), 7.0 if big else 4.0, 0.6 if big else 0.4)
 	_shockwave(ar.center + Vector3(0, Palette.DECAL_LIFT + 0.1, 0), col, r * 1.35, 0.4 if big else 0.3, Vector3.UP)
 	_flash(ar.center + Vector3(0, 1.0, 0), col, 6.0 if big else 3.5, 0.35)
 	_sparks(ar.center + Vector3(0, 0.3, 0), col, 40 if big else 22, 0.8, 7.0 if big else 5.0, 35.0)
@@ -216,9 +242,25 @@ func _process(delta: float) -> void:
 	for p: CombatAuthority.SimProjectile in _bolts:
 		var b: Dictionary = _bolts[p]
 		var host: Node3D = b.host
-		if is_instance_valid(host):
-			(b.trail as Node3D).global_position = host.global_position
+		if not is_instance_valid(host):
+			continue
+		for key in ["trail", "extra_trail"]:
+			var t: Node3D = b.get(key)
+			if t:
+				t.global_position = host.global_position
+		if b.has("glyph"):
 			(b.glyph as Node3D).rotate_object_local(Vector3.FORWARD, delta * 9.0)
+		if b.get("spin"):
+			(b.spin as Node3D).rotate_object_local(b.get("spin_axis", Vector3.FORWARD), delta * float(b.get("spin_rate", 9.0)))
+		if b.get("tick"):
+			(b.tick as Callable).call(delta)
+		if b.has("links") and is_instance_valid(p.source):
+			var from := p.source.global_position + Vector3(0, p.source.def.height * 0.6, 0)
+			for child in p.source.get_children():
+				if child is UnitView:
+					from = (child as UnitView).launch_point()
+					break
+			KitLooks.lay_chain(b.links, from, host.global_position)
 	for ar: CombatAuthority.SimArea in _circles:
 		var e: Dictionary = _circles[ar]
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)
@@ -252,9 +294,52 @@ func _process(delta: float) -> void:
 				(f.mat as StandardMaterial3D).albedo_color.a = 1.0 - k
 			"light":
 				(n as OmniLight3D).light_energy = f.grow * (1.0 - k) * (1.0 - k)
+			"tick":
+				(f.tick as Callable).call(k, delta)
+			"spikes":
+				# Burst up fast, hold, then sink back into the floor.
+				var up := minf(k / 0.12, 1.0)
+				var down := clampf((k - 0.65) / 0.35, 0.0, 1.0)
+				n.scale = Vector3(1.0, maxf(0.01, (1.0 - (1.0 - up) * (1.0 - up)) * (1.0 - down)), 1.0)
+			"swoosh":
+				var a := (1.0 - k) * (1.0 - k)
+				(f.mat as StandardMaterial3D).albedo_color = Color(2.2 * a, 2.2 * a, 2.2 * a, 1.0)
+				n.rotation.y = f.grow + k * 0.35
+			"follow":
+				var u: Unit = f.unit
+				if is_instance_valid(u):
+					n.global_position = u.global_position + Vector3(0, u.def.height * 0.5, 0)
+				if k > 0.6:
+					(n as CPUParticles3D).emitting = false
 		if k >= 1.0:
 			n.queue_free()
 	_fading = _fading.filter(func(f: Dictionary) -> bool: return f.t < f.life)
+
+
+# ------------------------------------------------------------------ melee and dashes
+
+func _on_melee_swung(caster: Unit, a: AbilityDef) -> void:
+	if not _is_champion(caster):
+		return
+	var col := caster.def.accent_color.lightened(0.35)
+	var mi := KitLooks.swoosh(a.range, a.arc_degrees, col, caster.def.height * 0.55)
+	add_child(mi)
+	mi.global_position = caster.global_position
+	mi.rotation.y = caster.aim_yaw
+	var life := 0.32 if a.is_ultimate else 0.22
+	_fading.append({"node": mi, "mat": mi.material_override, "t": 0.0, "life": life, "kind": "swoosh", "grow": caster.aim_yaw})
+	_sparks(caster.global_position + Vector3(0, caster.def.height * 0.5, 0) + Vector3(-sin(caster.aim_yaw), 0, -cos(caster.aim_yaw)) * a.range * 0.7,
+			col, 8 if a.is_ultimate else 5, 0.35, 3.0)
+
+
+func _on_dash_started(caster: Unit, a: AbilityDef) -> void:
+	if not _is_champion(caster):
+		return
+	var t := KitLooks._particles(self, caster.def.accent_color, 60, 0.45, 0.12, 0.3, Vector3(0, 0.4, 0), 0.4)
+	t.emission_sphere_radius = caster.def.radius * 0.8
+	t.global_position = caster.global_position + Vector3(0, caster.def.height * 0.5, 0)
+	var life := a.dash_duration + 0.5
+	_fading.append({"node": t, "mat": null, "t": 0.0, "life": life, "kind": "follow", "unit": caster, "grow": 0.0})
 
 
 # ------------------------------------------------------------------ pieces

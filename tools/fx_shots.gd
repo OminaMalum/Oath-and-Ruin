@@ -32,7 +32,7 @@ func _process(_delta: float) -> bool:
 	if warp > 0.0:
 		return false
 	_frames += 1
-	if _frames > 60 * 120:
+	if _frames > 60 * 200:
 		return true
 	if _cam == null:
 		for c in root.find_children("*", "CanvasLayer", true, false):
@@ -61,28 +61,33 @@ func _process(_delta: float) -> bool:
 	if _cool > 0:
 		return false
 	for f: Dictionary in _fx._fading:
-		if f.kind == "pillar" and f.t > 0.06 and not _seen.has(f.node):
+		var want := {"pillar": 0.06, "tick": 0.05, "spikes": 0.25, "swoosh": 0.03}
+		if want.has(f.kind) and f.t > want[f.kind] and not _seen.has(f.node) and not _seen.has("k_" + f.kind) \
+				and is_instance_valid(f.node):
 			_seen[f.node] = true
-			_aim((f.node as Node3D).global_position, 9.0)
-			_label = "detonation"
+			_seen["k_" + f.kind] = true
+			_aim((f.node as Node3D).global_position, 12.0 if f.kind == "tick" else 7.0)
+			_label = "go_" + f.kind
 			_pending = 1
 			return false
 	# Prefer circles (they last), then bolts; one shot per spell.
 	for ar: CombatAuthority.SimArea in _fx._circles:
-		if _seen.has(ar):
+		if _seen.has(ar) or _seen.has(ar.ability.id):
 			continue
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)
 		if k < 0.6:
 			continue
 		_seen[ar] = true
+		_seen[ar.ability.id] = true
 		_aim(ar.center, 7.5)
 		_label = String(ar.ability.id)
 		_pending = 2
 		return false
 	for p: CombatAuthority.SimProjectile in _fx._bolts:
-		if _seen.has(p) or p.travelled < 4.0:
+		if _seen.has(p) or _seen.has(p.ability.id) or p.travelled < 3.0:
 			continue
 		_seen[p] = true
+		_seen[p.ability.id] = true
 		_aim(p.position, 5.0)
 		_label = String(p.ability.id)
 		_pending = 1
