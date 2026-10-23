@@ -18,7 +18,7 @@ func _ready() -> void:
 	add_child(center)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 18)
-	box.custom_minimum_size = Vector2(520, 0)
+	box.custom_minimum_size = Vector2(1000, 0)
 	center.add_child(box)
 	var title := Label.new()
 	title.text = "PactFall"
@@ -39,11 +39,25 @@ func _ready() -> void:
 	pick_label.add_theme_font_size_override("font_size", 24)
 	pick_label.add_theme_color_override("font_color", Color(0.85, 0.80, 0.70))
 	box.add_child(pick_label)
+	# Two columns so nine champions and the match choices fit a 720p screen:
+	# picks on the left, difficulty and modes on the right.
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 48)
+	box.add_child(cols)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 14)
+	cols.add_child(left)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 14)
+	right.alignment = BoxContainer.ALIGNMENT_CENTER
+	cols.add_child(right)
+	box.remove_child(pick_label)
+	left.add_child(pick_label)
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 12)
 	grid.add_theme_constant_override("v_separation", 12)
-	box.add_child(grid)
+	left.add_child(grid)
 	var row := grid
 	var group := ButtonGroup.new()
 	for c in [["Ruinscribe", "Ranged caster", &"ruinscribe"], ["Oathwarden", "Frontline", &"oathwarden"], ["Ashrunner", "Skirmisher", &"ashrunner"],
@@ -59,12 +73,62 @@ func _ready() -> void:
 		b.button_pressed = Session.champion == id
 		b.pressed.connect(func() -> void: Session.champion = id)
 		row.add_child(b)
-	for item in [["3v3 Bot Match", "match"], ["Training Court", "court"], ["Quit", "quit"]]:
+	# Enemy bot difficulty: three toggles in a row, saved with the settings.
+	var diff_row := HBoxContainer.new()
+	diff_row.add_theme_constant_override("separation", 12)
+	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var diff_label := Label.new()
+	diff_label.text = "Enemy bots"
+	diff_label.add_theme_font_size_override("font_size", 24)
+	diff_label.add_theme_color_override("font_color", Color(0.85, 0.80, 0.70))
+	diff_row.add_child(diff_label)
+	var diff_group := ButtonGroup.new()
+	var record := Label.new()
+	for i in 3:
+		var d := Button.new()
+		d.toggle_mode = true
+		d.button_group = diff_group
+		d.text = Settings.DIFFICULTY_NAMES[i]
+		d.custom_minimum_size = Vector2(120, 56)
+		d.add_theme_font_size_override("font_size", 22)
+		d.button_pressed = Settings.difficulty == i
+		var level := i
+		d.pressed.connect(func() -> void:
+			Settings.difficulty = level
+			Settings.save()
+			record.text = Settings.record_text())
+		diff_row.add_child(d)
+	right.add_child(diff_row)
+	var start: Button
+	for item in [["3v3 Bot Match", "match"], ["Training Court", "court"], ["Settings", "settings"], ["Quit", "quit"]]:
 		var b := Button.new()
 		b.text = item[0]
-		b.custom_minimum_size = Vector2(520, 72)
+		b.custom_minimum_size = Vector2(440, 64)
 		b.add_theme_font_size_override("font_size", 30)
 		var mode: String = item[1]
-		b.pressed.connect(func() -> void: chosen.emit(mode))
-		box.add_child(b)
-	(box.get_child(4) as Button).grab_focus.call_deferred()  # 3v3 Bot Match
+		if mode == "settings":
+			b.pressed.connect(_open_settings.bind(center, b))
+		else:
+			b.pressed.connect(func() -> void: chosen.emit(mode))
+		right.add_child(b)
+		if start == null:
+			start = b
+	record.text = Settings.record_text()
+	record.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	record.add_theme_font_size_override("font_size", 22)
+	record.add_theme_color_override("font_color", Color(0.75, 0.72, 0.65))
+	right.add_child(record)
+	start.grab_focus.call_deferred()
+	if OS.get_cmdline_user_args().has("--settings"):  # screenshots
+		_open_settings.call_deferred(center, start)
+
+
+## The settings panel takes the place of the menu until Back.
+func _open_settings(center: CenterContainer, from: Button) -> void:
+	var menu := center.get_child(0) as Control
+	menu.visible = false
+	var panel := SettingsPanel.new()
+	center.add_child(panel)
+	panel.closed.connect(func() -> void:
+		menu.visible = true
+		from.grab_focus())

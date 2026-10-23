@@ -76,13 +76,12 @@ func mouse_captured() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and mouse_captured():
 		var m := event as InputEventMouseMotion
-		yaw = wrapf(yaw - m.relative.x * sensitivity, -PI, PI)
-		pitch = clampf(pitch - m.relative.y * sensitivity, deg_to_rad(min_pitch_deg), deg_to_rad(max_pitch_deg))
+		var k := sensitivity * Settings.mouse_sensitivity
+		yaw = wrapf(yaw - m.relative.x * k, -PI, PI)
+		pitch = clampf(pitch - m.relative.y * k, deg_to_rad(min_pitch_deg), deg_to_rad(max_pitch_deg))
 	elif event is InputEventMouseButton and event.pressed and not mouse_captured():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("release_mouse"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _process(delta: float) -> void:

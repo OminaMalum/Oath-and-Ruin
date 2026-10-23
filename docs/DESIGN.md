@@ -334,6 +334,24 @@ champion, option 2 won 5 of 12. That is no real difference in 12 matches. Role s
 Ashrunner 113 kills, Ruinscribe 44, Oathwarden 28. Ruinscribe dealt the most champion damage and nearly all the
 structure damage. Deaths were 62 to 86 per champion. Zero script errors.
 
+## The match loop (added 2026-10-23)
+
+- **Menu**: pick one of nine champions on the left; on the right choose the enemy bots (Easy, Normal, Hard), then
+  3v3 Bot Match, Training Court, Settings or Quit. Under the buttons: your win and loss record on the chosen
+  difficulty.
+- **Difficulty** changes only the enemy bots' reaction time and aim error (Easy 0.6 s and 1.5 m, Normal 0.3 s and
+  0.7 m, Hard 0.18 s and 0.35 m). Never damage, health or what they can see. Allied bots always play Normal.
+- **Every match from the menu draws a new seed**, so the lineup and your teammates change each time (`--seed=N`
+  still fixes it for tests and recordings).
+- **Lineup intro**: the first 7 seconds show the three champions both teams field, who you play and the bot
+  difficulty.
+- **Esc** opens the pause menu: Resume, Settings, Surrender (press twice), Main menu, Quit game. Offline the game
+  pauses underneath; a network client keeps running.
+- **Settings** (menu and pause menu): volume, mouse sensitivity, fullscreen. Saved in `user://settings.cfg` with the
+  difficulty and the record.
+- **Results**: Victory or Defeat, how and when it ended, then a table per team (level, kills and deaths, damage to
+  champions, gold), structures and Shrinebearer claims, and Play again / Main menu buttons (F5 and M still work).
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

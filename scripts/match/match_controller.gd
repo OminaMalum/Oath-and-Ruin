@@ -71,6 +71,9 @@ var make_view: Callable
 var human_slot: bool = true          # team 0 slot 0 is the player
 var human_pick: StringName = &"ruinscribe"  # champion the player chose
 var bot_seed: int = 1
+## Enemy bots against a human: 0 Easy, 1 Normal, 2 Hard (Settings.DIFFICULTY_NAMES).
+## Allied bots and spectated matches always play Normal.
+var difficulty: int = 1
 ## Fixed lineup (champion ids, slot order) instead of a draw; tests and --lineup.
 var lineup_ids: Array[StringName] = []
 var _lineup: Array[ChampionDef] = []
@@ -132,7 +135,10 @@ func start() -> void:
 			info.slots[u] = slot
 			champions.append(u)
 			if not (team == 0 and slot == 0 and human_slot):
-				u.controller = ChampionBot.new(authority, info, bot_seed * 100 + team * 10 + slot)
+				var b := ChampionBot.new(authority, info, bot_seed * 100 + team * 10 + slot)
+				if human_slot and team == 1:
+					b.set_difficulty(difficulty)
+				u.controller = b
 			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0, "gold_earned": 0.0, "items": [], "recalls": 0}
 			u.upgraded.connect(func(_slot: int, a: AbilityDef) -> void:
 				stats.champions[u.name].upgrade = String(a.id)
@@ -457,6 +463,12 @@ func _on_died(target: Unit, killer: Unit) -> void:
 			stats.events.append({"t": snappedf(authority.time, 0.1), "event": "structure_destroyed", "unit": target.name, "killer": kname})
 			if target == cores[0] or target == cores[1]:
 				_finish(1 - target.team, "core destroyed")
+
+
+## A team gives up: the other team wins at once.
+func surrender(team: int) -> void:
+	if not over:
+		_finish(1 - team, "surrendered")
 
 
 func _finish(win: int, reason: String) -> void:

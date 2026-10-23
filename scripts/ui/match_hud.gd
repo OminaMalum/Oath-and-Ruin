@@ -17,7 +17,8 @@ func setup(m: MatchController, r: CameraRig) -> void:
 	match_ctl = m
 	rig = r
 	m.match_over.connect(func(_w: int) -> void:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE)
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_add_result_buttons())
 	m.announce.connect(func(text: String, team: int) -> void:
 		_banner = text
 		_banner_t = 4.0
@@ -65,6 +66,8 @@ func _draw() -> void:
 		_text(Vector2(0, 128), _banner, 30, Color(_banner_col, clampf(_banner_t, 0.0, 1.0)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if match_ctl.over:
 		_results(vs)
+	elif match_ctl.authority.time < INTRO_TIME:
+		_intro(vs, match_ctl.authority.time)
 	elif force_scoreboard or Input.is_action_pressed("scoreboard"):
 		_scoreboard(vs)
 
@@ -172,28 +175,105 @@ func _objective_marker(vs: Vector2) -> void:
 	_text(p + Vector2(-90, 32), label, 18, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 180)
 
 
+const INTRO_TIME := 7.0
+
+
+## The first seconds of a match: who is on the field and how hard the bots are.
+func _intro(vs: Vector2, t: float) -> void:
+	var a := clampf((INTRO_TIME - t) / 1.0, 0.0, 1.0)
+	var w := minf(760.0, vs.x - 40.0)
+	var x := (vs.x - w) * 0.5
+	var y := vs.y * 0.24
+	draw_rect(Rect2(x, y, w, 250), Color(0.12, 0.10, 0.09, 0.9 * a))
+	draw_rect(Rect2(x, y, w, 250), Color(Palette.BRASS, a), false, 2.0)
+	var names: Array[String] = []
+	for d in match_ctl.team_roster(0):
+		names.append(d.display_name)
+	var cream := Color(0.95, 0.92, 0.85, a)
+	_text(Vector2(x, y + 52), "Oath and Ruin both field", 26, cream, HORIZONTAL_ALIGNMENT_CENTER, w)
+	_text(Vector2(x, y + 110), "   ".join(names), 38, Color(0.92, 0.84, 0.66, a), HORIZONTAL_ALIGNMENT_CENTER, w)
+	var me: Unit = match_ctl.player()
+	if match_ctl.human_slot and me:
+		_text(Vector2(x, y + 165), "You play %s for Oath" % me.def.display_name, 26, Color(Palette.team_color(0), a), HORIZONTAL_ALIGNMENT_CENTER, w)
+		_text(Vector2(x, y + 215), "Enemy bots: %s" % Settings.DIFFICULTY_NAMES[match_ctl.difficulty], 24, cream, HORIZONTAL_ALIGNMENT_CENTER, w)
+	else:
+		_text(Vector2(x, y + 175), "Six bots, watching", 26, cream, HORIZONTAL_ALIGNMENT_CENTER, w)
+
+
+const RESULT_H := 640.0
+
+
+func _result_box(vs: Vector2) -> Rect2:
+	var w := minf(1000.0, vs.x - 40.0)
+	return Rect2((vs.x - w) * 0.5, maxf(20.0, (vs.y - RESULT_H) * 0.5), w, RESULT_H)
+
+
+## Play again and Main menu as real buttons (F5 and M still work).
+func _add_result_buttons() -> void:
+	var r := _result_box(get_viewport_rect().size)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 24)
+	row.position = Vector2(r.position.x + r.size.x * 0.5 - 340, r.end.y - 84)
+	row.custom_minimum_size = Vector2(680, 64)
+	for item in [["Play again  (F5)", false], ["Main menu  (M)", true]]:
+		var b := Button.new()
+		b.text = item[0]
+		b.custom_minimum_size = Vector2(328, 64)
+		b.add_theme_font_size_override("font_size", 26)
+		var to_menu: bool = item[1]
+		b.pressed.connect(func() -> void:
+			if to_menu:
+				Session.mode = ""
+			get_tree().reload_current_scene())
+		row.add_child(b)
+	add_child(row)
+	(row.get_child(0) as Button).grab_focus()
+
+
 func _results(vs: Vector2) -> void:
 	var st := match_ctl.stats
 	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.03, 0.03, 0.6))
-	var w := 640.0
-	var x := (vs.x - w) * 0.5
-	var y := vs.y * 0.2
-	draw_rect(Rect2(x, y, w, 470), Color(0.12, 0.10, 0.09, 0.95))
-	draw_rect(Rect2(x, y, w, 470), Palette.BRASS, false, 2.0)
-	var title := "Victory" if match_ctl.winner == 0 else ("Defeat" if match_ctl.winner == 1 else "No winner")
-	_text(Vector2(x, y + 60), title, 48, Palette.team_color(maxi(match_ctl.winner, 0)), HORIZONTAL_ALIGNMENT_CENTER, w)
+	var r := _result_box(vs)
+	var x := r.position.x
+	var y := r.position.y
+	var w := r.size.x
+	draw_rect(r, Color(0.12, 0.10, 0.09, 0.96))
+	draw_rect(r, Palette.BRASS, false, 2.0)
+	var title := "No winner"
+	if match_ctl.human_slot:
+		title = "Victory" if match_ctl.winner == 0 else "Defeat"
+	elif match_ctl.winner >= 0:
+		title = "%s wins" % Palette.TEAM_NAMES[match_ctl.winner]
+	_text(Vector2(x, y + 58), title, 46, Palette.team_color(maxi(match_ctl.winner, 0)), HORIZONTAL_ALIGNMENT_CENTER, w)
 	var t := int(st.duration)
-	var lines := [
-		"%s, %d:%02d" % [st.reason.capitalize(), t / 60, t % 60],
-		"Kills  Oath %d  :  %d Ruin" % [st.kills[0], st.kills[1]],
-		"Minions slain  Oath %d  :  %d Ruin" % [st.minions_killed[0], st.minions_killed[1]],
-		"Structures standing  Oath %d  :  %d Ruin" % [st.structures_left[0], st.structures_left[1]],
-		"First champion fight at %s" % ("%d s" % roundi(st.first_champion_fight) if st.first_champion_fight >= 0 else "never"),
-		"Shrinebearer claimed  Oath %d  :  %d Ruin" % [st.objective_captures[0], st.objective_captures[1]],
-	]
-	var me: Dictionary = st.champions.get(match_ctl.player().name, {})
-	if not me.is_empty():
-		lines.append("You: %d kills, %d deaths, %d damage to champions" % [me.kills, me.deaths, roundi(me.damage_to_champions)])
-	for i in lines.size():
-		_text(Vector2(x, y + 120 + i * 40), lines[i], 24, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, w)
-	_text(Vector2(x, y + 445), "F5  play again      M  menu", 24, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, w)
+	var cream := Color(0.95, 0.92, 0.85)
+	_text(Vector2(x, y + 98), "%s after %d:%02d" % [String(st.reason).capitalize(), t / 60, t % 60], 24, cream, HORIZONTAL_ALIGNMENT_CENTER, w)
+	# One table per team: champion, level, kills / deaths, damage, gold.
+	var cols := [x + 40, x + w * 0.42, x + w * 0.55, x + w * 0.71, x + w * 0.86]
+	var me: Unit = match_ctl.player() if match_ctl.human_slot else null
+	var ty := y + 150
+	for team in 2:
+		var col := Palette.team_color(team)
+		_text(Vector2(cols[0], ty), "%s   %d kills" % [Palette.TEAM_NAMES[team], st.kills[team]], 28, col, HORIZONTAL_ALIGNMENT_LEFT)
+		var heads := ["Level", "K / D", "Damage", "Gold"]
+		for i in heads.size():
+			_text(Vector2(cols[i + 1], ty), heads[i], 20, Color(0.75, 0.72, 0.65), HORIZONTAL_ALIGNMENT_LEFT)
+		ty += 38
+		for u: Unit in match_ctl.champions:
+			if u.team != team:
+				continue
+			var c: Dictionary = st.champions.get(u.name, {})
+			if c.is_empty():
+				continue
+			if u == me:
+				draw_rect(Rect2(x + 24, ty - 26, w - 48, 34), Color(col, 0.18))
+			var label: String = u.def.display_name + ("  (you)" if u == me else "")
+			_text(Vector2(cols[0], ty), label, 24, cream, HORIZONTAL_ALIGNMENT_LEFT)
+			_text(Vector2(cols[1], ty), str(c.level), 24, cream, HORIZONTAL_ALIGNMENT_LEFT)
+			_text(Vector2(cols[2], ty), "%d / %d" % [c.kills, c.deaths], 24, cream, HORIZONTAL_ALIGNMENT_LEFT)
+			_text(Vector2(cols[3], ty), str(roundi(c.damage_to_champions)), 24, cream, HORIZONTAL_ALIGNMENT_LEFT)
+			_text(Vector2(cols[4], ty), str(roundi(c.gold_earned)), 24, cream, HORIZONTAL_ALIGNMENT_LEFT)
+			ty += 36
+		ty += 30
+	_text(Vector2(x, ty + 8), "Structures standing  Oath %d : %d Ruin      Shrinebearer  Oath %d : %d Ruin" % [st.structures_left[0], st.structures_left[1], st.objective_captures[0], st.objective_captures[1]], 22, cream, HORIZONTAL_ALIGNMENT_CENTER, w)
+
