@@ -173,6 +173,14 @@ class Kit:
             rings.append(ring)
         return self.ring_grid(rings, mname, u_scale=sx * 2.0, **kw)
 
+    def arc_lathe(self, profile, mname, th0, th1, seg=16, sx=1.0, sy=1.0, center=(0, 0)):
+        """A lathe over part of the circle, theta from th0 to th1 (0 is the front, +Y)."""
+        rings = []
+        for r, z in profile:
+            rings.append([Vector((center[0] + math.sin(th) * r * sx, center[1] + math.cos(th) * r * sy, z))
+                          for th in [th0 + (th1 - th0) * k / seg for k in range(seg + 1)]])
+        return self.ring_grid(rings, mname, closed=False)
+
     def tube(self, points, radii, mname, seg=10, twist=0.0, flat=1.0, cap=True):
         """A tube along a polyline. radii per point; flat squashes the local X."""
         rings = []

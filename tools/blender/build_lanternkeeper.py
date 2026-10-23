@@ -114,9 +114,10 @@ def build_model(rig, M):
     k = Kit("Head", M)
     k.sphere((0, hy, hz + 0.08), 0.092, "Skin", scale=(0.86, 0.95, 1.12))
     for sx in (-1.0, 1.0):
-        k.sphere((sx * 0.033, hy + 0.09, hz + 0.1), 0.012, "Eyes", scale=(1.5, 0.6, 0.55), u=8, v=6)
+        k.sphere((sx * 0.033, hy + 0.094, hz + 0.1), 0.013, "Eyes", scale=(1.5, 0.6, 0.55), u=8, v=6)
     k.sphere((0, hy + 0.092, hz + 0.07), 0.016, "Skin", scale=(0.8, 1.2, 1.2), u=8, v=6)
-    k.lathe([(0.06, hz - 0.02), (0.085, hz + 0.02), (0.07, hz + 0.06)], "Fur", seg=16, sx=1.0, sy=0.9, center=(0, hy + 0.02))
+    # Beard: around the jaw and chin only, under the mouth.
+    k.arc_lathe([(0.055, hz - 0.03), (0.08, hz + 0.01), (0.083, hz + 0.045)], "Fur", -1.6, 1.6, seg=12, sy=0.95, center=(0, hy + 0.01))
     k.finish(rig, "head")
     k = Kit("Hat", M)
     bz = hz + 0.15
