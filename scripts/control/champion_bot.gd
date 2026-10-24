@@ -576,21 +576,14 @@ func _clump(unit: Unit, at: Vector3, radius: float) -> int:
 	return n
 
 
-## The next item in the champion's build order, as a shop number, once the
-## bot stands in its fountain with the gold for it; 0 otherwise. It waits
-## for the next item instead of skipping to a cheaper one.
+## The next step in the champion's build order (ItemShop.next_step), as a
+## shop number, once the bot stands in its fountain with the gold for it;
+## 0 otherwise.
 func _next_buy(unit: Unit) -> int:
 	if not unit.can_shop():
 		return 0
-	for id in unit.def.item_build:
-		var i := -1
-		for n in Unit.ECONOMY.items.size():
-			if Unit.ECONOMY.items[n].id == id:
-				i = n
-		if i < 0 or unit.items.has(Unit.ECONOMY.items[i]):
-			continue
-		return i + 1 if unit.buy_problem(i + 1).is_empty() else 0
-	return 0
+	var idx := ItemShop.next_step(unit)
+	return idx if idx > 0 and unit.buy_problem(idx).is_empty() else 0
 
 
 ## Recall when heading home hurt, or when the next item is affordable and
@@ -611,11 +604,7 @@ func _wants_recall(unit: Unit, hp: float) -> bool:
 
 
 func _next_item_cost(unit: Unit) -> float:
-	for id in unit.def.item_build:
-		for it: ItemDef in Unit.ECONOMY.items:
-			if it.id == id and not unit.items.has(it):
-				return it.cost if unit.items.size() < Unit.ECONOMY.slots else INF
-	return INF
+	return ItemShop.next_step_price(unit)
 
 
 func commands_while_dead() -> bool:

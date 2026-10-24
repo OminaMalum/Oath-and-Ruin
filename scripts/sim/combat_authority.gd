@@ -9,6 +9,9 @@ signal projectile_ended(p: SimProjectile, hit_point: Vector3)
 signal area_spawned(a: SimArea)
 signal area_detonated(a: SimArea)
 signal unit_damaged(target: Unit, amount: float, source: Unit)
+## Health an ability restored (source set) or a shield an item gave (match stats).
+signal unit_healed(target: Unit, amount: float, source: Unit)
+signal unit_shielded(target: Unit, amount: float)
 signal unit_died(target: Unit, killer: Unit)
 signal unit_respawned(target: Unit)
 signal unit_removed(target: Unit)
@@ -209,7 +212,31 @@ func ward_factor(target: Unit) -> float:
 	return 1.0 - best
 
 
-func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> bool:
+## Which item power an ability uses: 0 weapon, 1 spell, -1 none.
+static func power_kind(source: Unit, a: AbilityDef) -> int:
+	if a == null or source == null:
+		return -1
+	match a.scaling:
+		AbilityDef.Scaling.WEAPON:
+			return 0
+		AbilityDef.Scaling.SPELL:
+			return 1
+		AbilityDef.Scaling.NONE:
+			return -1
+	return 0 if source.def.power == ChampionDef.Power.WEAPON else 1
+
+
+## Damage after armor (weapon) or magic resist (spell). Champions only.
+static func mitigate(target: Unit, amount: float, kind: int) -> float:
+	if kind < 0 or target.def.kind != ChampionDef.Kind.CHAMPION:
+		return amount
+	var defence := target.armor if kind == 0 else target.magic_resist
+	return amount * 100.0 / (100.0 + maxf(defence, 0.0))
+
+
+## `proc_kind` >= 0 marks damage from an item passive (a is null): it is
+## reduced by the target's defence but never triggers another item passive.
+func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef, proc_kind: int = -1) -> bool:
 	if not target.alive or amount <= 0.0:
 		return false
 	if a != null and a.hits_enemies_only and not are_enemies(source, target):
@@ -222,11 +249,23 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 			amount *= a.structure_damage_mult
 		amount *= source.structure_bonus
 	amount *= ward_factor(target)
-	if source.def.kind == ChampionDef.Kind.CHAMPION:
+	var kind := proc_kind
+	if source.def.kind == ChampionDef.Kind.CHAMPION and proc_kind < 0:
 		amount *= source.damage_mult
+		kind = power_kind(source, a)
+		# Item power is for fights: it does not speed up sieges.
+		if kind >= 0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
+			amount *= 1.0 + (source.weapon_power if kind == 0 else source.spell_power) / 100.0
+	amount = mitigate(target, amount, kind)
 	amount *= passive_damage_factor(source, target, a)
 	if target.mark_timer > 0.0:
 		amount *= 1.0 + target.mark_amount
+	if target.shield > 0.0:
+		var soaked := minf(target.shield, amount)
+		target.shield -= soaked
+		amount -= soaked
+		if target.shield <= 0.0:
+			target.shield_timer = 0.0
 	target.health -= amount
 	target.last_attacker = source
 	target.last_attacked_at = time
@@ -246,7 +285,9 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 			target.apply_compel(Unit.Compel.TAUNT, source, a.taunt_duration)
 		else:
 			target.apply_compel(Unit.Compel.CHARM, source, a.charm_duration)
-	if target.health <= 0.0:
+	if proc_kind < 0 and a != null:
+		_item_passives(source, target, a)
+	if target.alive and target.health <= 0.0:
 		target.set_dead(source)
 		unit_died.emit(target, source)
 		_on_kill(source, target)
@@ -323,9 +364,17 @@ func kill(target: Unit) -> void:
 		unit_died.emit(target, null)
 
 
-func heal(target: Unit, amount: float) -> void:
+## `source`: the champion whose ability heals (item passives read it).
+func heal(target: Unit, amount: float, source: Unit = null) -> void:
+	if source and source != target and is_instance_valid(source) and target.health < target.max_health * 0.35:
+		var lantern := item_with(source, ItemDef.Passive.LANTERN)
+		if lantern:
+			amount *= 1.0 + lantern.passive_value
 	if target.alive and amount > 0.0:
+		var before := target.health
 		target.health = minf(target.max_health, target.health + amount)
+		if source:
+			unit_healed.emit(target, target.health - before, source)
 
 
 func _step_projectiles(dt: float) -> void:
@@ -449,7 +498,7 @@ func _step_areas(dt: float) -> void:
 			for u in units:
 				if u.alive and u.team == ar.source.team and u.def.kind == ChampionDef.Kind.CHAMPION \
 						and Vector2(u.global_position.x - ar.center.x, u.global_position.z - ar.center.z).length() <= ar.ability.area_radius + u.def.radius:
-					heal(u, ar.ability.heal_per_second * dt)
+					heal(u, ar.ability.heal_per_second * dt, ar.source)
 		if ar.ability.delivery == AbilityDef.Delivery.WARD and ar.ability.enemy_slow > 0.0 \
 				and is_instance_valid(ar.source):
 			for u in units:
@@ -493,7 +542,7 @@ func _burst(ar: SimArea) -> void:
 			continue
 		if src_ok and not are_enemies(ar.source, u):
 			if a.ally_heal > 0.0 and u.def.kind == ChampionDef.Kind.CHAMPION:
-				heal(u, a.ally_heal)
+				heal(u, a.ally_heal, ar.source)
 			continue
 		var dmg := a.damage
 		if src_ok and ar.source.def.passive == ChampionDef.Passive.STORMEYE \
@@ -517,3 +566,45 @@ func _burst(ar: SimArea) -> void:
 		b.timer = area_lifetime(b.ability)
 		_new_areas.append(b)
 		area_spawned.emit(b)
+
+
+## The first owned item with this passive, or null.
+static func item_with(u: Unit, passive: ItemDef.Passive) -> ItemDef:
+	for it in u.items:
+		if it.passive == passive:
+			return it
+	return null
+
+
+## Item passives on a landed hit between champions (see data/items/adventurer).
+## Item damage passes proc_kind, so it never comes back here.
+func _item_passives(source: Unit, target: Unit, a: AbilityDef) -> void:
+	if source.def.kind != ChampionDef.Kind.CHAMPION or target.def.kind != ChampionDef.Kind.CHAMPION:
+		return
+	if not source.items.is_empty():
+		var basic := a == source.def.basic_attack
+		var duel := item_with(source, ItemDef.Passive.DUELIST)
+		if duel and basic:
+			# Every third basic hit on the same champion; stacks fade after the cooldown.
+			var key := "duelist:%d" % target.net_id
+			var last: Vector2 = source.item_counters.get(key, Vector2(0, -100))
+			var n := 1 if time - last.y > duel.passive_cooldown else int(last.x) + 1
+			if n >= 3:
+				n = 0
+				apply_damage(source, target, duel.passive_value, null, 0)
+			source.item_counters[key] = Vector2(n, time)
+		var codex := item_with(source, ItemDef.Passive.CODEX)
+		if codex and not basic and target.alive and target.health > 0.0:
+			# Two different abilities on the same champion within 4 s.
+			var key := "codex:%d" % target.net_id
+			var prev: Array = source.item_counters.get(key, [&"", -100.0])
+			if prev[0] != a.id and time - float(prev[1]) <= 4.0 and source.item_ready_at.get(key, -100.0) <= time:
+				source.item_ready_at[key] = time + codex.passive_cooldown
+				apply_damage(source, target, codex.passive_value, null, 1)
+			source.item_counters[key] = [a.id, time]
+	var bastion := item_with(target, ItemDef.Passive.BASTION)
+	if bastion and target.alive and target.health > 0.0 and target.health < target.max_health * 0.35 \
+			and target.item_ready_at.get("bastion", -100.0) <= time:
+		target.item_ready_at["bastion"] = time + bastion.passive_cooldown
+		target.apply_shield(bastion.passive_value + target.max_health * 0.1, 4.0)
+		unit_shielded.emit(target, target.shield)

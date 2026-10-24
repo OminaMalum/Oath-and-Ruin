@@ -46,6 +46,13 @@ enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE, BARROWB
 @export var passive_range: float = 0.0
 ## Item ids in the order bots buy them (see data/economy.tres).
 @export var item_build: Array[StringName] = []
+## Bots' buy order with the adventurer catalog (finished items are built
+## from their components on the way).
+@export var adventurer_build: Array[StringName] = []
+## Which item power the champion's abilities scale with (and so which
+## defence reduces them). An ability can override it (AbilityDef.scaling).
+enum Power { WEAPON, SPELL }
+@export var power: Power = Power.SPELL
 
 @export_group("Presentation")
 @export var primary_color: Color = Color(0.45, 0.32, 0.22)

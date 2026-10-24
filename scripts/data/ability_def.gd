@@ -17,6 +17,10 @@ enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD, WALL }
 @export var delivery: Delivery = Delivery.PROJECTILE
 ## Ultimates sit in the last slot (R) and unlock at Unit.ULT_LEVEL.
 @export var is_ultimate: bool = false
+## Item power this ability scales with: CHAMPION uses ChampionDef.power,
+## NONE ignores items (and armor and magic resist).
+enum Scaling { CHAMPION, WEAPON, SPELL, NONE }
+@export var scaling: Scaling = Scaling.CHAMPION
 
 @export_group("Damage")
 @export var damage: float = 0.0

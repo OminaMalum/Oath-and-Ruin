@@ -27,7 +27,8 @@ const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")
 const CASTER := preload("res://data/units/minion_caster.tres")
 const BREAKER := preload("res://data/units/minion_breaker.tres")
-const ECONOMY := Unit.ECONOMY
+var ECONOMY: EconomyDef:
+	get: return Unit.ECONOMY
 const BEAST_WILD := preload("res://data/units/shrinebearer_wild.tres")
 const BEAST_TAME := preload("res://data/units/shrinebearer.tres")
 
@@ -113,6 +114,12 @@ func setup(a: CombatAuthority, parent: Node3D) -> void:
 		info.lane_dirs.append(Vector3(0, 0, -s))
 	_reset_stats()
 	a.unit_damaged.connect(_on_damaged)
+	a.unit_healed.connect(func(_t: Unit, amount: float, src: Unit) -> void:
+		if not over and is_instance_valid(src) and stats.champions.has(src.name):
+			stats.champions[src.name].healing_done += amount)
+	a.unit_shielded.connect(func(u: Unit, amount: float) -> void:
+		if not over and stats.champions.has(u.name):
+			stats.champions[u.name].shield_received += amount)
 	a.unit_died.connect(_on_died)
 
 
@@ -139,7 +146,7 @@ func start() -> void:
 				if human_slot and team == 1:
 					b.set_difficulty(difficulty)
 				u.controller = b
-			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0, "gold_earned": 0.0, "items": [], "recalls": 0}
+			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0, "gold_earned": 0.0, "items": [], "recalls": 0, "healing_done": 0.0, "shield_received": 0.0, "gold_by_minute": [], "xp_by_minute": []}
 			u.upgraded.connect(func(_slot: int, a: AbilityDef) -> void:
 				stats.champions[u.name].upgrade = String(a.id)
 				stats.champions[u.name].upgrade_at = snappedf(authority.time, 0.1)
@@ -212,6 +219,13 @@ func _physics_process(dt: float) -> void:
 	for u in champions:
 		u.add_xp(XP_PER_SECOND * dt)
 		_pay(u, ECONOMY.per_second * dt)
+	# Gold earned and xp, once a minute, for the soak's curves.
+	if floori(authority.time / 60.0) > floori((authority.time - dt) / 60.0):
+		for u in champions:
+			if stats.champions.has(u.name):
+				var c: Dictionary = stats.champions[u.name]
+				c.gold_by_minute.append(roundi(c.gold_earned))
+				c.xp_by_minute.append(roundi(u.xp))
 	for u in champions:
 		if u.alive and UnitController.flat_distance(u.global_position, info.fountain(u.team)) <= FOUNTAIN_RADIUS:
 			authority.heal(u, u.def.fountain_heal * dt)

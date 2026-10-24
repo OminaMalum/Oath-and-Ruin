@@ -23,8 +23,10 @@ var buttons: int = 0
 var target_id: int = 0
 ## Pick an offered ability upgrade: 0 none, 1 or 2 the option.
 var upgrade_choice: int = 0
-## Buy a shop item: 0 none, else its number (1-based) in data/economy.tres.
+## Buy a shop item: 0 none, else its number (1-based) in Unit.ECONOMY.items.
 var buy_item: int = 0
+## Sell an owned item: 0 none, else its inventory position (1-based).
+var sell_item: int = 0
 
 
 func pressed(button: int) -> bool:
@@ -44,7 +46,7 @@ static func ability_button(slot: int) -> int:
 
 
 func to_dict() -> Dictionary:
-	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons, "t": target_id, "u": upgrade_choice, "i": buy_item}
+	return {"m": move, "y": aim_yaw, "a": aim_point, "b": buttons, "t": target_id, "u": upgrade_choice, "i": buy_item, "s": sell_item}
 
 
 const ALL_BUTTONS := BTN_ATTACK | BTN_ABILITY_1 | BTN_ABILITY_2 | BTN_ABILITY_3 | BTN_RECALL | BTN_ABILITY_4
@@ -76,4 +78,7 @@ static func from_dict(d: Dictionary) -> UnitCommand:
 	var i: Variant = d.get("i")
 	if i is int and i >= 1 and i <= 32:
 		c.buy_item = i
+	var s: Variant = d.get("s")
+	if s is int and s >= 1 and s <= 8:
+		c.sell_item = s
 	return c

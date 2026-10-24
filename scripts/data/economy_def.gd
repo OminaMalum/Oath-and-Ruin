@@ -24,6 +24,10 @@ extends Resource
 ## Buy within this distance of the own fountain, or while dead.
 @export var shop_radius: float = 6.0
 @export var slots: int = 4
+## Selling pays this share of the price (0: no selling).
+@export_range(0.0, 1.0) var sell_fraction: float = 0.0
+## Item haste counts up to this many points.
+@export var haste_cap: float = 40.0
 ## Recall (T): stand still this long to return to the fountain. Moving, any
 ## cast, a hit or a stun cancels it.
 @export var recall_time: float = 4.0

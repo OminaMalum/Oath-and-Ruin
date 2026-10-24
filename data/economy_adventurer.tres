@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EconomyDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/economy_def.gd" id="1_econ"]
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="2_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/trailwardens_token.tres" id="10_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/apprentices_focus.tres" id="11_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/pilgrims_seal.tres" id="12_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/tempered_edge.tres" id="13_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/etched_focus.tres" id="14_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/vital_cord.tres" id="15_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/iron_links.tres" id="16_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/warding_bead.tres" id="17_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/quickstring.tres" id="18_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/hourglass_chip.tres" id="19_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/travelers_soles.tres" id="20_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/ironstride_boots.tres" id="21_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/wayfarers_boots.tres" id="22_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/spellwalkers_boots.tres" id="23_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/duelists_measure.tres" id="24_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/runecasters_codex.tres" id="25_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/bastion_plate.tres" id="26_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/lantern_of_returning.tres" id="27_it"]
+
+[resource]
+script = ExtResource("1_econ")
+slots = 6
+sell_fraction = 0.7
+haste_cap = 40.0
+items = Array[ExtResource("2_item")]([ExtResource("10_it"), ExtResource("11_it"), ExtResource("12_it"), ExtResource("13_it"), ExtResource("14_it"), ExtResource("15_it"), ExtResource("16_it"), ExtResource("17_it"), ExtResource("18_it"), ExtResource("19_it"), ExtResource("20_it"), ExtResource("21_it"), ExtResource("22_it"), ExtResource("23_it"), ExtResource("24_it"), ExtResource("25_it"), ExtResource("26_it"), ExtResource("27_it")])

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/tempered_edge.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/quickstring.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"duelists_measure"
+display_name = "Duelist's Measure"
+short_name = "Duelist"
+description = "+18 weapon power, attacks 15% faster. Every third basic hit on the same champion adds 35 weapon damage"
+cost = 960
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+weapon_power = 18.0
+attack_speed = 0.15
+passive = 1
+passive_value = 35.0
+passive_cooldown = 3.0

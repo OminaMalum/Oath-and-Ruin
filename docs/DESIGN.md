@@ -381,6 +381,55 @@ Measured (headless soak, 24 seeds, with F): every match ended, sides 12 to 12,
 median 10.5 min (5.9 to 12.6), 19 kills a match. Highest team kill share is
 Stormscald at 45%, all under the 55% line.
 
+## Adventurer items (Phase 2 of the roster brief, added 2026-10-24)
+
+A second shop catalog sits beside the four classic items. The menu's Items
+toggle picks one (saved in settings; `--items=adventurer|classic` on the
+command line; network play uses classic). The classic catalog and its tests
+are unchanged, so old soaks stay comparable.
+
+**Rules.** Six slots. One starter, one pair of boots. Components take a slot
+and can be doubled. A finished item or boots uses owned recipe parts, so you
+pay the total minus those parts, in one step: a failed buy changes nothing.
+Selling pays 70%, at the fountain or while dead. Buying never heals (health
+keeps its fraction). Prices are the brief's list at 40%, because a match
+pays about 3,000 gold per champion.
+
+**Stats.** Every ability scales with one power: the champion's (weapon for
+Oathwarden, Ashrunner, Thornwright, Barrowking; spell for the rest) unless
+the ability sets its own `scaling`. Damage x (100 + power)%. Champions take
+weapon damage x 100 / (100 + armor) and spell damage x 100 / (100 + magic
+resist). Ability cooldowns x 100 / (100 + haste), item haste capped at 40.
+Attack speed shortens basic attacks only. Classic item bonuses still work.
+
+**Shields.** A shield soaks damage before health and ends with its timer.
+Shields never stack: the bigger one stays. Damage reduction from wards was
+already "strongest one counts".
+
+**Item passives.** Duelist's Measure (third basic hit on one champion adds
+35), Runecaster's Codex (two different abilities on one champion within 4 s
+add 45, 6 s cooldown per target), Bastion Plate (a champion hit that drops
+you under 35% gives a 100 + 10% max health shield for 4 s, 45 s cooldown),
+Lantern of Returning (your ability heals on allies under 35% are 30%
+stronger). Item damage never triggers item passives. Passive cooldowns live
+on the champion, so selling and buying again does not reset them.
+
+**Shop.** With adventurer items the shop frees the mouse: click to buy, right
+click an owned item to sell, 1 buys the suggested next step on the
+champion's build. Bots follow `adventurer_build` in each champion file and
+buy a finished item's parts first when short of gold (ItemShop.next_step).
+
+**Network.** Snapshot version 6 carries the item list (not a bit mask, since
+components can be doubled) and shields.
+
+Measured (headless soak, 24 seeds, adventurer items): every match ended,
+sides 11 to 13, median 10.1 min (6.4 to 15.5; classic 10.5), 20 kills a
+match, first finished item at a median 4.0 min, 1.7 finished items per
+champion by the end. A first pass let item power raise structure damage by
+29% and cut matches to 8.9 min, so power now counts only against units.
+Stormscald sits at the 55% kill share line (12 games): watch it. The same
+seeds with classic items gave exactly the old results.
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

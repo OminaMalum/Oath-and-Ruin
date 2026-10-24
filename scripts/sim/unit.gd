@@ -46,7 +46,13 @@ var dash_hit: Array[Unit] = []
 var move_dir: Vector3 = Vector3.ZERO
 
 ## Gold and items. The match pays gold in; buy_item() is the only way out.
-const ECONOMY := preload("res://data/economy.tres")
+## Two catalogs: CLASSIC (four flat items, the baseline) and ADVENTURER
+## (components, recipes, boots, selling). One for the whole match, chosen
+## before it starts with use_economy(); every peer must use the same one.
+const CLASSIC_ECONOMY := preload("res://data/economy.tres")
+const ADVENTURER_ECONOMY := preload("res://data/economy_adventurer.tres")
+static var ECONOMY: EconomyDef = CLASSIC_ECONOMY
+signal item_sold(item: ItemDef, gold: float)
 ## Gold that came with a place to show it (last hit, kill): the HUD pops it up.
 signal gold_earned(amount: float, at: Vector3)
 signal item_bought(item: ItemDef)
@@ -58,6 +64,21 @@ var shop_point: Vector3 = Vector3.INF
 ## From items: multiplies ability cooldowns (Q, E, R) and walking speed.
 var cooldown_mult: float = 1.0
 var speed_mult: float = 1.0
+## From adventurer items (see ItemDef for what each point does).
+var weapon_power: float = 0.0
+var spell_power: float = 0.0
+var armor: float = 0.0
+var magic_resist: float = 0.0
+var attack_speed: float = 0.0
+var ability_haste: float = 0.0
+## Shield: soaks damage before health, gone when the timer ends.
+var shield: float = 0.0
+var shield_timer: float = 0.0
+## Item passive state, kept by the authority. Keys are item and target ids;
+## values are authority times. Selling an item never clears these, so a
+## sell and rebuy cannot reset a passive.
+var item_ready_at := {}
+var item_counters := {}
 ## Recall home: counts down while the champion stands still; 0 when not recalling.
 signal recall_started
 signal recall_cancelled(reason: String)
@@ -179,13 +200,26 @@ func recompute_stats(set_max_health: bool = true) -> void:
 	var dmg := 0.0
 	var cdr := 0.0
 	var spd := 0.0
+	weapon_power = 0.0
+	spell_power = 0.0
+	armor = 0.0
+	magic_resist = 0.0
+	attack_speed = 0.0
+	ability_haste = 0.0
 	for it in items:
 		hp += it.health
 		dmg += it.damage
 		cdr += it.cooldown
 		spd += it.move_speed
+		weapon_power += it.weapon_power
+		spell_power += it.spell_power
+		armor += it.armor
+		magic_resist += it.magic_resist
+		attack_speed += it.attack_speed
+		ability_haste += it.haste
+	ability_haste = minf(ability_haste, ECONOMY.haste_cap)
 	damage_mult = (1.0 + DAMAGE_PER_LEVEL * (level - 1)) * (1.0 + dmg)
-	cooldown_mult = clampf(1.0 - cdr, 0.4, 1.0)
+	cooldown_mult = clampf(1.0 - cdr, 0.4, 1.0) * 100.0 / (100.0 + ability_haste)
 	speed_mult = 1.0 + spd
 	if set_max_health:
 		var frac := health / max_health if max_health > 0.0 else 1.0
@@ -208,50 +242,125 @@ func can_shop() -> bool:
 	return not alive or _flat_distance_to(shop_point) <= ECONOMY.shop_radius
 
 
+## How buying item `index` (1-based, ECONOMY.items) would go now:
+## {item, price, consume (owned item positions the recipe uses), problem}.
+## problem is "" when it can be bought.
+func purchase_plan(index: int) -> Dictionary:
+	var plan := {"item": null, "price": 0, "consume": [], "problem": ""}
+	if index < 1 or index > ECONOMY.items.size():
+		plan.problem = "No such item"
+		return plan
+	var it: ItemDef = ECONOMY.items[index - 1]
+	plan.item = it
+	var consume: Array[int] = []
+	var price := it.cost
+	for part: ItemDef in it.recipe:
+		for n in items.size():
+			if items[n] == part and n not in consume:
+				consume.append(n)
+				price -= part.cost
+				break
+	plan.consume = consume
+	plan.price = price
+	if it.kind != ItemDef.Kind.COMPONENT and items.has(it):
+		plan.problem = "You already own %s" % it.display_name
+	elif it.kind == ItemDef.Kind.STARTER and _owns_kind(ItemDef.Kind.STARTER):
+		plan.problem = "You can carry one starter item"
+	elif it.kind == ItemDef.Kind.BOOTS and _owns_kind(ItemDef.Kind.BOOTS):
+		plan.problem = "You can wear one pair of boots"
+	elif items.size() - consume.size() >= ECONOMY.slots:
+		plan.problem = "Your item slots are full"
+	elif not can_shop():
+		plan.problem = "The shop opens at your fountain or while you wait to respawn"
+	elif gold < price:
+		plan.problem = "%s needs %d more gold" % [it.display_name, ceili(price - gold)]
+	return plan
+
+
+func _owns_kind(kind: ItemDef.Kind) -> bool:
+	for it in items:
+		if it.kind == kind:
+			return true
+	return false
+
+
+func has_item(id: StringName) -> bool:
+	for it in items:
+		if it.id == id:
+			return true
+	return false
+
+
 ## Why item `index` (1-based, ECONOMY.items) cannot be bought now; "" if it can.
 func buy_problem(index: int) -> String:
-	if index < 1 or index > ECONOMY.items.size():
-		return "No such item"
-	var it: ItemDef = ECONOMY.items[index - 1]
-	if items.has(it):
-		return "You already own %s" % it.display_name
-	if items.size() >= ECONOMY.slots:
-		return "Your item slots are full"
-	if not can_shop():
-		return "The shop opens at your fountain or while you wait to respawn"
-	if gold < it.cost:
-		return "%s needs %d more gold" % [it.display_name, ceili(it.cost - gold)]
-	return ""
+	return purchase_plan(index).problem
 
 
+## Buys in one step: gold and recipe components go out, the item comes in.
+## A failed buy changes nothing.
 func buy_item(index: int) -> bool:
-	var problem := buy_problem(index)
-	if not problem.is_empty():
-		cast_rejected.emit(-1, problem)
+	var plan := purchase_plan(index)
+	if not plan.problem.is_empty():
+		cast_rejected.emit(-1, plan.problem)
 		return false
-	var it: ItemDef = ECONOMY.items[index - 1]
-	gold -= it.cost
+	var it: ItemDef = plan.item
+	var consume: Array = plan.consume
+	consume.sort()
+	consume.reverse()
+	for n: int in consume:
+		items.remove_at(n)
+	gold -= plan.price
 	items.append(it)
 	recompute_stats()
 	item_bought.emit(it)
 	return true
 
 
-## Network: the item list as one bit per ECONOMY.items index.
-func item_mask() -> int:
-	var m := 0
+## Gold back for the item in inventory position `slot` (1-based); 0 if none.
+func sell_value(slot: int) -> float:
+	if slot < 1 or slot > items.size():
+		return 0.0
+	return floorf(items[slot - 1].cost * ECONOMY.sell_fraction)
+
+
+func sell_problem(slot: int) -> String:
+	if ECONOMY.sell_fraction <= 0.0:
+		return "Items cannot be sold"
+	if slot < 1 or slot > items.size():
+		return "No item there"
+	if not can_shop():
+		return "Sell at your fountain or while you wait to respawn"
+	return ""
+
+
+func sell_item(slot: int) -> bool:
+	var problem := sell_problem(slot)
+	if not problem.is_empty():
+		cast_rejected.emit(-1, problem)
+		return false
+	var it: ItemDef = items[slot - 1]
+	var value := sell_value(slot)
+	items.remove_at(slot - 1)
+	gold += value
+	recompute_stats()
+	item_sold.emit(it, value)
+	return true
+
+
+## Network: the inventory as ECONOMY.items indices, in order.
+func item_indices() -> PackedByteArray:
+	var out := PackedByteArray()
 	for it in items:
-		var i := ECONOMY.items.find(it)
-		if i >= 0:
-			m |= 1 << i
-	return m
+		out.append(maxi(ECONOMY.items.find(it), 0))
+	return out
 
 
-func set_item_mask(m: int) -> void:
+func set_item_indices(list: PackedByteArray) -> void:
 	items.clear()
-	for i in ECONOMY.items.size():
-		if m & (1 << i):
+	for i in list:
+		if i < ECONOMY.items.size():
 			items.append(ECONOMY.items[i])
+	recompute_stats(false)
 
 
 func _flat_distance_to(p: Vector3) -> float:
@@ -284,7 +393,7 @@ func cooldown_fraction(slot: int) -> float:
 
 ## The cooldown a cast from `slot` starts: items shorten abilities, not basics.
 func cooldown_for(slot: int, a: AbilityDef) -> float:
-	return a.cooldown * cooldown_mult if slot > 0 else a.cooldown / (1.0 + haste_amount)
+	return a.cooldown * cooldown_mult if slot > 0 else a.cooldown / (1.0 + haste_amount + attack_speed)
 
 
 func current_move_speed() -> float:
@@ -307,6 +416,8 @@ func muzzle_position() -> Vector3:
 func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 	if cmd.buy_item > 0:
 		buy_item(cmd.buy_item)  # dead champions can shop too
+	if cmd.sell_item > 0:
+		sell_item(cmd.sell_item)
 	if not alive:
 		return
 	for i in cooldowns.size():
@@ -428,6 +539,10 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 ## Status timers both the server and a predicting client count down.
 func _step_status(dt: float) -> void:
 	root_timer = maxf(0.0, root_timer - dt)
+	if shield_timer > 0.0:
+		shield_timer -= dt
+		if shield_timer <= 0.0:
+			shield = 0.0
 	if mark_timer > 0.0:
 		mark_timer -= dt
 		if mark_timer <= 0.0:
@@ -464,6 +579,7 @@ func _compelled(cmd: UnitCommand) -> UnitCommand:
 		return cmd
 	var c := UnitCommand.new()
 	c.buy_item = cmd.buy_item
+	c.sell_item = cmd.sell_item
 	var to := Vector3(compel_point.x - global_position.x, 0.0, compel_point.z - global_position.z)
 	if to.length() < 0.05:
 		to = forward()
@@ -723,6 +839,14 @@ func is_impaired() -> bool:
 	return root_timer > 0.0 or slow_timer > 0.0 or stun_timer > 0.0 or compel_timer > 0.0
 
 
+## Shields never stack: the bigger one stays and the timer is refreshed.
+func apply_shield(amount: float, duration: float) -> void:
+	if not alive or amount <= 0.0:
+		return
+	shield = maxf(shield, amount)
+	shield_timer = maxf(shield_timer, duration)
+
+
 func apply_slow(amount: float, duration: float) -> void:
 	# Strongest slow wins; durations do not stack.
 	if amount >= slow_amount or slow_timer <= 0.0:
@@ -745,6 +869,8 @@ func set_dead(killer: Unit) -> void:
 	haste_timer = 0.0
 	quick_amount = 0.0
 	quick_timer = 0.0
+	shield = 0.0
+	shield_timer = 0.0
 	_end_compel()
 	stun_timer = 0.0
 	respawn_timer = def.respawn_time

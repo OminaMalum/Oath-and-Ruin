@@ -27,3 +27,5 @@ passive_range = 0.0
 primary_color = Color(0.22, 0.18, 0.28, 1)
 accent_color = Color(0.72, 0.58, 0.92, 1)
 item_build = Array[StringName]([&"ash_hourglass", &"oathbound_plate", &"ember_edge", &"wayfarer_greaves"])
+adventurer_build = Array[StringName]([&"apprentices_focus", &"runecasters_codex", &"spellwalkers_boots", &"bastion_plate"])
+power = 1

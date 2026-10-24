@@ -99,6 +99,31 @@ func _ready() -> void:
 			record.text = Settings.record_text())
 		diff_row.add_child(d)
 	right.add_child(diff_row)
+	# Shop catalog: the adventurer items or the four classic ones.
+	var items_row := HBoxContainer.new()
+	items_row.add_theme_constant_override("separation", 12)
+	items_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var items_label := Label.new()
+	items_label.text = "Items"
+	items_label.add_theme_font_size_override("font_size", 24)
+	items_label.add_theme_color_override("font_color", Color(0.85, 0.80, 0.70))
+	items_row.add_child(items_label)
+	var items_group := ButtonGroup.new()
+	for opt in [["Adventurer", true], ["Classic", false]]:
+		var ib := Button.new()
+		ib.toggle_mode = true
+		ib.button_group = items_group
+		ib.text = opt[0]
+		ib.custom_minimum_size = Vector2(170, 56)
+		ib.add_theme_font_size_override("font_size", 22)
+		ib.button_pressed = Settings.adventurer_items == opt[1]
+		var on: bool = opt[1]
+		ib.pressed.connect(func() -> void:
+			Settings.adventurer_items = on
+			Settings.save()
+			ItemShop.use_adventurer(on))
+		items_row.add_child(ib)
+	right.add_child(items_row)
 	var start: Button
 	for item in [["3v3 Bot Match", "match"], ["Training Court", "court"], ["Settings", "settings"], ["Quit", "quit"]]:
 		var b := Button.new()

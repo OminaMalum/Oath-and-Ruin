@@ -51,6 +51,8 @@ func _run() -> void:
 		"test_batch_c_data", "test_taunt", "test_charm", "test_war_song", "test_encore", "test_storm_wall",
 		"test_tempest", "test_barrow_blood", "test_kings_wrath",
 		"test_fourth_ability_data", "test_fold_step", "test_searing_light", "test_smoke_veil",
+		"test_adventurer_shop", "test_adventurer_stats", "test_item_passives", "test_adventurer_snapshot",
+		"test_adventurer_build_path", "test_adventurer_bot_match",
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
@@ -60,6 +62,7 @@ func _run() -> void:
 		var before := failures
 		await call(t)
 		print(("PASS " if failures == before else "FAIL ") + t)
+		ItemShop.use_adventurer(false)
 		world.queue_free()
 		await process_frame
 	print("%d checks, %d failures" % [checks, failures])
@@ -1116,6 +1119,232 @@ func test_smoke_veil() -> void:
 	check(is_equal_approx(ally.quick_amount, veil.ally_quick), "Smoke Veil: an ally inside moves %d%% faster" % roundi(veil.ally_quick * 100.0))
 	await secs(veil.ward_duration)
 	check(ally.quick_amount == 0.0, "the speed ends with the smoke")
+
+
+func _shop_champion(def: ChampionDef, gold: float) -> Unit:
+	ItemShop.use_adventurer(true)
+	var u := spawn(def, 0, Vector3.ZERO)
+	u.shop_point = Vector3.ZERO
+	u.gold = gold
+	return u
+
+
+func _idx(id: StringName) -> int:
+	var i := ItemShop.index_of(id)
+	check(i > 0, "%s is in the adventurer catalog" % id)
+	return i
+
+
+func test_adventurer_shop() -> void:
+	var u := _shop_champion(THORN, 3000.0)
+	await ticks(2)
+	var edge := _idx(&"tempered_edge")
+	var duel := _idx(&"duelists_measure")
+	var duel_def: ItemDef = Unit.ECONOMY.items[duel - 1]
+	check(Unit.ECONOMY.slots == 6 and Unit.ECONOMY.items.size() == 18, "six slots, eighteen items")
+	check(u.buy_item(edge) and is_equal_approx(u.gold, 3000.0 - 160.0), "a component costs its price")
+	check(u.buy_item(edge), "components can be doubled")
+	var g0 := u.gold
+	check(u.buy_item(duel) and is_equal_approx(g0 - u.gold, duel_def.cost - 160.0), "a recipe pays only what the owned part does not cover (%d)" % roundi(g0 - u.gold))
+	check(u.items.size() == 2 and u.items.count(duel_def) == 1, "and uses up one Edge, keeping the other")
+	check(not u.buy_item(duel), "a finished item cannot be bought twice")
+	check(u.buy_item(_idx(&"trailwardens_token")) and not u.buy_item(_idx(&"apprentices_focus")), "one starter only")
+	check(u.buy_item(_idx(&"travelers_soles")), "soles")
+	g0 = u.gold
+	check(u.buy_item(_idx(&"wayfarers_boots")) and is_equal_approx(g0 - u.gold, 360.0 - 120.0), "boots use the soles")
+	check(not u.buy_item(_idx(&"ironstride_boots")), "one pair of boots only")
+	# Fill the bag, then a recipe still fits because its parts leave.
+	u.buy_item(_idx(&"etched_focus"))
+	u.buy_item(_idx(&"hourglass_chip"))
+	check(u.items.size() == 6, "six items carried (%d)" % u.items.size())
+	var before := u.items.duplicate()
+	g0 = u.gold
+	check(not u.buy_item(_idx(&"vital_cord")), "a full bag refuses a new component")
+	check(u.items == before and u.gold == g0, "a failed buy changes neither items nor gold")
+	check(u.buy_item(_idx(&"runecasters_codex")) and u.items.size() == 5, "a recipe in a full bag frees its parts' slots")
+	# Selling, health kept as a fraction, never refilled.
+	u.health = u.max_health * 0.5
+	var hp_frac := u.health / u.max_health
+	g0 = u.gold
+	var first: ItemDef = u.items[0]
+	check(u.sell_item(1) and is_equal_approx(u.gold - g0, floorf(first.cost * 0.7)), "selling pays 70%")
+	check(is_equal_approx(u.health / u.max_health, hp_frac), "selling or buying never heals")
+	u.global_position = Vector3(40, 0, 0)
+	await ticks(1)
+	check(not u.sell_item(1) and not u.buy_item(edge), "no selling or buying away from the fountain")
+	# The command path: buy and sell go through UnitCommand like any input.
+	u.global_position = Vector3.ZERO
+	var n := u.items.size()
+	cmd(u).sell_item = 1
+	await ticks(1)
+	cmd(u).sell_item = 0
+	check(u.items.size() == n - 1, "selling works through the command")
+	var c := UnitCommand.from_dict({"s": 3, "i": 2})
+	check(c.sell_item == 3 and c.buy_item == 2, "sell and buy survive the wire")
+	check(UnitCommand.from_dict({"s": 99}).sell_item == 0, "a bad sell slot is dropped")
+
+
+func test_adventurer_stats() -> void:
+	var u := _shop_champion(WARDEN, 9000.0)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -3))
+	await ticks(2)
+	var cleave := WARDEN.basic_attack
+	check(CombatAuthority.power_kind(u, cleave) == 0 and CombatAuthority.power_kind(foe, SCRIBE.basic_attack) == 1, "Oathwarden hits with weapon power, Ruinscribe with spell power")
+	var h0 := foe.health
+	authority.apply_damage(u, foe, 100.0, cleave)
+	var base := h0 - foe.health
+	foe.health = foe.max_health
+	u.buy_item(_idx(&"tempered_edge"))
+	authority.apply_damage(u, foe, 100.0, cleave)
+	check(absf((foe.max_health - foe.health) - base * 1.07) < 0.01, "+7 weapon power: 7% more weapon damage")
+	var tower := spawn(TOWER, 1, Vector3(0, 0, -8))
+	await ticks(1)
+	var th := tower.health
+	authority.apply_damage(u, tower, 100.0, cleave)
+	check(absf((th - tower.health) - 100.0 * u.damage_mult * cleave.structure_damage_mult * u.structure_bonus) < 0.01, "item power does not speed up sieges")
+	foe.health = foe.max_health
+	foe.items.append(Unit.ECONOMY.items[_idx(&"iron_links") - 1])
+	foe.recompute_stats()
+	authority.apply_damage(u, foe, 100.0, cleave)
+	check(absf((foe.max_health - foe.health) - base * 1.07 * 100.0 / 112.0) < 0.01, "12 armor: weapon damage x 100/112")
+	foe.health = foe.max_health
+	authority.apply_damage(foe, u, 100.0, SCRIBE.basic_attack)
+	var spell := u.max_health - u.health
+	check(absf(spell - 100.0) < 0.01, "armor does nothing against spells")
+	# Haste: 100 / (100 + haste), item haste capped at 40.
+	var w := spawn(SCRIBE, 0, Vector3(5, 0, 0))
+	for id in [&"runecasters_codex", &"lantern_of_returning", &"hourglass_chip", &"spellwalkers_boots"]:
+		w.items.append(Unit.ECONOMY.items[_idx(id) - 1])
+	w.recompute_stats()
+	check(is_equal_approx(w.ability_haste, 40.0) and is_equal_approx(w.cooldown_mult, 100.0 / 140.0), "haste caps at 40 (cooldowns x %.3f)" % w.cooldown_mult)
+	var a := spawn(THORN, 0, Vector3(-5, 0, 0))
+	a.items.append(Unit.ECONOMY.items[_idx(&"quickstring") - 1])
+	a.recompute_stats()
+	check(is_equal_approx(a.cooldown_for(0, THORN.basic_attack), THORN.basic_attack.cooldown / 1.08), "attack speed shortens the basic attack only")
+	# Shields soak damage first and never stack.
+	foe.apply_shield(50.0, 2.0)
+	foe.apply_shield(30.0, 2.0)
+	check(is_equal_approx(foe.shield, 50.0), "the bigger shield stays")
+	var hp := foe.health
+	authority.apply_damage(foe, u, 0.0, null)
+	authority.apply_damage(u, foe, 40.0, AbilityDef.new())
+	check(foe.health == hp and foe.shield < 50.0, "a hit smaller than the shield leaves health alone")
+	await secs(2.1)
+	check(foe.shield == 0.0, "the shield ends with its timer")
+
+
+func test_item_passives() -> void:
+	var u := _shop_champion(THORN, 0.0)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -3))
+	await ticks(2)
+	var duel_def: ItemDef = Unit.ECONOMY.items[_idx(&"duelists_measure") - 1]
+	u.items.append(duel_def)
+	u.recompute_stats()
+	var bow := THORN.basic_attack
+	var hits: Array[float] = []
+	for i in 3:
+		var h := foe.health
+		authority.apply_damage(u, foe, 50.0, bow)
+		hits.append(h - foe.health)
+	check(is_equal_approx(hits[0], hits[1]) and absf(hits[2] - hits[0] - duel_def.passive_value) < 0.01, "Duelist's Measure: the third hit adds %d (%.1f)" % [roundi(duel_def.passive_value), hits[2] - hits[0]])
+	# Codex: two different abilities on one champion.
+	var s := spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	var codex: ItemDef = Unit.ECONOMY.items[_idx(&"runecasters_codex") - 1]
+	s.items.append(codex)
+	s.recompute_stats()
+	foe.health = foe.max_health
+	var h0 := foe.health
+	authority.apply_damage(s, foe, 50.0, SCRIBE.get_slot(1))
+	var one := h0 - foe.health
+	h0 = foe.health
+	authority.apply_damage(s, foe, 50.0, SCRIBE.get_slot(2))
+	check(absf((h0 - foe.health) - one - codex.passive_value) < 0.01, "Runecaster's Codex: a second, different ability adds %d" % roundi(codex.passive_value))
+	h0 = foe.health
+	authority.apply_damage(s, foe, 50.0, SCRIBE.get_slot(1))
+	check(absf((h0 - foe.health) - one) < 0.01, "and then waits for its cooldown")
+	# Bastion: a shield when a champion hit drops the owner low, on a long cooldown.
+	var b := spawn(BARROW, 1, Vector3(-3, 0, 0))
+	var bastion: ItemDef = Unit.ECONOMY.items[_idx(&"bastion_plate") - 1]
+	b.items.append(bastion)
+	b.recompute_stats()
+	b.shop_point = b.global_position
+	authority.apply_damage(u, b, b.max_health * 0.7, bow)
+	check(b.shield > 0.0, "Bastion Plate shields below 35%% health (%d)" % roundi(b.shield))
+	b.shield = 0.0
+	b.gold = 5000.0
+	b.sell_item(1)
+	b.buy_item(_idx(&"bastion_plate"))
+	authority.apply_damage(u, b, 10.0, bow)
+	check(b.shield == 0.0, "selling and buying again does not reset its cooldown")
+	# Lantern: heals on a badly hurt ally are stronger; others unchanged.
+	var l := spawn(LANTERN, 0, Vector3(6, 0, 0))
+	l.items.append(Unit.ECONOMY.items[_idx(&"lantern_of_returning") - 1])
+	var ally := spawn(SCRIBE, 0, Vector3(7, 0, 0))
+	ally.health = ally.max_health * 0.2
+	h0 = ally.health
+	authority.heal(ally, 100.0, l)
+	check(is_equal_approx(ally.health - h0, 130.0), "Lantern of Returning: +30%% on an ally under 35%% (%.0f)" % (ally.health - h0))
+	ally.health = ally.max_health * 0.6
+	h0 = ally.health
+	authority.heal(ally, 100.0, l)
+	check(is_equal_approx(ally.health - h0, 100.0), "no bonus on a healthier ally")
+	# No proc from a proc: item damage never triggers item passives.
+	u.item_counters.clear()
+	var dueling := u.item_counters.size()
+	authority.apply_damage(u, foe, 10.0, null, 0)
+	check(u.item_counters.size() == dueling, "item damage does not count as a hit for items")
+
+
+func test_adventurer_snapshot() -> void:
+	var u := _shop_champion(RUNNER, 0.0)
+	await ticks(2)
+	for id in [&"trailwardens_token", &"tempered_edge", &"tempered_edge", &"bastion_plate", &"wayfarers_boots", &"quickstring"]:
+		u.items.append(Unit.ECONOMY.items[_idx(id) - 1])
+	u.recompute_stats()
+	u.apply_shield(123.0, 2.5)
+	var snap := SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([u])))
+	var s: Array = snap.units[u.net_id]
+	var c := spawn(RUNNER, 1, Vector3(5, 0, 0))
+	await ticks(1)
+	SnapshotCodec.apply(c, s)
+	check(c.items == u.items, "six items, doubles included, survive the snapshot")
+	check(is_equal_approx(c.weapon_power, u.weapon_power) and is_equal_approx(c.armor, u.armor), "and give the same stats on the client")
+	check(absf(c.shield - 123.0) <= 1.0 and absf(c.shield_timer - 2.5) < 0.01, "shield and its timer")
+
+
+func test_adventurer_build_path() -> void:
+	var u := _shop_champion(SCRIBE, 160.0)
+	await ticks(2)
+	check(ItemShop.next_step(u) == _idx(&"apprentices_focus"), "the build starts with its starter")
+	u.buy_item(ItemShop.next_step(u))
+	u.gold = 200.0
+	var codex := _idx(&"runecasters_codex")
+	var step := ItemShop.next_step(u)
+	check(step != codex and Unit.ECONOMY.items[step - 1].kind == ItemDef.Kind.COMPONENT, "short of gold, the next step is a Codex part")
+	u.buy_item(step)
+	u.gold = 5000.0
+	check(ItemShop.next_step(u) == codex, "with the gold, the Codex itself (using the part)")
+	check(is_equal_approx(ItemShop.next_step_price(u), 1000.0 - 160.0), "and its price counts the part")
+
+
+## Bots with adventurer items buy along their builds, finished items included.
+func test_adventurer_bot_match() -> void:
+	ItemShop.use_adventurer(true)
+	var mc := MatchController.new()
+	mc.human_slot = false
+	world.add_child(mc)
+	mc.setup(authority, world)
+	mc.start()
+	await ticks(2)
+	for u: Unit in mc.champions:
+		u.gold = 3000.0
+	await secs(1.0)
+	var finished := 0
+	for u: Unit in mc.champions:
+		for it in u.items:
+			if it.kind == ItemDef.Kind.FINISHED:
+				finished += 1
+	check(finished >= 6, "bots at the fountain with gold buy finished items (%d)" % finished)
 
 
 func test_root() -> void:
