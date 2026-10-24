@@ -13,11 +13,14 @@ import math
 import bpy  # noqa: F401,I001  (bpy first: it makes mathutils importable)
 from mathutils import Vector
 
+import body_fit as bf
 import champion_kit as ck
 from champion_kit import TAU, Kit, base
 
 S = 0.98
 W = 1.28
+# Across-bone scale of the fitted body: a barrel chest and a heavy belly.
+GIRTH = {"thigh_l": (1.4, 1.35), "thigh_r": (1.4, 1.35), "shin_l": (1.3, 1.3), "shin_r": (1.3, 1.3), "hips": (1.4, 1.3), "spine": (1.5, 1.4), "chest": (1.55, 1.3), "neck": (1.4, 1.3)}
 
 NAMES = ck.BODY + ["axe"]
 
@@ -34,27 +37,32 @@ def build_model(rig, M):
     bn = rig.data.bones
     z = lambda v: v * S  # noqa: E731
 
-    # Torso: a broad bare chest and belly under a leather harness.
+    # Torso: the CC0 Blender Studio body (tools/blender/body_fit.py) fitted to
+    # this rig and widened, so the bare chest has real pecs, ribs and belly.
+    fitted = bf.fit(rig, GIRTH)
+    torso = ("hips", "spine", "chest", "neck")
     k = Kit("Torso", M)
-    prof = [(0.2, 0.95), (0.21, 1.04), (0.215, 1.14), (0.25, 1.26), (0.265, 1.35), (0.245, 1.43), (0.17, 1.5), (0.1, 1.55)]
-    k.lathe([(r * S, z(h)) for r, h in prof], "Skin", seg=28, sx=1.22, sy=0.86)
-    k.finish(rig, ["chest", "spine", "hips"], subsurf=1)
+    bf.add_faces(k, fitted, bf.region(fitted, lambda i, o, p: o in torso), "Skin", uv_scale=2.0)
+    k.finish(rig, ["chest", "spine", "hips", "neck"])
     k = Kit("Harness", M)
+
+    def on_skin(x, zz, front):
+        y = bf.surface_y(fitted, x, zz, torso, front)
+        return (y if y is not None else (0.2 if front else -0.2)) + (0.014 if front else -0.014)
+
     for sd in (-1.0, 1.0):
         a = Vector((sd * 0.17, 0, z(1.46)))
         bb = Vector((-sd * 0.2, 0, z(1.0)))
         front, back = [], []
         for i in range(9):
             p = a.lerp(bb, i / 8)
-            hh = p.z / S
-            r = next((rr for rr, h0 in reversed(prof) if h0 <= hh), prof[0][0]) * S
-            ry = r * 0.86 * math.sqrt(max(0.0, 1 - (p.x / (r * 1.22 + 0.01)) ** 2)) + 0.012
-            front.append(Vector((p.x, ry, p.z)))
-            back.append(Vector((p.x, -ry, p.z)))
+            front.append(Vector((p.x, on_skin(p.x, p.z, True), p.z)))
+            back.append(Vector((p.x, on_skin(p.x, p.z, False), p.z)))
         k.tube(front, [0.026] * 9, "Leather", seg=6, flat=0.35)
         k.tube(back, [0.026] * 9, "Leather", seg=6, flat=0.35)
-    k.sphere(Vector((0, 0.25 * 0.86 * S + 0.02, z(1.24))), 0.045, "Iron", scale=(1, 0.5, 1), u=12, v=8)
-    k.sphere(Vector((0, 0.25 * 0.86 * S + 0.04, z(1.24))), 0.02, "Bone", scale=(1, 0.6, 1.2), u=8, v=6)
+    chest_y = on_skin(0.0, z(1.24), True)
+    k.sphere(Vector((0, chest_y + 0.006, z(1.24))), 0.045, "Iron", scale=(1, 0.5, 1), u=12, v=8)
+    k.sphere(Vector((0, chest_y + 0.026, z(1.24))), 0.02, "Bone", scale=(1, 0.6, 1.2), u=8, v=6)
     # Wide belt, team loin panel, leather kilt of strips.
     k.lathe([(0.205 * S, z(0.92)), (0.215 * S, z(1.02))], "Leather", seg=30, sx=1.22, sy=0.9)
     k.box(Vector((0, 0.215 * 0.9 * S + 0.012, z(0.97))), (0.1, 0.02, 0.09), "Iron")
@@ -159,7 +167,7 @@ def build_model(rig, M):
             k.tube([top + Vector((sx * 0.07, dy, 0.1)), top + Vector((sx * 0.1, dy, 0.17))], [0.016, 0.002], "Bone", seg=5)
         k.finish(rig, "shoulder_" + side)
 
-    ck.limbs(rig, M, legs="Leather", boots="Fur", hands=None, leg_r=(0.11, 0.1, 0.08, 0.074), boot_scale=1.2, cuff="Fur")
+    bf.legs(rig, M, fitted, "Leather", "Fur", 1.2, cuff="Fur")
 
     # Two handed axe: a long haft, an iron crescent blade with a pale glowing
     # edge, a spike on the back and a bone pommel.

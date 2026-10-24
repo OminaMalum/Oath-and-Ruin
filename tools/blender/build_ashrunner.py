@@ -13,6 +13,7 @@ import math
 import bpy  # noqa: F401,I001  (bpy first: it makes mathutils importable)
 from mathutils import Vector
 
+import body_fit as bf
 import champion_kit as ck
 from champion_kit import TAU, Kit, base
 
@@ -166,7 +167,8 @@ def build_model(rig, M):
     k.finish(rig, "shoulder_l")
 
     # Legs: cloth trousers wrapped from the knee, soft leather boots.
-    ck.limbs(rig, M, legs="ClothDark", boots="Leather", hands=None, leg_r=(0.078, 0.066, 0.055, 0.05), boot_scale=0.92, cuff="Leather")
+    # The legs are the CC0 Blender Studio body's (tools/blender/body_fit.py), lean.
+    bf.legs(rig, M, bf.fit(rig, {"thigh_l": (0.95, 0.95), "thigh_r": (0.95, 0.95)}), "ClothDark", "Leather", 0.92, cuff="Leather")
     for side in ("l", "r"):
         knee = bn["shin_" + side].head_local
         k = Kit("KneePad_" + side, M)

@@ -194,3 +194,33 @@ def rim(kit, loop, radius, mname, seg=6, step=2):
     pts = pts + pts[:1]
     kit.tube(pts, [radius] * len(pts), mname, seg=seg, cap=False)
 
+
+
+def surface_y(fitted, x, zz, owners, front=True, reach=0.03):
+    """The body's surface in front of (or behind) the point (x, zz): the largest
+    (or smallest) y among kept vertices of the given owners near that x and z."""
+    vs, _, _, owner = fitted
+    ys = [p.y for i, p in enumerate(vs) if owner[i] in owners and abs(p.x - x) < reach and abs(p.z - zz) < reach]
+    if not ys:
+        return None
+    return max(ys) if front else min(ys)
+
+
+def legs(rig, M, fitted, mname, boots, boot_scale=1.0, cuff=None, offset=0.006):
+    """The body's legs as trousers (mname), with a wrapped cuff from mid shin to
+    the ankle and champion_kit boots. Stands in for champion_kit.limbs legs."""
+    bn = rig.data.bones
+    for side in ("l", "r"):
+        knee = bn["shin_" + side].head_local
+        ankle = bn["foot_" + side].head_local
+        names = ("thigh_" + side, "shin_" + side)
+        k = ck.Kit("Leg_" + side, M)
+        add_faces(k, fitted, region(fitted, lambda i, o, p: o in names and p.z > ankle.z - 0.02), mname, offset=offset, uv_scale=3.0)
+        if cuff:
+            # Wrapped from mid shin down, following the calf.
+            top = knee.lerp(ankle, 0.45).z
+            wrap = region(fitted, lambda i, o, p: o == "shin_" + side and ankle.z - 0.02 < p.z < top)
+            for loop in add_faces(k, fitted, wrap, cuff, offset=offset + 0.012, uv_scale=3.0):
+                rim(k, loop, 0.008, cuff)
+        k.finish(rig, ["thigh_" + side, "shin_" + side])
+        ck.boot(rig, M, side, boots, boot_scale)

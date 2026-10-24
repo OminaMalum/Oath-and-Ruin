@@ -389,9 +389,18 @@ def rest_feet(rig):
 
 
 def limbs(rig, M, legs="Cloth", boots="Leather", hands="Skin", leg_r=(0.085, 0.075, 0.06, 0.055), boot_scale=1.0,
-          cuff="Leather", smooth=1):
-    """Legs, boots and hands for the shared skeleton."""
+          cuff="Leather", smooth=1, fit=True):
+    """Legs, boots and hands for the shared skeleton. fit: the legs are the CC0
+    body's (body_fit.py), girth from leg_r; False gives the old tube legs."""
     b = rig.data.bones
+    if fit:
+        import body_fit as bf
+        g = leg_r[0] / 0.085
+        bf.legs(rig, M, bf.fit(rig, {n + s: (g, g) for n in ("thigh_", "shin_") for s in ("l", "r")}), legs, boots, boot_scale, cuff=cuff)
+        for side in ("l", "r"):
+            if hands:
+                hand(rig, M, side, hands)
+        return
     for side in ("l", "r"):
         hip = b["thigh_" + side].head_local
         knee = b["shin_" + side].head_local
