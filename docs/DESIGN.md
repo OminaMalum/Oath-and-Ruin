@@ -486,7 +486,14 @@ Grapple rules (`Unit.grapple_endpoint`, `GrappleAnchors`):
   weaken on the wire). Bots grapple to close on a hurt champion or to escape
   home when an enemy champion is close, and step sideways out of lines.
 
-P4_SOAK
+Soaks (adventurer items): the 24 seed baseline (seeds 18 to 41) reproduces
+the Phase 3 result exactly (sides 10/14, median 10.1 min, 18.7 kills), so the
+new rules leave the other nine untouched. 18 mirrored matches with Chainbound
+in the lineup all ended (medians 8.5 to 10.9 min). Her team kill share is 51%
+beside Oathwarden and Lanternkeeper (she is the only damage dealer there), 23%
+and 25% beside carries, under the 55% line. She dies often (4.7 to 5.7 deaths
+a game in two lineups): the bots commit with the chain, which is the
+counterplay working. Bots grapple about 20 times a match each.
 
 ## Presentation and sound (review batches 1 to 3)
 
