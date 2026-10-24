@@ -18,6 +18,14 @@ var _circles := {}   # SimArea -> {node, mat, sigil, sigil_mat, motes}
 var _fading: Array[Dictionary] = []  # {node, mat, t, life, kind, grow}
 static var _streaks: NoiseTexture2D
 static var _dot_mats := {}
+## Glow budget for busy fights: 1 with a few effects alive, down to 0.5 as
+## they pile up, so a crowded teamfight stays readable instead of turning
+## into one white bloom. New additive materials and flash lights scale by it.
+static var crowd := 1.0
+## No single additive effect brighter than this (times its colour).
+const ENERGY_CAP := 2.6
+## At most this many flash lights alive at once; extra flashes skip the light.
+const MAX_FLASH_LIGHTS := 6
 
 
 func setup(a: CombatAuthority, wv: WorldView) -> void:
@@ -239,6 +247,7 @@ func _on_area_detonated(ar: CombatAuthority.SimArea) -> void:
 
 
 func _process(delta: float) -> void:
+	crowd = clampf(sqrt(10.0 / maxf(10.0, float(_bolts.size() + _circles.size() + _fading.size()))), 0.5, 1.0)
 	for p: CombatAuthority.SimProjectile in _bolts:
 		var b: Dictionary = _bolts[p]
 		var host: Node3D = b.host
@@ -389,6 +398,13 @@ func _pillar(at: Vector3, col: Color, radius: float, height: float, life: float)
 
 
 func _flash(at: Vector3, col: Color, energy: float, life: float) -> void:
+	var lights := 0
+	for f in _fading:
+		if f.kind == "light":
+			lights += 1
+	if lights >= MAX_FLASH_LIGHTS:
+		return
+	energy *= crowd
 	var l := OmniLight3D.new()
 	l.light_color = col.lightened(0.2)
 	l.omni_range = 5.0
@@ -435,6 +451,7 @@ static func _add_mat(col: Color, energy: float) -> StandardMaterial3D:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	energy = minf(energy, ENERGY_CAP) * crowd
 	m.albedo_color = Color(col.r * energy, col.g * energy, col.b * energy, 1.0)
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	m.no_depth_test = false
