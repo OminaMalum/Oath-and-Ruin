@@ -125,14 +125,14 @@ static func environment(parent: Node) -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.75
+	env.ambient_light_energy = 0.4
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.0
-	env.tonemap_white = 6.0
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_exposure = 1.1
+	env.tonemap_white = 8.0
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.6
+	env.ssao_intensity = 1.8
 	env.glow_enabled = true
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.04
@@ -146,24 +146,28 @@ static func environment(parent: Node) -> void:
 	env.fog_aerial_perspective = 0.35
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 1.15
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.05
 	var we := WorldEnvironment.new()
 	we.environment = env
 	parent.add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
-	sun.light_color = Color(1.0, 0.86, 0.66)
-	sun.light_energy = 1.35
+	sun.light_color = Color(1.0, 0.82, 0.6)
+	sun.light_energy = 1.7
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.5
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	sun.directional_shadow_max_distance = 70.0
 	sun.directional_shadow_blend_splits = true
-	sun.rotation_degrees = Vector3(-38, -38, 0)
+	# Low golden hour sun from the side of the lane, so neither team fights
+	# into it and every unit gets a lit and a shaded half.
+	sun.rotation_degrees = Vector3(-28, 90, 0)
 	parent.add_child(sun)
 	if "--ultra" in OS.get_cmdline_user_args():
 		_ultra(env, sun, parent)
+	if "--bench" in OS.get_cmdline_user_args():
+		parent.add_child(BenchProbe.new())
 
 
 ## Godot at its best, for comparing looks on a strong PC (start with -- --ultra):
