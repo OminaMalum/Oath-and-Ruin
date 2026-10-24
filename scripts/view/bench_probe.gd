@@ -4,7 +4,7 @@ extends Node
 ## --seed, --spectate --follow=N and --warp=S so the same fight is on screen
 ## every run). Waits for the warp to end, then records frame time, GPU time,
 ## draw calls, objects, primitives, lights and live particle emitters for
-## BENCH_SECONDS of real time, writes the summary to user://bench.txt, prints
+## BENCH_SECONDS of real time, writes the summary to bench.txt, prints
 ## it and quits. Reads the render state only; changes nothing in the match.
 
 const BENCH_SECONDS := 20.0
@@ -73,8 +73,13 @@ func _finish() -> void:
 	lines.append("emitters   median %d  max %d   omni lights max %d" % [_pct(_emitters, 0.5), _pct(_emitters, 1.0), _pct(_lights, 1.0)])
 	var text := "\n".join(lines)
 	print(text)
-	var f := FileAccess.open("user://bench.txt", FileAccess.WRITE_READ if FileAccess.file_exists("user://bench.txt") else FileAccess.WRITE)
-	if f:
-		f.seek_end()
-		f.store_string(text + "\n\n")
+	# user://bench.txt, and next to the exe in an exported build so it is easy to find.
+	var paths := ["user://bench.txt"]
+	if not OS.has_feature("editor"):
+		paths.append(OS.get_executable_path().get_base_dir().path_join("bench.txt"))
+	for path in paths:
+		var f := FileAccess.open(path, FileAccess.READ_WRITE if FileAccess.file_exists(path) else FileAccess.WRITE)
+		if f:
+			f.seek_end()
+			f.store_string(text + "\n\n")
 	get_tree().quit()
