@@ -352,6 +352,184 @@ structure damage. Deaths were 62 to 86 per champion. Zero script errors.
 - **Results**: Victory or Defeat, how and when it ended, then a table per team (level, kills and deaths, damage to
   champions, gold), structures and Shrinebearer claims, and Play again / Main menu buttons (F5 and M still work).
 
+## The fourth ability, F (added 2026-10-23)
+
+Every champion now has four abilities: Q, E, F and the ultimate R. F is a
+regular ability (no level lock, no upgrade). It lives in slot 4 so slot 3
+stays the ultimate everywhere. Each F reuses a mechanic the sim already has,
+so no new rules, only new numbers in .tres files.
+
+| Champion | F | What it is for |
+|---|---|---|
+| Ruinscribe | Fold Step: 6 m blink, no damage, 14 s | Escape for the squishy mage |
+| Oathwarden | Shield Rush: 6 m dash, 40 damage, 30% slow | Engage |
+| Ashrunner | Smoke Veil: 3.5 m cloud, allies 30% faster, 20% less damage | Team escape |
+| Lanternkeeper | Searing Light: slow beam, 40 damage, 0.6 s stun | Peel |
+| Thornwright | Hunter's Roll: 5 m roll, no damage, 10 s | Keep range |
+| Gravebinder | Withering Curse: piercing line, 60 damage, 30% slow | Zone |
+| Barrowking | Barrow Hide: 2.5 m, 35% less damage for 3 s | Frontline |
+| Veilsinger | Discord: 3 m circle, 50 damage, 35% slow | Poke |
+| Stormscald | Arc Bolt: piercing line, 80 damage, 9 s | Damage |
+
+The bar shows the slots in keyboard order: LMB, Q, E, F, R. Bots use F with
+the rules they already have: a damage dash to engage, a plain step only as an
+escape (a champion close, health under 45%), wards in a fight, stuns on a
+casting or fleeing champion. A model may leave out the `ability_4` clip; the
+asset contract only checks it when it is there.
+
+Measured (headless soak, 24 seeds, with F): every match ended, sides 12 to 12,
+median 10.5 min (5.9 to 12.6), 19 kills a match. Highest team kill share is
+Stormscald at 45%, all under the 55% line.
+
+## Adventurer items (Phase 2 of the roster brief, added 2026-10-24)
+
+A second shop catalog sits beside the four classic items. The menu's Items
+toggle picks one (saved in settings; `--items=adventurer|classic` on the
+command line; network play uses classic). The classic catalog and its tests
+are unchanged, so old soaks stay comparable.
+
+**Rules.** Six slots. One starter, one pair of boots. Components take a slot
+and can be doubled. A finished item or boots uses owned recipe parts, so you
+pay the total minus those parts, in one step: a failed buy changes nothing.
+Selling pays 70%, at the fountain or while dead. Buying never heals (health
+keeps its fraction). Prices are the brief's list at 40%, because a match
+pays about 3,000 gold per champion.
+
+**Stats.** Every ability scales with one power: the champion's (weapon for
+Oathwarden, Ashrunner, Thornwright, Barrowking; spell for the rest) unless
+the ability sets its own `scaling`. Damage x (100 + power)%. Champions take
+weapon damage x 100 / (100 + armor) and spell damage x 100 / (100 + magic
+resist). Ability cooldowns x 100 / (100 + haste), item haste capped at 40.
+Attack speed shortens basic attacks only. Classic item bonuses still work.
+
+**Shields.** A shield soaks damage before health and ends with its timer.
+Shields never stack: the bigger one stays. Damage reduction from wards was
+already "strongest one counts".
+
+**Item passives.** Duelist's Measure (third basic hit on one champion adds
+35), Runecaster's Codex (two different abilities on one champion within 4 s
+add 45, 6 s cooldown per target), Bastion Plate (a champion hit that drops
+you under 35% gives a 100 + 10% max health shield for 4 s, 45 s cooldown),
+Lantern of Returning (your ability heals on allies under 35% are 30%
+stronger). Item damage never triggers item passives. Passive cooldowns live
+on the champion, so selling and buying again does not reset them.
+
+**Shop.** With adventurer items the shop frees the mouse: click to buy, right
+click an owned item to sell, 1 buys the suggested next step on the
+champion's build. Bots follow `adventurer_build` in each champion file and
+buy a finished item's parts first when short of gold (ItemShop.next_step).
+
+**Network.** Snapshot version 6 carries the item list (not a bit mask, since
+components can be doubled) and shields.
+
+Measured (headless soak, 24 seeds, adventurer items): every match ended,
+sides 11 to 13, median 10.1 min (6.4 to 15.5; classic 10.5), 20 kills a
+match, first finished item at a median 4.0 min, 1.7 finished items per
+champion by the end. A first pass let item power raise structure damage by
+29% and cut matches to 8.9 min, so power now counts only against units.
+Stormscald sits at the 55% kill share line (12 games): watch it. The same
+seeds with classic items gave exactly the old results.
+
+## Phase 3: deeper kits and lore (added 2026-10-24)
+
+Three passives from the roster brief replace the old ones (Inscribed,
+Resolve, Steady Aim). The Q, E, F and R abilities stay as they were.
+
+| Champion | New passive | How it works |
+|---|---|---|
+| Ruinscribe | Marginalia | Binding Glyph inscribes champions it hits for 4 s. Unmaking Lance on an inscribed champion wipes the mark and gives her a 70 shield for 3 s. |
+| Oathwarden | Stand Behind Me | A Q or E cast primes his next basic hit on a champion (6 s). That hit shields the most hurt allied champion within 8 m (him if nobody else) for 90, 3 s. 8 s cooldown. |
+| Thornwright | Patient Quarry | Longbow hits on a champion stack up to 3 marks (4 s). Charged Shot spends them for 15% more damage each. |
+
+Marks only go on champions (and training dummies). Shields use the Phase 2
+rule: the bigger shield stays. Every champion file now carries a character
+name, title, ancestry and two lines of story from the brief, shown in the
+menu under the champion picks. Lore is text only; no ancestry stats.
+
+Soak f1 (24 seeds, adventurer items): every match ended, sides 10/14, median 10.1 min (6.2 to 15.5), 18.7 kills per match. Highest team kill share Stormscald 54%, Gravebinder 52%, both under the 55% line. Oathwarden sits at 15% kill share, which fits a frontline shield role.
+
+## Phase 4: Chainbound prototype (added 2026-10-24)
+
+Veyra Sable, the Broken Covenant (tiefling warlock), the tenth champion. She
+is a **prototype**: pickable in the menu (its own row under the grid) and with
+`--lineup`, but never drawn at random, so seeded bot matches stay comparable
+with earlier builds. She borrows the Ashrunner body until the graphics pass
+gives her one of her own.
+
+| Slot | Ability | How it works |
+|---|---|---|
+| Passive | Borrowed Momentum | A Chain Traverse that carries her at least 4 m primes her next basic hit on a champion within 3 s for 60% more. One stored hit, no stacking, no chain refund. |
+| LMB | Pactlash | Short narrow chain-blade cut (3.2 m, 70 degrees). |
+| Q | Debt Collector | 9 m chain thrust: 55 damage and a 30% slow for 1 s on the first enemy. Pulls nobody. |
+| E | Chain Traverse | Grapple to a marked wall within 12 m. Two charges, each back after 8 s, one at a time. A second cast in flight hooks another wall and redirects. |
+| F | Break the Seal | Wide close sweep: 45 damage, champions struck deal 30% less for 2.5 s. No dash, stun or heal. |
+| R | Covenant Severed | A 14 m by 2.4 m chain line shows for 1 s, then 160 damage and a 1 s root. Does not refresh E. |
+
+Grapple rules (`Unit.grapple_endpoint`, `GrappleAnchors`):
+- Legal surfaces are marked: walls at least 2 m tall standing on the floor
+  inside the playable stretch get `Unit.LAYER_ANCHOR`. The floor, the base
+  plazas (spawn and fountain) and everything without collision (trees,
+  banners, rubble) are never anchors. Units are never anchors.
+- The chain flies flat from chest height. The first world surface it meets
+  must be a marked wall face, so it never passes through a wall.
+- The landing point stands off the wall by the body radius, must have ground
+  under it, and the body's capsule must fit along the whole route. The route
+  is checked again at release, from where she is then.
+- A press with no valid anchor spends nothing, shows why ("No wall in reach",
+  "The chain cannot hold there", "The way to that wall is blocked") and waits
+  0.3 s before the next try.
+- Rooted: no launch, the charge stays. A stun or root during travel stops her
+  where she is; the launched charge stays spent. Death clears it.
+- She stays targetable in flight. The camera simply follows.
+- New sim pieces: `AbilityDef.max_charges` and `charge_lock`, line shaped
+  ground areas (`line_width`), a weaken status, snapshot version 7 (charges and
+  weaken on the wire). Bots grapple to close on a hurt champion or to escape
+  home when an enemy champion is close, and step sideways out of lines.
+
+Soaks (adventurer items): the 24 seed baseline (seeds 18 to 41) reproduces
+the Phase 3 result exactly (sides 10/14, median 10.1 min, 18.7 kills), so the
+new rules leave the other nine untouched. 18 mirrored matches with Chainbound
+in the lineup all ended (medians 8.5 to 10.9 min). Her team kill share is 51%
+beside Oathwarden and Lanternkeeper (she is the only damage dealer there), 23%
+and 25% beside carries, under the 55% line. She dies often (4.7 to 5.7 deaths
+a game in two lineups): the bots commit with the chain, which is the
+counterplay working. Bots grapple about 20 times a match each.
+
+## Phase 5: the other six kits and the full item catalog (added 2026-10-24)
+
+Items (adventurer catalog, 30 items, the twelve new ones appended so old
+indices hold): Giantfall Spear, Ranger's Covenant, Headsman's Writ, Ashen
+Brand, Cinder Reliquary, Witchglass Lens, Stormthread Spindle, Spellward
+Mantle, Cairnheart, Pilgrim's Bulwark, Cantor's Thread, Oathkeeper's Harness.
+Prices stay at 40% of the brief. Healing reduction (Ashen, Witchglass) takes
+the strongest active cut, burns refresh and do not stack, item damage never
+triggers item damage, Bastion and Spellward share one shield cooldown. The
+shop has two pages: parts and boots, and finished items in four columns.
+Bot builds follow the brief's teaching paths.
+
+Passives, reconciled with the kits that exist (the brief's slot names differ):
+- Ashrunner, Exposed Seam: a hit from behind, or on a target Ember Knife cut
+  in the last 3 s, deals 40% more. Once every 6 s per target. Replaces Ember.
+- Lanternkeeper, Keep the Flame: healing an allied champion in a fight stores
+  an ember (once per cast, up to 3); the next Lantern Light shields everyone
+  in it for 25 per ember. Replaces Kindled (the aura heal).
+- Barrowking, Ancestral Fury: 10 fury per hit dealt and 6 per hit taken on
+  champions; at 100 the next Q heals 12% of max health once; fades after 3 s
+  out of the fight. Replaces Barrow Blood.
+- Veilsinger, Refrain: Q then E (or E then Q) within 6 s empowers the second:
+  War Song wider and quicker, Lure longer and further. Replaces Encore.
+- Stormscald, Residual Charge: Arc Bolt (F) or Tempest hitting a champion
+  stores a charge (once per cast, up to 2); the next Called Lightning (his
+  delayed ground strike) deals 20% more per charge. Replaces Eye of the Storm.
+- Gravebinder keeps Soul Tithe until summons exist (Names Remembered needs
+  Willing Dead). That lands with Phase 6, next to the Brasswright sentry.
+- The HUD shows embers, fury, charges and the waiting half of a refrain.
+  Snapshot version 8 carries passive stacks and the refrain.
+
+Soak (adventurer items, seeds 18 to 41): all 24 ended, sides 10/14, median
+10.4 min (7.2 to 16.0), 23.2 kills a match (was 18.7). Highest team kill share
+Gravebinder 54%, Thornwright 49%: under the 55% line.
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

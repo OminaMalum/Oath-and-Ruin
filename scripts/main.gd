@@ -16,11 +16,12 @@ extends Node3D
 ##   --champion=ID                      any id in data/champions (match and court)
 ##   --seed=N                           match: bot seed (lineup and bot choices); random when left out
 ##   --difficulty=0|1|2                 match: enemy bots Easy, Normal or Hard (default: the saved setting)
+##   --items=adventurer|classic         shop catalog (default: the saved setting; network play: classic)
 ##   --pause                            open the pause menu (screenshots)
 ##   --settings                         menu: open the settings panel (screenshots)
 ##   --lineup=A,B,C                     match: these three champions on both teams
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
-##   --shop                             open the shop panel (screenshots)
+##   --shop[=finished]                  open the shop panel (screenshots), on its second page
 ##   --scoreboard                       show the scoreboard (screenshots)
 ##   --warp=S                           run without drawing until S seconds (needs --fixed-fps 60)
 ##   --follow=N                         spectate: follow champion N (0-2 Oath, 3-5 Ruin)
@@ -56,6 +57,11 @@ func _ready() -> void:
 	Settings.load_once()
 	Settings.apply()
 	_parse_args()
+	# One catalog for the whole match. Network peers default to classic so a
+	# server and its clients always agree.
+	var net_play := args.has("server") or args.has("connect")
+	var items_arg: String = args.get("items", "classic" if net_play else ("adventurer" if Settings.adventurer_items else "classic"))
+	ItemShop.use_adventurer(items_arg == "adventurer")
 	if args.has("champion"):
 		Session.champion = StringName(args.champion)
 	var mode: String = args.get("mode", Session.mode)
@@ -71,7 +77,9 @@ func _ready() -> void:
 			layer.add_child(menu)
 			menu.chosen.connect(_on_menu)
 			return
-	add_child(LaneMapBuilder.new() if mode == "match" else ArenaBuilder.new())
+	var map: Node3D = LaneMapBuilder.new() if mode == "match" else ArenaBuilder.new()
+	add_child(map)
+	GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0 if mode == "match" else INF)
 	authority = CombatAuthority.new()
 	authority.name = "CombatAuthority"
 	add_child(authority)
@@ -126,7 +134,9 @@ func _start_match() -> void:
 	else:
 		rig.follow_unit_yaw = true
 	rig.audit = args.has("camaudit")
-	HumanController.shop_open = args.has("shop")
+	HumanController.shop_open = false
+	if args.has("shop"):
+		HumanController.set_shop(true)
 	MatchHud.force_scoreboard = args.has("scoreboard")
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -265,6 +275,8 @@ func _setup_presentation(local_unit: Unit) -> void:
 	hud = Hud.new()
 	layer.add_child(hud)
 	hud.setup(authority, local_unit, rig, bot if net == null and match_ctl == null else null)
+	if args.get("shop", "") == "finished":
+		hud.shop_tab = 1  # screenshots of the second shop page
 	if DisplayServer.get_name() != "headless" and not rig.follow_unit_yaw:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var top := CanvasLayer.new()

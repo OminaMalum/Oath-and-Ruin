@@ -6,23 +6,30 @@
 [ext_resource type="Resource" path="res://data/abilities/grave_roar.tres" id="4_a"]
 [ext_resource type="Resource" path="res://data/abilities/barrow_charge.tres" id="5_a"]
 [ext_resource type="Resource" path="res://data/abilities/kings_wrath.tres" id="6_a"]
+[ext_resource type="Resource" path="res://data/abilities/barrow_hide.tres" id="9_f"]
 
 [resource]
 script = ExtResource("1_ch")
 id = &"barrowking"
 display_name = "Barrowking"
 role = "Frontline"
+hero_name = "Torvald Cairn"
+title = "King Without a Kingdom"
+ancestry = "Half-orc barbarian"
+lore = "His crown rules a kingdom that lives only in burial songs. His ancestors demand conquest; he wants to earn them peace."
 look = 13
 max_health = 860.0
 move_speed = 5.85
 fountain_heal = 80.0
 basic_attack = ExtResource("3_b")
-abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a")])
-passive = 7
-passive_name = "Barrow Blood"
-passive_description = "Below half health the Barrowking regains 14 health a second."
-passive_value = 14.0
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("9_f")])
+passive = 16
+passive_name = "Ancestral Fury"
+passive_description = "Fighting champions fills Fury (10 per hit dealt, 6 per hit taken). At 100, the next Grave Roar heals 12% of max health. Fury fades after 3 s out of the fight."
+passive_value = 0.12
 passive_range = 0.0
 primary_color = Color(0.36, 0.3, 0.24, 1)
 accent_color = Color(0.86, 0.8, 0.66, 1)
 item_build = Array[StringName]([&"oathbound_plate", &"wayfarer_greaves", &"ash_hourglass", &"ember_edge"])
+adventurer_build = Array[StringName]([&"trailwardens_token", &"ashen_brand", &"ironstride_boots", &"cairnheart"])
+power = 0

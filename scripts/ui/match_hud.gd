@@ -61,12 +61,13 @@ func _draw() -> void:
 		_small_bar(Rect2(x + 64, 50, 56, 8), co.health / co.max_health if co.alive else 0.0, col)
 	_text(Vector2(cx - 220, 74), "tower  core", 14, Color(0.85, 0.85, 0.8), HORIZONTAL_ALIGNMENT_LEFT)
 	_marker()
-	_objective_marker(vs)
+	if not HumanController.shop_open:
+		_objective_marker(vs)
 	if _banner_t > 0.0:
 		_text(Vector2(0, 128), _banner, 30, Color(_banner_col, clampf(_banner_t, 0.0, 1.0)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if match_ctl.over:
 		_results(vs)
-	elif match_ctl.authority.time < INTRO_TIME:
+	elif match_ctl.authority.time < INTRO_TIME and not HumanController.shop_open:
 		_intro(vs, match_ctl.authority.time)
 	elif force_scoreboard or Input.is_action_pressed("scoreboard"):
 		_scoreboard(vs)
@@ -111,7 +112,11 @@ func _scoreboard(vs: Vector2) -> void:
 			var names := PackedStringArray()
 			for it in u.items:
 				names.append(it.short_name)
-			_text(Vector2(x + 710, ry + 36), ", ".join(names) if names.size() > 0 else "none yet", 22,
+			var list := ", ".join(names) if names.size() > 0 else "none yet"
+			var fs := 22
+			while fs > 15 and ThemeDB.fallback_font.get_string_size(list, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w - 730:
+				fs -= 1
+			_text(Vector2(x + 710, ry + 36), list, fs,
 					Color(0.92, 0.9, 0.84) if names.size() > 0 else Color(0.55, 0.53, 0.5), HORIZONTAL_ALIGNMENT_LEFT, w - 730)
 			row += 1
 
@@ -124,7 +129,7 @@ func _small_bar(r: Rect2, f: float, col: Color) -> void:
 ## A diamond over the next enemy structure on the lane, so the destination is
 ## always findable from behind the champion. Clamped to the screen edge.
 func _marker() -> void:
-	if rig == null or rig.camera == null or match_ctl.over:
+	if rig == null or rig.camera == null or match_ctl.over or HumanController.shop_open:
 		return
 	var enemy := 1
 	var target: Unit = match_ctl.towers[enemy] if match_ctl.towers[enemy].alive else match_ctl.cores[enemy]

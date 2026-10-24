@@ -9,6 +9,7 @@ const KEYS := {
 	"ability_1_preview": [KEY_Q],
 	"ability_2": [KEY_E],
 	"ability_3": [KEY_R],
+	"ability_4": [KEY_F],
 	"upgrade_1": [KEY_1],
 	"upgrade_2": [KEY_2],
 	"shop": [KEY_B],

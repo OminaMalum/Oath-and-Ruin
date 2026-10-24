@@ -60,6 +60,23 @@ func _ready() -> void:
 	left.add_child(grid)
 	var row := grid
 	var group := ButtonGroup.new()
+	# Who the picked champion is: name, title, class and a few lines of story.
+	var who := Label.new()
+	who.add_theme_font_size_override("font_size", 24)
+	who.add_theme_color_override("font_color", Color(0.92, 0.84, 0.66))
+	var story := Label.new()
+	story.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	story.custom_minimum_size = Vector2(519, 0)
+	story.add_theme_font_size_override("font_size", 20)
+	story.add_theme_color_override("font_color", Color(0.85, 0.82, 0.76))
+	var show_lore := func(id: StringName) -> void:
+		var d := load("res://data/champions/%s.tres" % id) as ChampionDef
+		if d == null or d.hero_name.is_empty():
+			who.text = ""
+			story.text = ""
+			return
+		who.text = "%s, %s" % [d.hero_name, d.title]
+		story.text = "%s.  %s" % [d.ancestry, d.lore]
 	for c in [["Ruinscribe", "Ranged caster", &"ruinscribe"], ["Oathwarden", "Frontline", &"oathwarden"], ["Ashrunner", "Skirmisher", &"ashrunner"],
 			["Lanternkeeper", "Support", &"lanternkeeper"], ["Thornwright", "Marksman", &"thornwright"], ["Gravebinder", "Controller", &"gravebinder"],
 			["Barrowking", "Frontline", &"barrowking"], ["Veilsinger", "Support", &"veilsinger"], ["Stormscald", "Spellcaster", &"stormscald"]]:
@@ -71,8 +88,27 @@ func _ready() -> void:
 		b.add_theme_font_size_override("font_size", 22)
 		var id: StringName = c[2]
 		b.button_pressed = Session.champion == id
-		b.pressed.connect(func() -> void: Session.champion = id)
+		b.pressed.connect(func() -> void:
+			Session.champion = id
+			show_lore.call(id))
 		row.add_child(b)
+	# Prototype champions: playable, marked as unfinished, never drawn at random.
+	for c in [["Chainbound", "Prototype", &"chainbound"]]:
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_group = group
+		b.text = "%s  (%s)" % [c[0], c[1]]
+		b.custom_minimum_size = Vector2(519, 52)
+		b.add_theme_font_size_override("font_size", 22)
+		var id: StringName = c[2]
+		b.button_pressed = Session.champion == id
+		b.pressed.connect(func() -> void:
+			Session.champion = id
+			show_lore.call(id))
+		left.add_child(b)
+	left.add_child(who)
+	left.add_child(story)
+	show_lore.call(Session.champion)
 	# Enemy bot difficulty: three toggles in a row, saved with the settings.
 	var diff_row := HBoxContainer.new()
 	diff_row.add_theme_constant_override("separation", 12)
@@ -99,6 +135,31 @@ func _ready() -> void:
 			record.text = Settings.record_text())
 		diff_row.add_child(d)
 	right.add_child(diff_row)
+	# Shop catalog: the adventurer items or the four classic ones.
+	var items_row := HBoxContainer.new()
+	items_row.add_theme_constant_override("separation", 12)
+	items_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var items_label := Label.new()
+	items_label.text = "Items"
+	items_label.add_theme_font_size_override("font_size", 24)
+	items_label.add_theme_color_override("font_color", Color(0.85, 0.80, 0.70))
+	items_row.add_child(items_label)
+	var items_group := ButtonGroup.new()
+	for opt in [["Adventurer", true], ["Classic", false]]:
+		var ib := Button.new()
+		ib.toggle_mode = true
+		ib.button_group = items_group
+		ib.text = opt[0]
+		ib.custom_minimum_size = Vector2(170, 56)
+		ib.add_theme_font_size_override("font_size", 22)
+		ib.button_pressed = Settings.adventurer_items == opt[1]
+		var on: bool = opt[1]
+		ib.pressed.connect(func() -> void:
+			Settings.adventurer_items = on
+			Settings.save()
+			ItemShop.use_adventurer(on))
+		items_row.add_child(ib)
+	right.add_child(items_row)
 	var start: Button
 	for item in [["3v3 Bot Match", "match"], ["Training Court", "court"], ["Settings", "settings"], ["Quit", "quit"]]:
 		var b := Button.new()

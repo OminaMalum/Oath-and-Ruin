@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"pilgrims_seal"
+display_name = "Pilgrim's Seal"
+short_name = "Seal"
+description = "Starter. +60 health, +6 haste"
+cost = 160
+kind = 2
+health = 60.0
+haste = 6.0

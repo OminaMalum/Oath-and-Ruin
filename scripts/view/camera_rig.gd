@@ -79,7 +79,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		var k := sensitivity * Settings.mouse_sensitivity
 		yaw = wrapf(yaw - m.relative.x * k, -PI, PI)
 		pitch = clampf(pitch - m.relative.y * k, deg_to_rad(min_pitch_deg), deg_to_rad(max_pitch_deg))
-	elif event is InputEventMouseButton and event.pressed and not mouse_captured():
+	elif event is InputEventMouseButton and event.pressed and not mouse_captured() \
+			and not (HumanController.shop_open and ItemShop.adventurer()):
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 

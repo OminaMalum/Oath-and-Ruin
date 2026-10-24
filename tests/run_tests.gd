@@ -18,6 +18,7 @@ const GRAVE := preload("res://data/champions/gravebinder.tres")
 const BARROW := preload("res://data/champions/barrowking.tres")
 const VEIL := preload("res://data/champions/veilsinger.tres")
 const STORM := preload("res://data/champions/stormscald.tres")
+const CHAIN := preload("res://data/champions/chainbound.tres")
 const DT := 1.0 / 60.0
 
 var failures: int = 0
@@ -44,12 +45,19 @@ func _run() -> void:
 		"test_upgrade_choice", "test_roster",
 		"test_second_slot_and_pierce", "test_stun", "test_knife_slow",
 		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
-		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember", "test_last_hit_xp",
+		"test_marginalia", "test_stand_behind", "test_exposed_seam", "test_last_hit_xp",
 		"test_gold_and_shop", "test_items_change_stats", "test_bots_buy_items", "test_recall",
 		"test_batch_b_data", "test_root", "test_pull", "test_bramble_field", "test_mark",
-		"test_lantern_heals", "test_dawnlight", "test_longshot", "test_tithe",
-		"test_batch_c_data", "test_taunt", "test_charm", "test_war_song", "test_encore", "test_storm_wall",
-		"test_tempest", "test_barrow_blood", "test_kings_wrath",
+		"test_lantern_heals", "test_dawnlight", "test_quarry", "test_tithe",
+		"test_batch_c_data", "test_taunt", "test_charm", "test_war_song", "test_refrain", "test_storm_wall",
+		"test_tempest", "test_ancestral_fury", "test_passive_snapshot", "test_keep_the_flame", "test_residual_charge", "test_kings_wrath",
+		"test_fourth_ability_data", "test_fold_step", "test_searing_light", "test_smoke_veil",
+		"test_adventurer_shop", "test_adventurer_stats", "test_item_passives", "test_adventurer_snapshot",
+		"test_adventurer_build_path", "test_adventurer_bot_match",
+		"test_chainbound_data", "test_grapple_to_wall", "test_grapple_rejects", "test_grapple_interrupt",
+		"test_grapple_redirect", "test_grapple_charges", "test_momentum", "test_weaken", "test_covenant_line",
+		"test_anchor_marking", "test_chainbound_snapshot", "test_chainbound_bot_match",
+		"test_items_weapon", "test_items_spell", "test_items_defence", "test_items_support", "test_item_catalog",
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
@@ -59,6 +67,7 @@ func _run() -> void:
 		var before := failures
 		await call(t)
 		print(("PASS " if failures == before else "FAIL ") + t)
+		ItemShop.use_adventurer(false)
 		world.queue_free()
 		await process_frame
 	print("%d checks, %d failures" % [checks, failures])
@@ -89,9 +98,9 @@ func _make_world(with_wall := false) -> void:
 	world.add_child(authority)
 
 
-func add_wall(pos: Vector3, size: Vector3) -> void:
+func add_wall(pos: Vector3, size: Vector3, anchor := false) -> void:
 	var b := StaticBody3D.new()
-	b.collision_layer = Unit.LAYER_WORLD
+	b.collision_layer = Unit.LAYER_WORLD | (Unit.LAYER_ANCHOR if anchor else 0)
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = size
@@ -532,6 +541,7 @@ func test_melee_arc() -> void:
 func test_dash() -> void:
 	var me := spawn(RUNNER, 0, Vector3.ZERO)
 	var crossed := spawn(DUMMY, 1, Vector3(0, 0, -4))
+	aim(crossed, Vector3(0, 0, 10))  # face the runner: no Exposed Seam
 	await ticks(2)
 	aim(me, Vector3(0, 0, -10))
 	me.apply_slow(0.5, 5.0)
@@ -715,6 +725,7 @@ func test_stun() -> void:
 func test_knife_slow() -> void:
 	var me := spawn(RUNNER, 0, Vector3.ZERO)
 	var target := spawn(SCRIBE, 1, Vector3(0, 0, -6))
+	aim(target, Vector3(0, 0, 10))  # face the runner: no Exposed Seam
 	await ticks(2)
 	aim(me, target.global_position)
 	cmd(me).buttons = UnitCommand.BTN_ABILITY_2
@@ -811,6 +822,7 @@ func test_ashfall() -> void:
 	var me := spawn(RUNNER, 0, Vector3.ZERO)
 	var crossed := spawn(SCRIBE, 1, Vector3(0, 0, -5))
 	var missed := spawn(SCRIBE, 1, Vector3(4, 0, -5))
+	aim(crossed, Vector3(0, 0, 10))  # face the runner: no Exposed Seam
 	await ticks(2)
 	_level_up(me, Unit.ULT_LEVEL)
 	aim(me, Vector3(0, 0, -20))
@@ -827,50 +839,31 @@ func test_ashfall() -> void:
 	check(missed.health == SCRIBE.max_health and not missed.is_stunned(), "an enemy off the line is untouched")
 
 
-func test_passive_inscribe() -> void:
-	var me := spawn(SCRIBE, 0, Vector3.ZERO)
-	var target := spawn(DUMMY, 1, Vector3(0, 0, -6))
-	var other := spawn(DUMMY, 1, Vector3(3, 0, -6))
-	await ticks(2)
-	var bolt := SCRIBE.basic_attack
-	var hits: Array[float] = []
-	target.damaged.connect(func(amount: float, _src: Unit) -> void: hits.append(amount))
-	for i in 3:
-		authority.apply_damage(me, target, bolt.damage, bolt)
-	check(hits.size() == 3 and is_equal_approx(hits[0], bolt.damage) and is_equal_approx(hits[1], bolt.damage), "the first two bolts hit normally")
-	check(is_equal_approx(hits[2], bolt.damage * (1.0 + SCRIBE.passive_value)), "the third bolt on the same target hits for +%.0f%%" % (SCRIBE.passive_value * 100.0))
-	authority.apply_damage(me, other, bolt.damage, bolt)
-	check(is_equal_approx(DUMMY.max_health - other.health, bolt.damage), "the count is per target")
-	authority.apply_damage(me, target, 10.0, SCRIBE.get_slot(1))
-	check(is_equal_approx(DUMMY.max_health - target.health, bolt.damage * (3.0 + SCRIBE.passive_value) + 10.0), "abilities do not count or get the bonus")
-
-
-func test_passive_resolve() -> void:
-	var warden := spawn(WARDEN, 0, Vector3.ZERO)
-	var enemy := spawn(SCRIBE, 1, Vector3(0, 0, -6))
-	await ticks(2)
-	authority.apply_damage(enemy, warden, 100.0, null)
-	check(is_equal_approx(WARDEN.max_health - warden.health, 100.0), "above half health a hit lands in full")
-	warden.health = warden.max_health * 0.4
-	var before := warden.health
-	authority.apply_damage(enemy, warden, 100.0, null)
-	check(is_equal_approx(before - warden.health, 100.0 * (1.0 - WARDEN.passive_value)), "below half health hits are softened by %.0f%%" % (WARDEN.passive_value * 100.0))
-
-
-func test_passive_ember() -> void:
+func test_exposed_seam() -> void:
 	var me := spawn(RUNNER, 0, Vector3.ZERO)
-	var victim := spawn(SCRIBE, 1, Vector3(0, 0, -3))
-	var minion := spawn(MELEE, 1, Vector3(2, 0, -3))
-	await ticks(2)
-	me.health = 200.0
-	me.cooldowns[1] = 5.0
-	minion.health = 1.0
-	authority.apply_damage(me, minion, 10.0, RUNNER.basic_attack)
-	check(me.cooldowns[1] == 5.0 and me.health == 200.0, "a minion kill does nothing")
-	victim.health = 1.0
-	authority.apply_damage(me, victim, 10.0, RUNNER.basic_attack)
-	check(me.cooldowns[1] == 0.0, "a champion kill resets Vault")
-	check(is_equal_approx(me.health, 200.0 + me.max_health * RUNNER.passive_value), "and heals %.0f%% of max health" % (RUNNER.passive_value * 100.0))
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -3))
+	var other := spawn(SCRIBE, 1, Vector3(3, 0, -3))
+	aim(foe, Vector3(0, 0, 5))
+	aim(other, Vector3(3, 0, 5))
+	await ticks(4)
+	var cut := RUNNER.basic_attack
+	var h := foe.health
+	authority.apply_damage(me, foe, 100.0, cut)
+	var plain := h - foe.health
+	aim(foe, Vector3(0, 0, -20))  # turn away
+	await ticks(4)
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, cut)
+	check(is_equal_approx(h - foe.health, plain * (1.0 + RUNNER.passive_value)), "Exposed Seam: a hit from behind deals +%d%%" % roundi(RUNNER.passive_value * 100.0))
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, cut)
+	check(is_equal_approx(h - foe.health, plain), "then not again on that target for a while")
+	h = other.health
+	authority.apply_damage(me, other, 100.0, RUNNER.get_slot(2))
+	check(is_equal_approx(h - other.health, plain), "Ember Knife from the front: a plain hit")
+	h = other.health
+	authority.apply_damage(me, other, 100.0, cut)
+	check(is_equal_approx(h - other.health, plain * (1.0 + RUNNER.passive_value)), "but it opens a seam for the next hit")
 
 
 func test_last_hit_xp() -> void:
@@ -1060,13 +1053,360 @@ func test_batch_b_data() -> void:
 
 func _kit_data(defs: Array) -> void:
 	for def: ChampionDef in defs:
-		check(def.abilities.size() == 3 and def.get_slot(3).is_ultimate, "%s has Q, E and an ultimate R" % def.id)
+		check(def.abilities.size() == 4 and def.get_slot(3).is_ultimate, "%s has Q, E, F and an ultimate R" % def.id)
 		check(def.get_slot(1).upgrades.size() == 2, "%s Q offers two upgrades" % def.id)
 		check(def.passive != ChampionDef.Passive.NONE and not def.passive_name.is_empty(), "%s has a passive" % def.id)
 		check(def.item_build.size() == 4, "%s has a bot item order" % def.id)
 		for slot in def.slot_count():
 			check(not def.get_slot(slot).description.is_empty(), "%s slot %d is described" % [def.id, slot])
 	await ticks(1)
+
+
+func test_fourth_ability_data() -> void:
+	check(UnitCommand.ability_button(4) == UnitCommand.BTN_ABILITY_4, "slot 4 has its own button (F)")
+	for def: ChampionDef in [SCRIBE, WARDEN, RUNNER, LANTERN, THORN, GRAVE, BARROW, VEIL, STORM]:
+		var f := def.get_slot(4)
+		check(f != null and not f.is_ultimate and not f.description.is_empty(), "%s has a described F ability" % def.id)
+		check(def.slot_count() == 5, "%s has five slots" % def.id)
+	await ticks(1)
+
+
+func test_fold_step() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	await ticks(2)
+	aim(me, Vector3(0, 0, -10))
+	cmd(me).move = Vector2(0, 1)
+	await ticks(2)
+	cmd(me).buttons = UnitCommand.BTN_ABILITY_4
+	await ticks(1)
+	cmd(me).buttons = 0
+	cmd(me).move = Vector2.ZERO
+	var start := me.global_position
+	await secs(0.4)
+	var step := SCRIBE.get_slot(4)
+	var moved := Vector2(me.global_position.x - start.x, me.global_position.z - start.z).length()
+	check(absf(moved - step.dash_distance) < 0.6, "F: Fold Step carries %.1f m (%.2f m)" % [step.dash_distance, moved])
+	check(me.cooldowns[4] > 0.0 and me.cooldowns[1] <= 0.0, "only the F slot goes on cooldown")
+
+
+func test_searing_light() -> void:
+	var me := spawn(LANTERN, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	await _cast(me, 4, foe.global_position, 0.7)
+	var light := LANTERN.get_slot(4)
+	check(is_equal_approx(foe.health, DUMMY.max_health - light.damage), "Searing Light hits for %d" % roundi(light.damage))
+	check(foe.is_stunned(), "and stuns")
+
+
+func test_smoke_veil() -> void:
+	var me := spawn(RUNNER, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(2, 0, 0))
+	await ticks(2)
+	await _cast(me, 4, me.global_position, 0.4)
+	var veil := RUNNER.get_slot(4)
+	check(is_equal_approx(ally.quick_amount, veil.ally_quick), "Smoke Veil: an ally inside moves %d%% faster" % roundi(veil.ally_quick * 100.0))
+	await secs(veil.ward_duration)
+	check(ally.quick_amount == 0.0, "the speed ends with the smoke")
+
+
+func _shop_champion(def: ChampionDef, gold: float) -> Unit:
+	ItemShop.use_adventurer(true)
+	var u := spawn(def, 0, Vector3.ZERO)
+	u.shop_point = Vector3.ZERO
+	u.gold = gold
+	return u
+
+
+func _idx(id: StringName) -> int:
+	var i := ItemShop.index_of(id)
+	check(i > 0, "%s is in the adventurer catalog" % id)
+	return i
+
+
+func test_adventurer_shop() -> void:
+	var u := _shop_champion(THORN, 3000.0)
+	await ticks(2)
+	var edge := _idx(&"tempered_edge")
+	var duel := _idx(&"duelists_measure")
+	var duel_def: ItemDef = Unit.ECONOMY.items[duel - 1]
+	check(Unit.ECONOMY.slots == 6 and Unit.ECONOMY.items.size() == 30, "six slots, thirty items")
+	check(u.buy_item(edge) and is_equal_approx(u.gold, 3000.0 - 160.0), "a component costs its price")
+	check(u.buy_item(edge), "components can be doubled")
+	var g0 := u.gold
+	check(u.buy_item(duel) and is_equal_approx(g0 - u.gold, duel_def.cost - 160.0), "a recipe pays only what the owned part does not cover (%d)" % roundi(g0 - u.gold))
+	check(u.items.size() == 2 and u.items.count(duel_def) == 1, "and uses up one Edge, keeping the other")
+	check(not u.buy_item(duel), "a finished item cannot be bought twice")
+	check(u.buy_item(_idx(&"trailwardens_token")) and not u.buy_item(_idx(&"apprentices_focus")), "one starter only")
+	check(u.buy_item(_idx(&"travelers_soles")), "soles")
+	g0 = u.gold
+	check(u.buy_item(_idx(&"wayfarers_boots")) and is_equal_approx(g0 - u.gold, 360.0 - 120.0), "boots use the soles")
+	check(not u.buy_item(_idx(&"ironstride_boots")), "one pair of boots only")
+	# Fill the bag, then a recipe still fits because its parts leave.
+	u.buy_item(_idx(&"etched_focus"))
+	u.buy_item(_idx(&"hourglass_chip"))
+	check(u.items.size() == 6, "six items carried (%d)" % u.items.size())
+	var before := u.items.duplicate()
+	g0 = u.gold
+	check(not u.buy_item(_idx(&"vital_cord")), "a full bag refuses a new component")
+	check(u.items == before and u.gold == g0, "a failed buy changes neither items nor gold")
+	check(u.buy_item(_idx(&"runecasters_codex")) and u.items.size() == 5, "a recipe in a full bag frees its parts' slots")
+	# Selling, health kept as a fraction, never refilled.
+	u.health = u.max_health * 0.5
+	var hp_frac := u.health / u.max_health
+	g0 = u.gold
+	var first: ItemDef = u.items[0]
+	check(u.sell_item(1) and is_equal_approx(u.gold - g0, floorf(first.cost * 0.7)), "selling pays 70%")
+	check(is_equal_approx(u.health / u.max_health, hp_frac), "selling or buying never heals")
+	u.global_position = Vector3(40, 0, 0)
+	await ticks(1)
+	check(not u.sell_item(1) and not u.buy_item(edge), "no selling or buying away from the fountain")
+	# The command path: buy and sell go through UnitCommand like any input.
+	u.global_position = Vector3.ZERO
+	var n := u.items.size()
+	cmd(u).sell_item = 1
+	await ticks(1)
+	cmd(u).sell_item = 0
+	check(u.items.size() == n - 1, "selling works through the command")
+	var c := UnitCommand.from_dict({"s": 3, "i": 2})
+	check(c.sell_item == 3 and c.buy_item == 2, "sell and buy survive the wire")
+	check(UnitCommand.from_dict({"s": 99}).sell_item == 0, "a bad sell slot is dropped")
+
+
+func test_adventurer_stats() -> void:
+	var u := _shop_champion(WARDEN, 9000.0)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -3))
+	await ticks(2)
+	var cleave := WARDEN.basic_attack
+	check(CombatAuthority.power_kind(u, cleave) == 0 and CombatAuthority.power_kind(foe, SCRIBE.basic_attack) == 1, "Oathwarden hits with weapon power, Ruinscribe with spell power")
+	var h0 := foe.health
+	authority.apply_damage(u, foe, 100.0, cleave)
+	var base := h0 - foe.health
+	foe.health = foe.max_health
+	u.buy_item(_idx(&"tempered_edge"))
+	authority.apply_damage(u, foe, 100.0, cleave)
+	check(absf((foe.max_health - foe.health) - base * 1.07) < 0.01, "+7 weapon power: 7% more weapon damage")
+	var tower := spawn(TOWER, 1, Vector3(0, 0, -8))
+	await ticks(1)
+	var th := tower.health
+	authority.apply_damage(u, tower, 100.0, cleave)
+	check(absf((th - tower.health) - 100.0 * u.damage_mult * cleave.structure_damage_mult * u.structure_bonus) < 0.01, "item power does not speed up sieges")
+	foe.health = foe.max_health
+	foe.items.append(Unit.ECONOMY.items[_idx(&"iron_links") - 1])
+	foe.recompute_stats()
+	authority.apply_damage(u, foe, 100.0, cleave)
+	check(absf((foe.max_health - foe.health) - base * 1.07 * 100.0 / 112.0) < 0.01, "12 armor: weapon damage x 100/112")
+	foe.health = foe.max_health
+	authority.apply_damage(foe, u, 100.0, SCRIBE.basic_attack)
+	var spell := u.max_health - u.health
+	check(absf(spell - 100.0) < 0.01, "armor does nothing against spells")
+	# Haste: 100 / (100 + haste), item haste capped at 40.
+	var w := spawn(SCRIBE, 0, Vector3(5, 0, 0))
+	for id in [&"runecasters_codex", &"lantern_of_returning", &"hourglass_chip", &"spellwalkers_boots"]:
+		w.items.append(Unit.ECONOMY.items[_idx(id) - 1])
+	w.recompute_stats()
+	check(is_equal_approx(w.ability_haste, 40.0) and is_equal_approx(w.cooldown_mult, 100.0 / 140.0), "haste caps at 40 (cooldowns x %.3f)" % w.cooldown_mult)
+	var a := spawn(THORN, 0, Vector3(-5, 0, 0))
+	a.items.append(Unit.ECONOMY.items[_idx(&"quickstring") - 1])
+	a.recompute_stats()
+	check(is_equal_approx(a.cooldown_for(0, THORN.basic_attack), THORN.basic_attack.cooldown / 1.08), "attack speed shortens the basic attack only")
+	# Shields soak damage first and never stack.
+	foe.apply_shield(50.0, 2.0)
+	foe.apply_shield(30.0, 2.0)
+	check(is_equal_approx(foe.shield, 50.0), "the bigger shield stays")
+	var hp := foe.health
+	authority.apply_damage(foe, u, 0.0, null)
+	authority.apply_damage(u, foe, 40.0, AbilityDef.new())
+	check(foe.health == hp and foe.shield < 50.0, "a hit smaller than the shield leaves health alone")
+	await secs(2.1)
+	check(foe.shield == 0.0, "the shield ends with its timer")
+
+
+func test_item_passives() -> void:
+	var u := _shop_champion(THORN, 0.0)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -3))
+	await ticks(2)
+	var duel_def: ItemDef = Unit.ECONOMY.items[_idx(&"duelists_measure") - 1]
+	u.items.append(duel_def)
+	u.recompute_stats()
+	var bow := THORN.basic_attack
+	var hits: Array[float] = []
+	for i in 3:
+		var h := foe.health
+		authority.apply_damage(u, foe, 50.0, bow)
+		hits.append(h - foe.health)
+	check(is_equal_approx(hits[0], hits[1]) and absf(hits[2] - hits[0] - duel_def.passive_value) < 0.01, "Duelist's Measure: the third hit adds %d (%.1f)" % [roundi(duel_def.passive_value), hits[2] - hits[0]])
+	# Codex: two different abilities on one champion.
+	var s := spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	var codex: ItemDef = Unit.ECONOMY.items[_idx(&"runecasters_codex") - 1]
+	s.items.append(codex)
+	s.recompute_stats()
+	foe.health = foe.max_health
+	var h0 := foe.health
+	authority.apply_damage(s, foe, 50.0, SCRIBE.get_slot(1))
+	var one := h0 - foe.health
+	h0 = foe.health
+	authority.apply_damage(s, foe, 50.0, SCRIBE.get_slot(2))
+	check(absf((h0 - foe.health) - one - codex.passive_value) < 0.01, "Runecaster's Codex: a second, different ability adds %d" % roundi(codex.passive_value))
+	h0 = foe.health
+	authority.apply_damage(s, foe, 50.0, SCRIBE.get_slot(1))
+	check(absf((h0 - foe.health) - one) < 0.01, "and then waits for its cooldown")
+	# Bastion: a shield when a champion hit drops the owner low, on a long cooldown.
+	var b := spawn(BARROW, 1, Vector3(-3, 0, 0))
+	var bastion: ItemDef = Unit.ECONOMY.items[_idx(&"bastion_plate") - 1]
+	b.items.append(bastion)
+	b.recompute_stats()
+	b.shop_point = b.global_position
+	authority.apply_damage(u, b, b.max_health * 0.7, bow)
+	check(b.shield > 0.0, "Bastion Plate shields below 35%% health (%d)" % roundi(b.shield))
+	b.shield = 0.0
+	b.gold = 5000.0
+	b.sell_item(1)
+	b.buy_item(_idx(&"bastion_plate"))
+	authority.apply_damage(u, b, 10.0, bow)
+	check(b.shield == 0.0, "selling and buying again does not reset its cooldown")
+	# Lantern: heals on a badly hurt ally are stronger; others unchanged.
+	var l := spawn(LANTERN, 0, Vector3(6, 0, 0))
+	l.items.append(Unit.ECONOMY.items[_idx(&"lantern_of_returning") - 1])
+	var ally := spawn(SCRIBE, 0, Vector3(7, 0, 0))
+	ally.health = ally.max_health * 0.2
+	h0 = ally.health
+	authority.heal(ally, 100.0, l)
+	check(is_equal_approx(ally.health - h0, 130.0), "Lantern of Returning: +30%% on an ally under 35%% (%.0f)" % (ally.health - h0))
+	ally.health = ally.max_health * 0.6
+	h0 = ally.health
+	authority.heal(ally, 100.0, l)
+	check(is_equal_approx(ally.health - h0, 100.0), "no bonus on a healthier ally")
+	# No proc from a proc: item damage never triggers item passives.
+	u.item_counters.clear()
+	var dueling := u.item_counters.size()
+	authority.apply_damage(u, foe, 10.0, null, 0)
+	check(u.item_counters.size() == dueling, "item damage does not count as a hit for items")
+
+
+func test_adventurer_snapshot() -> void:
+	var u := _shop_champion(RUNNER, 0.0)
+	await ticks(2)
+	for id in [&"trailwardens_token", &"tempered_edge", &"tempered_edge", &"bastion_plate", &"wayfarers_boots", &"quickstring"]:
+		u.items.append(Unit.ECONOMY.items[_idx(id) - 1])
+	u.recompute_stats()
+	u.apply_shield(123.0, 2.5)
+	var snap := SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([u])))
+	var s: Array = snap.units[u.net_id]
+	var c := spawn(RUNNER, 1, Vector3(5, 0, 0))
+	await ticks(1)
+	SnapshotCodec.apply(c, s)
+	check(c.items == u.items, "six items, doubles included, survive the snapshot")
+	check(is_equal_approx(c.weapon_power, u.weapon_power) and is_equal_approx(c.armor, u.armor), "and give the same stats on the client")
+	check(absf(c.shield - 123.0) <= 1.0 and absf(c.shield_timer - 2.5) < 0.01, "shield and its timer")
+
+
+func test_adventurer_build_path() -> void:
+	var u := _shop_champion(SCRIBE, 160.0)
+	await ticks(2)
+	check(ItemShop.next_step(u) == _idx(&"apprentices_focus"), "the build starts with its starter")
+	u.buy_item(ItemShop.next_step(u))
+	u.gold = 200.0
+	var codex := _idx(&"runecasters_codex")
+	var step := ItemShop.next_step(u)
+	check(step != codex and Unit.ECONOMY.items[step - 1].kind == ItemDef.Kind.COMPONENT, "short of gold, the next step is a Codex part")
+	u.buy_item(step)
+	u.gold = 5000.0
+	check(ItemShop.next_step(u) == codex, "with the gold, the Codex itself (using the part)")
+	check(is_equal_approx(ItemShop.next_step_price(u), 1000.0 - 160.0), "and its price counts the part")
+
+
+## Bots with adventurer items buy along their builds, finished items included.
+func test_adventurer_bot_match() -> void:
+	ItemShop.use_adventurer(true)
+	var mc := MatchController.new()
+	mc.human_slot = false
+	world.add_child(mc)
+	mc.setup(authority, world)
+	mc.start()
+	await ticks(2)
+	for u: Unit in mc.champions:
+		u.gold = 3000.0
+	await secs(1.0)
+	var finished := 0
+	for u: Unit in mc.champions:
+		for it in u.items:
+			if it.kind == ItemDef.Kind.FINISHED:
+				finished += 1
+	check(finished >= 6, "bots at the fountain with gold buy finished items (%d)" % finished)
+
+
+func test_marginalia() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -6))
+	await ticks(2)
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(2))
+	check(me.shield == 0.0, "Marginalia: the lance alone gives no shield")
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(1))
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(2))
+	check(is_equal_approx(me.shield, SCRIBE.passive_value), "glyph then lance on the same target: a %d shield" % roundi(SCRIBE.passive_value))
+	me.shield = 0.0
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(2))
+	check(me.shield == 0.0, "the mark is spent")
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(1))
+	await secs(CombatAuthority.MARK_TIME + 0.2)
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(2))
+	check(me.shield == 0.0, "a mark older than %d s does nothing" % roundi(CombatAuthority.MARK_TIME))
+	var minion := spawn(MELEE, 1, Vector3(3, 0, -6))
+	await ticks(1)
+	authority.apply_damage(me, minion, 1.0, SCRIBE.get_slot(1))
+	authority.apply_damage(me, minion, 1.0, SCRIBE.get_slot(2))
+	check(me.shield == 0.0, "minions cannot be inscribed")
+
+
+func test_stand_behind() -> void:
+	var warden := spawn(WARDEN, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	var far := spawn(SCRIBE, 0, Vector3(30, 0, 0))
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -2))
+	await ticks(2)
+	ally.health = ally.max_health * 0.5
+	far.health = far.max_health * 0.2
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	check(ally.shield == 0.0, "Stand Behind Me: an unprimed hit shields nobody")
+	await _cast(warden, 1, warden.global_position, 0.6)
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	check(is_equal_approx(ally.shield, WARDEN.passive_value) and far.shield == 0.0, "after a cast, the next hit shields the most hurt ally in reach")
+	ally.shield = 0.0
+	await _cast(warden, 2, foe.global_position, 0.6)
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	check(ally.shield == 0.0, "then it waits %d s" % roundi(CombatAuthority.STAND_COOLDOWN))
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	ally.health = ally.max_health
+	warden.health = warden.max_health * 0.5
+	await secs(CombatAuthority.STAND_COOLDOWN)
+	warden.cooldowns.fill(0.0)
+	await _cast(warden, 2, foe.global_position, 0.6)
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	check(warden.shield > 0.0, "with no hurt ally it shields the Oathwarden")
+
+
+func test_quarry() -> void:
+	var me := spawn(THORN, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	var shot := THORN.get_slot(1)
+	var h := foe.health
+	authority.apply_damage(me, foe, 100.0, shot)
+	check(is_equal_approx(h - foe.health, 100.0), "Patient Quarry: an unmarked target takes plain damage")
+	for i in 5:
+		authority.apply_damage(me, foe, 1.0, THORN.basic_attack)
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, shot)
+	check(is_equal_approx(h - foe.health, 100.0 * (1.0 + 3.0 * THORN.passive_value)), "three marks at most: +%d%%" % roundi(300.0 * THORN.passive_value))
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, shot)
+	check(is_equal_approx(h - foe.health, 100.0), "the marks are spent")
+	authority.apply_damage(me, foe, 1.0, THORN.basic_attack)
+	await secs(CombatAuthority.MARK_TIME + 0.2)
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, shot)
+	check(is_equal_approx(h - foe.health, 100.0), "marks fade after %d s" % roundi(CombatAuthority.MARK_TIME))
 
 
 func test_root() -> void:
@@ -1136,17 +1476,57 @@ func test_mark() -> void:
 func test_lantern_heals() -> void:
 	var me := spawn(LANTERN, 0, Vector3.ZERO)
 	var ally := spawn(SCRIBE, 0, Vector3(3, 0, 0))
-	var far := spawn(SCRIBE, 0, Vector3(20, 0, 0))
 	await ticks(2)
-	ally.health = 200.0
-	far.health = 200.0
-	await secs(1.0)
-	check(absf(ally.health - 200.0 - LANTERN.passive_value) < 0.5, "Kindled: a nearby ally regains %.0f a second (%.1f)" % [LANTERN.passive_value, ally.health - 200.0])
-	check(far.health == 200.0, "an ally far away does not")
 	ally.health = 200.0
 	await _cast(me, 1, me.global_position, 1.3)
 	var gain := ally.health - 200.0
 	check(gain > LANTERN.get_slot(1).heal_per_second * 0.8, "lantern light heals an ally standing in it (%.0f in 1 s)" % gain)
+
+
+
+func test_keep_the_flame() -> void:
+	var me := spawn(LANTERN, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(2, 0, 0))
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -12))
+	await ticks(2)
+	var light := LANTERN.get_slot(1)
+	ally.health = 200.0
+	await _cast(me, 1, ally.global_position, 1.3)
+	check(me.passive_stacks == 0.0, "Keep the Flame: healing out of a fight stores nothing")
+	authority.apply_damage(foe, ally, 10.0, SCRIBE.basic_attack)
+	me.cooldowns[1] = 0.0
+	await _cast(me, 1, ally.global_position, 1.3)
+	check(is_equal_approx(me.passive_stacks, 1.0), "healing an ally in a fight stores one ember per cast")
+	authority.apply_damage(foe, ally, 10.0, SCRIBE.basic_attack)
+	me.cooldowns[1] = 0.0
+	await _cast(me, 1, ally.global_position, light.cast_time + 0.05)
+	check(is_equal_approx(ally.shield, LANTERN.passive_value) and is_equal_approx(me.shield, LANTERN.passive_value), "the next light shields everyone in it for %d per ember" % roundi(LANTERN.passive_value))
+	check(me.passive_stacks <= 1.0, "and spends the embers")
+
+
+func test_residual_charge() -> void:
+	var me := spawn(STORM, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	var bolt := STORM.get_slot(4)
+	var strike := STORM.get_slot(1)
+	var h := foe.health
+	await _cast(me, 1, foe.global_position, strike.cast_time + strike.area_delay + 0.2)
+	var plain := h - foe.health
+	check(plain > 0.0, "a plain Called Lightning (%.0f)" % plain)
+	authority.apply_damage(me, foe, 1.0, bolt)
+	authority.apply_damage(me, foe, 1.0, bolt)
+	check(is_equal_approx(me.passive_stacks, 1.0), "Residual Charge: one cast stores one charge, however often it hits")
+	await secs(CombatAuthority.RESIDUAL_WINDOW + 0.1)
+	authority.apply_damage(me, foe, 1.0, bolt)
+	await secs(CombatAuthority.RESIDUAL_WINDOW + 0.1)
+	authority.apply_damage(me, foe, 1.0, bolt)
+	check(is_equal_approx(me.passive_stacks, CombatAuthority.RESIDUAL_MAX), "up to two")
+	me.cooldowns[1] = 0.0
+	h = foe.health
+	await _cast(me, 1, foe.global_position, strike.cast_time + strike.area_delay + 0.2)
+	check(absf(h - foe.health - plain * (1.0 + 2.0 * STORM.passive_value)) < 1.0, "the next Called Lightning spends them: +%d%% (%.0f)" % [roundi(200.0 * STORM.passive_value), h - foe.health])
+	check(me.passive_stacks == 0.0, "and they are gone")
 
 
 func test_dawnlight() -> void:
@@ -1160,19 +1540,6 @@ func test_dawnlight() -> void:
 	var dawn := LANTERN.get_slot(3)
 	check(ally.health >= 100.0 + dawn.ally_heal, "dawnlight heals the ally in it (%.0f)" % ally.health)
 	check(foe.health < DUMMY.max_health, "and burns the enemy")
-
-
-func test_longshot() -> void:
-	var me := spawn(THORN, 0, Vector3.ZERO)
-	var near := spawn(DUMMY, 1, Vector3(-3, 0, -8))
-	await ticks(2)
-	var bow := THORN.basic_attack
-	await _cast(me, 0, near.global_position, 0.8)
-	check(is_equal_approx(DUMMY.max_health - near.health, bow.damage), "Longbow at 8.5 m: plain damage")
-	var far := spawn(DUMMY, 1, Vector3(3, 0, -18))
-	await secs(0.5)  # the bow's cooldown
-	await _cast(me, 0, far.global_position, 1.4)
-	check(is_equal_approx(DUMMY.max_health - far.health, bow.damage * (1.0 + THORN.passive_value)), "Steady Aim: beyond %.0f m it hits %d%% harder" % [THORN.passive_range, roundi(THORN.passive_value * 100.0)])
 
 
 func test_tithe() -> void:
@@ -1260,19 +1627,22 @@ func test_war_song() -> void:
 	check(ally.haste_amount == 0.0, "the haste ends with the song")
 
 
-func test_encore() -> void:
+func test_refrain() -> void:
 	var me := spawn(VEIL, 0, Vector3.ZERO)
-	var ally := spawn(SCRIBE, 0, Vector3(5, 0, 0))
-	var far := spawn(SCRIBE, 0, Vector3(20, 0, 0))
-	await ticks(3)
-	check(is_equal_approx(ally.quick_amount, VEIL.passive_value) and is_equal_approx(me.quick_amount, VEIL.passive_value), "Encore: allies within %.0f m and the singer move faster" % VEIL.passive_range)
-	check(far.quick_amount == 0.0, "an ally far away does not")
-	var x0 := ally.global_position.x
-	cmd(ally).aim_yaw = -PI * 0.5  # face +X
-	cmd(ally).move = Vector2(0, 1)
-	await secs(0.5)
-	var moved := ally.global_position.x - x0
-	check(absf(moved - SCRIBE.move_speed * (1.0 + VEIL.passive_value) * 0.5) < 0.15, "it walks %.2f m in 0.5 s" % moved)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -6))
+	await ticks(2)
+	var song := VEIL.get_slot(1)
+	var lure := VEIL.get_slot(2)
+	await _cast(me, 1, me.global_position, song.cast_time + 0.1)
+	check(is_equal_approx(me.haste_amount, song.ally_haste), "a first War Song is plain")
+	await _cast(me, 2, foe.global_position, 1.2)
+	check(foe.compel_timer > 0.0, "Lure after War Song lands")
+	var strong := CombatAuthority.empowered(lure)
+	check(is_equal_approx(strong.charm_duration, lure.charm_duration + 0.4) and is_equal_approx(strong.range, lure.range + 3.0), "Refrain: the second of the pair is the stronger Lure")
+	var loud := CombatAuthority.empowered(song)
+	check(is_equal_approx(loud.ally_haste, song.ally_haste * 1.4) and is_equal_approx(loud.area_radius, song.area_radius + 1.0), "and a closing War Song is wider and quicker")
+	check(me.refrain_slot == -1, "the pair starts over")
+	check(song.ally_haste == VEIL.get_slot(1).ally_haste, "the data itself is unchanged")
 
 
 func test_storm_wall() -> void:
@@ -1299,20 +1669,29 @@ func test_tempest() -> void:
 	var t := STORM.get_slot(3)
 	await _cast(me, 3, foe.global_position, t.cast_time + t.area_delay + 0.6 * 2 + 0.2)
 	var dmg := t.damage * me.damage_mult
-	check(absf(DUMMY.max_health - foe.health - 3.0 * dmg * (1.0 + STORM.passive_value)) < 1.0, "Tempest strikes three times, harder at the centre (%.0f)" % (DUMMY.max_health - foe.health))
-	check(absf(DUMMY.max_health - edge.health - 3.0 * dmg) < 1.0, "and plain at the edge (%.0f)" % (DUMMY.max_health - edge.health))
+	check(absf(DUMMY.max_health - foe.health - 3.0 * dmg) < 1.0, "Tempest strikes three times (%.0f)" % (DUMMY.max_health - foe.health))
+	check(absf(DUMMY.max_health - edge.health - 3.0 * dmg) < 1.0, "the same at the edge (%.0f)" % (DUMMY.max_health - edge.health))
+	check(is_equal_approx(me.passive_stacks, 1.0), "Residual Charge: one cast stores one charge (%.1f)" % me.passive_stacks)
 
 
-func test_barrow_blood() -> void:
+func test_ancestral_fury() -> void:
 	var me := spawn(BARROW, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -2))
 	await ticks(2)
+	for i in 6:
+		authority.apply_damage(me, foe, 1.0, BARROW.basic_attack)
+	check(is_equal_approx(me.passive_stacks, 60.0), "Ancestral Fury: hits dealt fill 10 each (%.0f)" % me.passive_stacks)
+	for i in 7:
+		authority.apply_damage(foe, me, 1.0, SCRIBE.basic_attack)
+	check(is_equal_approx(me.passive_stacks, 100.0), "hits taken fill 6 each, up to 100")
 	me.health = 300.0
-	await secs(1.0)
-	check(absf(me.health - 300.0 - BARROW.passive_value) < 0.5, "Barrow Blood: below half it regains %.0f a second" % BARROW.passive_value)
-	me.health = BARROW.max_health * 0.8
-	var h := me.health
-	await secs(1.0)
-	check(me.health == h, "not above half")
+	await _cast(me, 1, foe.global_position, BARROW.get_slot(1).cast_time + 0.05)
+	check(absf(me.health - 300.0 - BARROW.max_health * BARROW.passive_value) < 1.0, "at full, Grave Roar heals %d%% of max health (%.0f)" % [roundi(BARROW.passive_value * 100.0), me.health - 300.0])
+	check(me.passive_stacks < 20.0, "and spends the fury")
+	await secs(2.0)  # the taunted foe swings back for a moment
+	me.passive_stacks = 50.0
+	await secs(CombatAuthority.FIGHT_TIME)
+	check(me.passive_stacks < 50.0, "out of the fight it fades (%.0f)" % me.passive_stacks)
 
 
 func test_kings_wrath() -> void:
@@ -1570,3 +1949,450 @@ func test_asset_contract() -> void:
 	check(is_equal_approx(AssetContract.windup_speed(0.3, 0.3), 1.0) and AssetContract.windup_speed(0.6, 0.3) > AssetContract.MAX_SPEED,
 		"windup speed is clip release over sim cast time")
 
+
+
+# --- Phase 4: Chainbound -------------------------------------------------
+
+func test_chainbound_data() -> void:
+	check(CHAIN.slot_count() == 5 and CHAIN.get_slot(3).is_ultimate, "Chainbound has Q, E, F and an ultimate R")
+	var e := CHAIN.get_slot(2)
+	check(e.delivery == AbilityDef.Delivery.GRAPPLE and e.max_charges == 2, "E is a two charge grapple")
+	check(CHAIN.get_slot(3).line_width > 0.0, "R is a line on the ground")
+	check(CHAIN.get_slot(4).weaken_amount > 0.0 and CHAIN.get_slot(4).stun_duration == 0.0, "F weakens and does not stun")
+	check(CHAIN.passive == ChampionDef.Passive.MOMENTUM and not CHAIN.passive_name.is_empty(), "Borrowed Momentum passive")
+	check(CHAIN.hero_name == "Veyra Sable", "lore name")
+	for slot in CHAIN.slot_count():
+		check(not CHAIN.get_slot(slot).description.is_empty(), "slot %d is described" % slot)
+	check(not MatchController.ROSTER.has(CHAIN) and MatchController.PROTOTYPES.has(CHAIN), "a prototype: pickable, never drawn at random")
+	var mc := MatchController.new()
+	mc.human_slot = true
+	mc.human_pick = &"chainbound"
+	world.add_child(mc)
+	mc.setup(authority, world)
+	check(mc.team_roster(0)[0] == CHAIN, "the player can pick Chainbound")
+	await ticks(1)
+
+
+## Press E aimed at `at`.
+func _grapple(u: Unit, at: Vector3) -> void:
+	aim(u, at)
+	cmd(u).buttons = UnitCommand.ability_button(2)
+	await ticks(1)
+	cmd(u).buttons = 0
+
+
+func test_grapple_to_wall() -> void:
+	add_wall(Vector3(0, 1.5, -10), Vector3(8, 3, 1), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	await ticks(2)
+	var e := CHAIN.get_slot(2)
+	var land := -9.5 + CHAIN.radius + 0.15
+	check(me.grapple_endpoint(e, Vector3(0, 0, -20)).distance_to(Vector3(0, 0, land)) < 0.05, "the landing point stands off the wall")
+	await _grapple(me, Vector3(0, 0, -20))
+	check(me.charges[2] == 1, "a launch spends one charge")
+	await secs(e.cast_time + 0.1)
+	check(me.is_grappling(), "the chain pulls her")
+	check(absf(me.grapple_anchor.z + 9.5) < 0.1, "the chain holds the wall face")
+	await secs(0.6)
+	check(not me.is_grappling() and absf(me.global_position.z - land) < 0.15, "she lands in front of the wall (z %.2f)" % me.global_position.z)
+	check(me.alive and absf(me.global_position.x) < 0.1, "straight line, still standing")
+
+
+func test_grapple_rejects() -> void:
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var why := []
+	me.cast_rejected.connect(func(_s: int, r: String) -> void: why.append(r))
+	await ticks(2)
+	# Nothing in reach.
+	await _grapple(me, Vector3(0, 0, -20))
+	await ticks(2)
+	check(me.charges[2] == 2 and not me.is_casting() and not why.is_empty(), "no wall: no cast, no charge, a message")
+	check(me.cooldowns[2] > 0.0 and me.cooldowns[2] <= Unit.GRAPPLE_RETRY, "a short retry wait")
+	# A wall out of range.
+	add_wall(Vector3(0, 1.5, -15), Vector3(8, 3, 1), true)
+	await ticks(2)
+	check(not me.grapple_endpoint(CHAIN.get_slot(2), Vector3(0, 0, -20)).is_finite(), "a wall beyond 12 m does not count")
+	# A wall that is not marked as an anchor.
+	add_wall(Vector3(8, 1.5, 0), Vector3(1, 3, 8), false)
+	await ticks(2)
+	check(not me.grapple_endpoint(CHAIN.get_slot(2), Vector3(20, 0, 0)).is_finite(), "an unmarked wall does not hold")
+	check(me.grapple_problem.contains("cannot hold"), "and says why")
+	# An unmarked wall in front of a marked one blocks the chain: no passing through.
+	add_wall(Vector3(-10, 1.5, 0), Vector3(1, 3, 8), true)
+	add_wall(Vector3(-5, 1.5, 0), Vector3(0.5, 3, 8), false)
+	await ticks(2)
+	check(not me.grapple_endpoint(CHAIN.get_slot(2), Vector3(-20, 0, 0)).is_finite(), "the chain never passes through a wall")
+	# A low block under the chain: the chain reaches, the body would not.
+	add_wall(Vector3(0, 1.5, 10), Vector3(8, 3, 1), true)
+	add_wall(Vector3(0, 0.3, 5), Vector3(4, 0.6, 1), false)
+	await ticks(2)
+	check(not me.grapple_endpoint(CHAIN.get_slot(2), Vector3(0, 0, 20)).is_finite() and me.grapple_problem.contains("blocked"), "a blocked route is refused")
+	# Rooted: no launch, the charge stays.
+	add_wall(Vector3(0, 1.5, -11), Vector3(8, 3, 1), true)
+	await ticks(2)
+	me.cooldowns[2] = 0.0
+	me.apply_root(1.0)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(0.3)
+	check(me.charges[2] == 2 and not me.is_grappling(), "rooted: no launch, no charge spent")
+
+
+func test_grapple_interrupt() -> void:
+	add_wall(Vector3(0, 1.5, -11.5), Vector3(8, 3, 1), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	await ticks(2)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(CHAIN.get_slot(2).cast_time + 0.1)
+	check(me.is_grappling(), "in flight")
+	me.apply_stun(0.5)
+	var at := me.global_position
+	await secs(0.2)
+	check(not me.is_grappling() and me.global_position.distance_to(at) < 0.1, "a stun stops the pull where she is")
+	check(me.charges[2] == 1, "the launched charge stays spent")
+	await secs(0.5)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(CHAIN.get_slot(2).cast_time + 0.05)
+	check(me.is_grappling(), "second launch")
+	me.apply_root(0.5)
+	at = me.global_position
+	await secs(0.2)
+	check(not me.is_grappling() and me.global_position.distance_to(at) < 0.1, "a root pulls her down too")
+	check(me.charges[2] == 0, "both charges spent")
+	await _grapple(me, Vector3(0, 0, -20))
+	await ticks(2)
+	check(not me.is_casting(), "no charges left: no cast")
+
+
+func test_grapple_redirect() -> void:
+	add_wall(Vector3(0, 1.5, -11.5), Vector3(6, 3, 1), true)
+	add_wall(Vector3(10, 1.5, -4), Vector3(1, 3, 16), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	await ticks(2)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(0.33)
+	check(me.is_grappling(), "flying toward the first wall")
+	await _grapple(me, me.global_position + Vector3(20, 0, 0))
+	check(me.charges[2] == 0, "the redirect spends the second charge")
+	await secs(0.8)
+	check(not me.is_grappling() and me.global_position.x > 8.5, "she ends at the second wall (x %.2f)" % me.global_position.x)
+	check(me.global_position.z > -11.0, "and never reached the first one")
+
+
+func test_grapple_charges() -> void:
+	add_wall(Vector3(0, 1.5, -6), Vector3(8, 3, 1), true)
+	add_wall(Vector3(0, 1.5, 6), Vector3(8, 3, 1), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var e := CHAIN.get_slot(2)
+	await ticks(2)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(0.6)
+	await _grapple(me, Vector3(0, 0, 20))
+	await secs(0.8)
+	check(me.charges[2] == 0 and me.global_position.z > 4.5, "two grapples back to back (z %.2f)" % me.global_position.z)
+	check(me.ready_in(2) > e.cooldown - 2.0, "then a wait for the first charge (%.1f s)" % me.ready_in(2))
+	await secs(me.ready_in(2) + 0.1)
+	check(me.charges[2] == 1, "charges come back one at a time")
+	await secs(e.cooldown)
+	check(me.charges[2] == 2, "and the second after another full wait")
+	me.set_dead(null)
+	me.respawn()
+	check(me.charges[2] == 2, "respawn refills charges")
+
+
+func test_momentum() -> void:
+	add_wall(Vector3(0, 1.5, -11), Vector3(8, 3, 1), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(3, 0, -9))
+	await ticks(2)
+	var lash := CHAIN.basic_attack
+	var h := foe.health
+	authority.apply_damage(me, foe, 100.0, lash)
+	check(is_equal_approx(h - foe.health, 100.0), "a plain basic hit")
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(1.0)
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, lash)
+	check(is_equal_approx(h - foe.health, 100.0 * (1.0 + CHAIN.passive_value)), "after a long grapple the next hit deals +%d%%" % roundi(CHAIN.passive_value * 100.0))
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, lash)
+	check(is_equal_approx(h - foe.health, 100.0), "one stored hit only")
+	# A short pull (under 4 m) does not count.
+	var me2 := spawn(CHAIN, 0, Vector3(20, 0, -8))
+	add_wall(Vector3(20, 1.5, -11.5), Vector3(4, 3, 1), true)
+	await ticks(2)
+	await _grapple(me2, Vector3(20, 0, -20))
+	await secs(0.6)
+	h = foe.health
+	authority.apply_damage(me2, foe, 100.0, lash)
+	check(is_equal_approx(h - foe.health, 100.0), "a short pull primes nothing")
+
+
+func test_weaken() -> void:
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -2))
+	var dummy := spawn(DUMMY, 0, Vector3(0, 0, -4))
+	await ticks(2)
+	var h := dummy.health
+	authority.apply_damage(foe, dummy, 100.0, null)
+	var plain := h - dummy.health
+	await _cast(me, 4, foe.global_position, CHAIN.get_slot(4).cast_time + 0.1)
+	check(foe.weaken_timer > 0.0 and is_equal_approx(foe.weaken_amount, CHAIN.get_slot(4).weaken_amount), "Break the Seal weakens the champion struck")
+	check(foe.stun_timer <= 0.0, "and does not stun")
+	h = dummy.health
+	authority.apply_damage(foe, dummy, 100.0, null)
+	check(is_equal_approx(h - dummy.health, plain * (1.0 - CHAIN.get_slot(4).weaken_amount)), "a weakened champion deals 30% less")
+	await secs(CHAIN.get_slot(4).weaken_duration + 0.1)
+	check(foe.weaken_timer <= 0.0, "it wears off")
+
+
+func test_covenant_line() -> void:
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var far := spawn(DUMMY, 1, Vector3(0.5, 0, -13))
+	var side := spawn(DUMMY, 1, Vector3(3.5, 0, -6))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	var r := CHAIN.get_slot(3)
+	await _cast(me, 3, Vector3(0, 0, -4), r.cast_time + 0.1)
+	check(authority.areas.size() == 1 and authority.areas[0].ability == r, "the chain line is drawn")
+	check(far.health == DUMMY.max_health, "nothing before the delay")
+	await secs(r.area_delay + 0.1)
+	check(far.health < DUMMY.max_health and far.root_timer > 0.0, "the far end of the line hits and roots, though the aim was short")
+	check(side.health == DUMMY.max_health, "beside the line is safe")
+	check(CombatAuthority.in_area(_line_at(me, r), Vector3(0, 0, -7), 0.3), "in_area: inside the strip")
+	check(not CombatAuthority.in_area(_line_at(me, r), Vector3(0, 0, 2), 0.3), "in_area: behind the caster is outside")
+
+
+func _line_at(me: Unit, r: AbilityDef) -> CombatAuthority.SimArea:
+	var ar := CombatAuthority.SimArea.new()
+	ar.ability = r
+	ar.dir = Vector3(0, 0, -1)
+	ar.center = me.global_position + ar.dir * r.range * 0.5
+	return ar
+
+
+func test_anchor_marking() -> void:
+	var map := LaneMapBuilder.new()
+	world.add_child(map)
+	var n := GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0)
+	check(n > 20, "lane and flank walls are anchors (%d)" % n)
+	var floor_marked := false
+	var base_marked := false
+	for body: StaticBody3D in map.find_children("*", "StaticBody3D", true, false):
+		if body.collision_layer & Unit.LAYER_ANCHOR:
+			if body.global_position.y <= 0.0:
+				floor_marked = true
+			if absf(body.global_position.z) > LaneMapBuilder.BASE_Z + 1.0:
+				base_marked = true
+	check(not floor_marked, "the floor is never an anchor")
+	check(not base_marked, "base plazas (spawn) are never anchors")
+	# From the lane, a lane wall holds.
+	var me := spawn(CHAIN, 0, Vector3(0, 0, 20))
+	await ticks(2)
+	check(me.grapple_endpoint(CHAIN.get_slot(2), Vector3(20, 0, 20)).is_finite(), "a chain to the lane wall holds")
+	map.queue_free()
+
+
+func test_chainbound_snapshot() -> void:
+	var u := spawn(CHAIN, 1, Vector3(1, 0, 2))
+	await ticks(2)
+	u.charges[2] = 1
+	u.recharge[2] = 5.25
+	u.apply_weaken(0.3, 1.5)
+	var snap := SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([u])))
+	var s: Array = snap.units[u.net_id]
+	check((s[SnapshotCodec.CHARGES] as PackedInt32Array)[2] == 1, "charges survive the wire")
+	check(absf((s[SnapshotCodec.RECHARGE] as PackedFloat32Array)[2] - 5.25) < 0.002, "recharge timer survives")
+	check(absf(s[SnapshotCodec.WEAKEN] - 0.3) < 0.005 and absf(s[SnapshotCodec.WEAKEN_TIMER] - 1.5) < 0.002, "weaken survives")
+	var v := spawn(CHAIN, 1, Vector3(5, 0, 2))
+	await ticks(1)
+	SnapshotCodec.apply(v, s)
+	check(v.charges[2] == 1 and v.weaken_timer > 1.0, "a client unit takes them")
+	var plain := spawn(SCRIBE, 0, Vector3(9, 0, 0))
+	await ticks(1)
+	var bytes := SnapshotCodec.encode_units([plain])
+	check(SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, bytes)).units[plain.net_id][SnapshotCodec.CHARGES] == null, "champions without charges send none")
+
+func test_passive_snapshot() -> void:
+	var u := spawn(LANTERN, 0, Vector3(1, 0, 2))
+	var w := spawn(VEIL, 0, Vector3(3, 0, 2))
+	await ticks(2)
+	u.passive_stacks = 2.0
+	w.refrain_slot = 2
+	w.refrain_at = authority.time
+	var snap := SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 2, SnapshotCodec.encode_units([u, w])))
+	check(snap.units[u.net_id][SnapshotCodec.STACKS] == 2.0, "passive stacks survive the wire")
+	check(snap.units[w.net_id][SnapshotCodec.REFRAIN] == 2, "and the half-sung refrain")
+	var v := spawn(LANTERN, 0, Vector3(5, 0, 2))
+	await ticks(1)
+	SnapshotCodec.apply(v, snap.units[u.net_id])
+	check(v.passive_stacks == 2.0 and Hud.passive_readout(v) == "Embers 2/3", "a client shows them (%s)" % Hud.passive_readout(v))
+	check(Hud.passive_readout(w) == "Refrain: War Song next", "the HUD names the other half (%s)" % Hud.passive_readout(w))
+	await secs(CombatAuthority.REFRAIN_TIME + 0.2)
+	check(w.refrain_slot == -1, "the refrain lapses")
+
+
+func test_chainbound_bot_match() -> void:
+	var mc := MatchController.new()
+	mc.human_slot = false
+	mc.lineup_ids = [&"chainbound", &"oathwarden", &"ruinscribe"]
+	mc.bot_seed = 5
+	var map := LaneMapBuilder.new()
+	world.add_child(map)
+	GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0)
+	world.add_child(mc)
+	mc.setup(authority, world)
+	var grapples := [0]
+	authority.grapple_started.connect(func(_c: Unit, _a: AbilityDef) -> void: grapples[0] += 1)
+	mc.start()
+	await secs(120.0)
+	check(mc.champions.any(func(c: Unit) -> bool: return c.def == CHAIN), "Chainbound fields in a bot match")
+	check(grapples[0] > 0, "bots use Chain Traverse (%d grapples in 120 s)" % grapples[0])
+	for c: Unit in mc.champions:
+		check(c.global_position.y > -1.0 and absf(c.global_position.x) < 30.0, "%s stays on the map" % c.def.id)
+	map.queue_free()
+
+
+# --- Phase 5: the full finished-item catalog -------------------------------
+
+func _equip(u: Unit, id: StringName) -> ItemDef:
+	var it: ItemDef = Unit.ECONOMY.items[_idx(id) - 1]
+	u.items.append(it)
+	u.recompute_stats()
+	return it
+
+
+func _hit(src: Unit, dst: Unit, amount: float, a: AbilityDef) -> float:
+	var h := dst.health
+	authority.apply_damage(src, dst, amount, a)
+	return h - dst.health
+
+
+func test_items_weapon() -> void:
+	var u := _shop_champion(THORN, 0.0)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -3))
+	await ticks(2)
+	var bow := THORN.basic_attack
+	var plain := _hit(u, foe, 50.0, bow)
+	var giant := _equip(u, &"giantfall_spear")
+	var power := 1.0 + giant.weapon_power / 100.0
+	var with_giant := _hit(u, foe, 50.0, bow)
+	var extra := minf(foe.max_health * giant.passive_value, 40.0) * 100.0 / (100.0 + foe.armor)
+	check(absf(with_giant - plain * power - extra) < 0.6, "Giantfall Spear: a basic hit adds max-health damage (%.1f)" % (with_giant - plain * power))
+	check(absf(_hit(u, foe, 50.0, bow) - plain * power) < 0.6, "once a second per target")
+	u.items.clear()
+	var ranger := _equip(u, &"rangers_covenant")
+	_hit(u, foe, 10.0, bow)
+	check(is_equal_approx(u.quick_amount, ranger.passive_value), "Ranger's Covenant: a champion hit speeds you up")
+	u.items.clear()
+	var writ := _equip(u, &"headsmans_writ")
+	var base := _hit(u, foe, 50.0, bow)
+	_hit(u, foe, 10.0, THORN.get_slot(1))
+	var primed := _hit(u, foe, 50.0, bow)
+	check(primed - base > writ.passive_value * 0.5, "Headsman's Writ: an ability hit primes the next basic (%.1f more)" % (primed - base))
+	check(absf(_hit(u, foe, 50.0, bow) - base) < 0.6, "one primed hit only")
+	u.items.clear()
+	_equip(u, &"ashen_brand")
+	_hit(u, foe, 10.0, bow)
+	check(foe.heal_cut_timer > 0.0, "Ashen Brand: weapon damage cuts healing")
+	foe.health = 100.0
+	authority.heal(foe, 100.0)
+	check(is_equal_approx(foe.health, 170.0), "healing is cut by 30%% (%.0f)" % foe.health)
+	var other := spawn(DUMMY, 1, Vector3(5, 0, 0))
+	await ticks(1)
+	other.apply_heal_cut(0.1, 5.0)
+	other.apply_heal_cut(0.3, 1.0)
+	other.apply_heal_cut(0.2, 1.0)
+	check(is_equal_approx(other.heal_cut, 0.3), "healing cuts never add up: the strongest counts")
+
+
+func test_items_spell() -> void:
+	var s := _shop_champion(SCRIBE, 0.0)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -3))
+	await ticks(2)
+	var cinder := _equip(s, &"cinder_reliquary")
+	_hit(s, foe, 10.0, SCRIBE.get_slot(1))
+	check(foe.burn_timer > 0.0 and foe.burn_source == s, "Cinder Reliquary: a spell hit burns")
+	var h := foe.health
+	await secs(1.0)
+	var burned := h - foe.health
+	check(burned > 0.0 and burned < cinder.passive_value, "the burn ticks (%.1f in 1 s)" % burned)
+	_hit(s, foe, 10.0, SCRIBE.get_slot(1))
+	check(is_equal_approx(foe.burn_dps, cinder.passive_value / CombatAuthority.BURN_TIME) and foe.burn_timer <= CombatAuthority.BURN_TIME, "a second burn refreshes, it does not stack")
+	s.items.clear()
+	foe.burn_timer = 0.0
+	var glass := _equip(s, &"witchglass_lens")
+	_hit(s, foe, 10.0, SCRIBE.basic_attack)
+	check(foe.heal_cut_timer <= 0.0, "Witchglass Lens: basic hits do not cut healing")
+	_hit(s, foe, 10.0, SCRIBE.get_slot(2))
+	check(is_equal_approx(foe.heal_cut, glass.passive_value), "a spell ability hit does")
+	s.items.clear()
+	var thread := _equip(s, &"stormthread_spindle")
+	var plain := _hit(s, foe, 20.0, SCRIBE.basic_attack)
+	authority.release_ability(s, SCRIBE.get_slot(4), s.global_position + Vector3(0, 0, -5))
+	var primed := _hit(s, foe, 20.0, SCRIBE.basic_attack)
+	check(primed - plain > thread.passive_value * 0.5, "Stormthread Spindle: a cast primes the next basic (%.1f more)" % (primed - plain))
+
+
+func test_items_defence() -> void:
+	var u := _shop_champion(THORN, 0.0)
+	var b := spawn(BARROW, 1, Vector3(-3, 0, 0))
+	await ticks(2)
+	_equip(b, &"spellward_mantle")
+	_equip(b, &"bastion_plate")
+	authority.apply_damage(u, b, b.max_health * 0.9, THORN.basic_attack)
+	var first := b.shield
+	check(first > 0.0, "Spellward Mantle and Bastion: a low-health shield")
+	b.shield = 0.0
+	authority.apply_damage(u, b, 5.0, THORN.basic_attack)
+	check(b.shield == 0.0, "owning both never gives a second shield")
+	var c := spawn(BARROW, 0, Vector3(8, 0, 0))
+	await ticks(1)
+	var cairn := _equip(c, &"cairnheart")
+	c.health = c.max_health * 0.5
+	c.last_champion_hit_at = authority.time
+	var h := c.health
+	await secs(2.0)
+	check(c.health - h < 1.0, "Cairnheart: no recovery right after champion damage")
+	await secs(CombatAuthority.CAIRN_QUIET)
+	h = c.health
+	await secs(1.0)
+	check(absf(c.health - h - c.max_health * cairn.passive_value) < 2.0, "then 1.5%% max health a second (%.1f)" % (c.health - h))
+
+
+func test_items_support() -> void:
+	ItemShop.use_adventurer(true)
+	var w := spawn(WARDEN, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	var foe := spawn(THORN, 1, Vector3(0, 0, -3))
+	await ticks(2)
+	var bulwark := _equip(w, &"pilgrims_bulwark")
+	authority.give_shield(w, ally, 50.0, 3.0)
+	check(is_equal_approx(w.shield, bulwark.passive_value), "Pilgrim's Bulwark: shielding an ally shields you")
+	w.shield = 0.0
+	authority.give_shield(w, ally, 50.0, 3.0)
+	check(w.shield == 0.0, "on a cooldown")
+	w.items.clear()
+	var cantor := _equip(w, &"cantors_thread")
+	ally.health = 100.0
+	authority.heal(ally, 20.0, w)
+	check(is_equal_approx(ally.quick_amount, cantor.passive_value), "Cantor's Thread: a healed ally moves faster")
+	w.items.clear()
+	var harness := _equip(w, &"oathkeepers_harness")
+	ally.shield = 0.0
+	authority.apply_damage(w, foe, 10.0, WARDEN.get_slot(2))  # Shield Slam stuns
+	check(foe.stun_timer > 0.0 and is_equal_approx(ally.shield, harness.passive_value), "Oathkeeper's Harness: a stun shields the nearest ally")
+
+
+func test_item_catalog() -> void:
+	ItemShop.use_adventurer(true)
+	var finished := 0
+	for it: ItemDef in Unit.ECONOMY.items:
+		if it.kind == ItemDef.Kind.FINISHED:
+			finished += 1
+			check(it.recipe.size() == 2, "%s has a two part recipe" % it.id)
+			check(it.passive != ItemDef.Passive.NONE and not it.description.is_empty(), "%s has a described passive" % it.id)
+	check(finished == 16, "sixteen finished items (%d)" % finished)
+	for def: ChampionDef in MatchController.ROSTER + MatchController.PROTOTYPES:
+		for id in def.adventurer_build:
+			check(ItemShop.index_of(id) > 0, "%s builds %s, which exists" % [def.id, id])
+	await ticks(1)

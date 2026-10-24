@@ -9,6 +9,9 @@ signal projectile_ended(p: SimProjectile, hit_point: Vector3)
 signal area_spawned(a: SimArea)
 signal area_detonated(a: SimArea)
 signal unit_damaged(target: Unit, amount: float, source: Unit)
+## Health an ability restored (source set) or a shield an item gave (match stats).
+signal unit_healed(target: Unit, amount: float, source: Unit)
+signal unit_shielded(target: Unit, amount: float)
 signal unit_died(target: Unit, killer: Unit)
 signal unit_respawned(target: Unit)
 signal unit_removed(target: Unit)
@@ -18,6 +21,8 @@ signal damage_blocked(target: Unit, source: Unit)
 signal melee_swung(caster: Unit, a: AbilityDef)
 ## A dash started (for trail visuals; the unit's own position replicates).
 signal dash_started(caster: Unit, a: AbilityDef)
+## A grapple launched (the unit holds grapple_anchor while it travels).
+signal grapple_started(caster: Unit, a: AbilityDef)
 
 ## Tests turn this off and call step() themselves.
 @export var auto_step: bool = true
@@ -55,6 +60,8 @@ class SimArea:
 	var dir: Vector3 = Vector3.FORWARD
 	var timer: float
 	var alive: bool = true
+	## Damage multiplier for the burst (RESIDUAL charges spent on the cast).
+	var power: float = 1.0
 
 
 func register_unit(u: Unit, net_id: int = 0) -> void:
@@ -117,6 +124,7 @@ func step(dt: float) -> void:
 	_step_projectiles(dt)
 	_step_areas(dt)
 	_step_passives(dt)
+	_step_item_effects(dt)
 
 
 func are_enemies(a: Unit, b: Unit) -> bool:
@@ -124,6 +132,26 @@ func are_enemies(a: Unit, b: Unit) -> bool:
 
 
 func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: Unit = null) -> void:
+	var q := a == caster.get_slot(1)
+	if caster.def.passive == ChampionDef.Passive.STAND_BEHIND and (q or a == caster.get_slot(2)):
+		caster.passive_primed_until = time + PRIMED_TIME
+	if caster.def.passive == ChampionDef.Passive.REFRAIN and (q or a == caster.get_slot(2)):
+		var slot := 1 if q else 2
+		if caster.refrain_slot == 3 - slot and time - caster.refrain_at <= REFRAIN_TIME:
+			a = empowered(a)  # the second of the pair; the sequence starts over
+			caster.refrain_slot = -1
+		else:
+			caster.refrain_slot = slot
+			caster.refrain_at = time
+	if q and caster.def.passive == ChampionDef.Passive.FLAME and caster.passive_stacks >= 1.0:
+		for u in units:
+			if u.alive and u.team == caster.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+					and _flat(u.global_position, target) <= a.area_radius + u.def.radius:
+				give_shield(caster, u, caster.def.passive_value * floorf(caster.passive_stacks), PASSIVE_SHIELD_TIME)
+		caster.passive_stacks = 0.0
+	if q and caster.def.passive == ChampionDef.Passive.FURY and caster.passive_stacks >= FURY_MAX:
+		caster.passive_stacks = 0.0
+		heal(caster, caster.max_health * caster.def.passive_value, caster)  # once, however many it hits
 	match a.delivery:
 		AbilityDef.Delivery.PROJECTILE:
 			var p := SimProjectile.new()
@@ -146,7 +174,14 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 			ar.center = Vector3(target.x, 0.0, target.z)
 			var d := Vector3(target.x - caster.global_position.x, 0.0, target.z - caster.global_position.z)
 			ar.dir = d.normalized() if d.length() > 0.1 else caster.forward()
+			if a.line_width > 0.0:
+				# A line from the caster along the aim: centre at its middle.
+				var p := caster.global_position + ar.dir * (a.range * 0.5)
+				ar.center = Vector3(p.x, 0.0, p.z)
 			ar.timer = area_lifetime(a)
+			if q and caster.def.passive == ChampionDef.Passive.RESIDUAL and a.delivery == AbilityDef.Delivery.GROUND_AREA:
+				ar.power = 1.0 + caster.def.passive_value * floorf(caster.passive_stacks)
+				caster.passive_stacks = 0.0
 			areas.append(ar)
 			area_spawned.emit(ar)
 		AbilityDef.Delivery.MELEE_ARC:
@@ -165,6 +200,32 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 		AbilityDef.Delivery.DASH:
 			caster.start_dash(a, target)
 			dash_started.emit(caster, a)
+		AbilityDef.Delivery.GRAPPLE:
+			if caster.start_grapple(a, target):
+				grapple_started.emit(caster, a)
+	# Stormthread Spindle: casting an ability primes the next basic hit.
+	if a != caster.def.basic_attack and not caster.items.is_empty() and item_with(caster, ItemDef.Passive.STORMTHREAD):
+		caster.item_counters["stormthread"] = time
+
+
+## A grapple reached its wall. MOMENTUM: a long enough route primes the
+## next basic hit on a champion.
+func grapple_finished(u: Unit, a: AbilityDef) -> void:
+	if u.def.passive == ChampionDef.Passive.MOMENTUM \
+			and _flat(u.global_position, u.grapple_from) >= a.grapple_min_travel:
+		u.passive_primed_until = time + MOMENTUM_TIME
+
+
+## Is a circle at `pos` (radius r) inside the area? Lines are rectangles
+## along ar.dir, `range` long and line_width wide; the rest are circles.
+static func in_area(ar: SimArea, pos: Vector3, r: float) -> bool:
+	var a := ar.ability
+	if a.line_width > 0.0:
+		var to := Vector3(pos.x - ar.center.x, 0.0, pos.z - ar.center.z)
+		var along := absf(to.dot(ar.dir))
+		var across := absf(to.dot(Vector3(-ar.dir.z, 0.0, ar.dir.x)))
+		return along <= a.range * 0.5 + r and across <= a.line_width * 0.5 + r
+	return Vector2(pos.x - ar.center.x, pos.z - ar.center.z).length() <= a.area_radius + r
 
 
 ## Ground areas burst after their delay; wards and walls stand for their duration.
@@ -209,7 +270,31 @@ func ward_factor(target: Unit) -> float:
 	return 1.0 - best
 
 
-func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> bool:
+## Which item power an ability uses: 0 weapon, 1 spell, -1 none.
+static func power_kind(source: Unit, a: AbilityDef) -> int:
+	if a == null or source == null:
+		return -1
+	match a.scaling:
+		AbilityDef.Scaling.WEAPON:
+			return 0
+		AbilityDef.Scaling.SPELL:
+			return 1
+		AbilityDef.Scaling.NONE:
+			return -1
+	return 0 if source.def.power == ChampionDef.Power.WEAPON else 1
+
+
+## Damage after armor (weapon) or magic resist (spell). Champions only.
+static func mitigate(target: Unit, amount: float, kind: int) -> float:
+	if kind < 0 or target.def.kind != ChampionDef.Kind.CHAMPION:
+		return amount
+	var defence := target.armor if kind == 0 else target.magic_resist
+	return amount * 100.0 / (100.0 + maxf(defence, 0.0))
+
+
+## `proc_kind` >= 0 marks damage from an item passive (a is null): it is
+## reduced by the target's defence but never triggers another item passive.
+func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef, proc_kind: int = -1) -> bool:
 	if not target.alive or amount <= 0.0:
 		return false
 	if a != null and a.hits_enemies_only and not are_enemies(source, target):
@@ -222,14 +307,37 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 			amount *= a.structure_damage_mult
 		amount *= source.structure_bonus
 	amount *= ward_factor(target)
-	if source.def.kind == ChampionDef.Kind.CHAMPION:
+	var kind := proc_kind
+	if source.def.kind == ChampionDef.Kind.CHAMPION and proc_kind < 0:
 		amount *= source.damage_mult
+		kind = power_kind(source, a)
+		# Item power is for fights: it does not speed up sieges.
+		if kind >= 0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
+			amount *= 1.0 + (source.weapon_power if kind == 0 else source.spell_power) / 100.0
+	amount = mitigate(target, amount, kind)
 	amount *= passive_damage_factor(source, target, a)
+	if source.weaken_timer > 0.0:
+		amount *= 1.0 - source.weaken_amount
 	if target.mark_timer > 0.0:
 		amount *= 1.0 + target.mark_amount
+	if target.shield > 0.0:
+		var soaked := minf(target.shield, amount)
+		target.shield -= soaked
+		amount -= soaked
+		if target.shield <= 0.0:
+			target.shield_timer = 0.0
 	target.health -= amount
 	target.last_attacker = source
 	target.last_attacked_at = time
+	if source.def.kind == ChampionDef.Kind.CHAMPION:
+		target.last_champion_hit_at = time
+		if target.def.kind == ChampionDef.Kind.CHAMPION:
+			source.champion_fight_at = time
+			target.champion_fight_at = time
+			if source.def.passive == ChampionDef.Passive.FURY:
+				source.passive_stacks = minf(source.passive_stacks + FURY_DEALT, FURY_MAX)
+			if target.def.passive == ChampionDef.Passive.FURY:
+				target.passive_stacks = minf(target.passive_stacks + FURY_TAKEN, FURY_MAX)
 	target.cancel_recall("Recall cancelled: you were hit")
 	target.damaged.emit(amount, source)
 	unit_damaged.emit(target, amount, source)
@@ -241,12 +349,20 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef) -> b
 		target.apply_root(a.root_duration)
 	if a != null and a.mark_duration > 0.0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
 		target.apply_mark(a.mark_amount, a.mark_duration)
+	if a != null and a.weaken_duration > 0.0 and _markable(target):
+		target.apply_weaken(a.weaken_amount, a.weaken_duration)
 	if a != null and (a.taunt_duration > 0.0 or a.charm_duration > 0.0) and _compellable(target):
 		if a.taunt_duration > 0.0:
 			target.apply_compel(Unit.Compel.TAUNT, source, a.taunt_duration)
 		else:
 			target.apply_compel(Unit.Compel.CHARM, source, a.charm_duration)
-	if target.health <= 0.0:
+	if proc_kind < 0 and a != null and target.def.kind == ChampionDef.Kind.CHAMPION \
+			and (a.stun_duration > 0.0 or a.root_duration > 0.0 or a.taunt_duration > 0.0 or a.charm_duration > 0.0):
+		_harness(source)
+	if proc_kind < 0 and a != null:
+		_hit_passives(source, target, a)
+		_item_passives(source, target, a)
+	if target.alive and target.health <= 0.0:
 		target.set_dead(source)
 		unit_died.emit(target, source)
 		_on_kill(source, target)
@@ -276,6 +392,29 @@ func passive_damage_factor(source: Unit, target: Unit, a: AbilityDef) -> float:
 			and target.def.kind != ChampionDef.Kind.STRUCTURE \
 			and Vector2(target.global_position.x - source.global_position.x, target.global_position.z - source.global_position.z).length() > source.def.passive_range:
 		f *= 1.0 + source.def.passive_value
+	if source.def.passive == ChampionDef.Passive.QUARRY and a != null and _markable(target):
+		var key := target.net_id
+		var m: Vector2 = source.passive_marks.get(key, Vector2(0, -100))
+		var n := int(m.x) if time - m.y <= MARK_TIME else 0
+		if a == source.def.basic_attack:
+			source.passive_marks[key] = Vector2(mini(n + 1, 3), time)
+		elif a == source.get_slot(1) and n > 0:
+			f *= 1.0 + source.def.passive_value * n
+			source.passive_marks.erase(key)
+	if source.def.passive == ChampionDef.Passive.MOMENTUM and a != null and a == source.def.basic_attack \
+			and _markable(target) and time <= source.passive_primed_until:
+		f *= 1.0 + source.def.passive_value
+		source.passive_primed_until = -1.0  # one stored hit, no stacking
+	if source.def.passive == ChampionDef.Passive.SEAM and a != null and _markable(target):
+		var ready_key := "seam:%d" % target.net_id
+		var prime_key := "seamprime:%d" % target.net_id
+		var to_src := Vector3(source.global_position.x - target.global_position.x, 0.0, source.global_position.z - target.global_position.z)
+		var behind := to_src.length() > 0.05 and target.forward().dot(to_src.normalized()) < -SEAM_BEHIND
+		var primed := time - float(source.passive_marks.get(prime_key, -100.0)) <= SEAM_PRIME_TIME
+		if time >= float(source.passive_marks.get(ready_key, -100.0)) and (behind or primed):
+			f *= 1.0 + source.def.passive_value
+			source.passive_marks[ready_key] = time + SEAM_COOLDOWN
+			source.passive_marks.erase(prime_key)
 	if source.def.passive == ChampionDef.Passive.TITHE and target.def.kind != ChampionDef.Kind.STRUCTURE and target.is_impaired():
 		f *= 1.0 + source.def.passive_value
 	return f
@@ -300,6 +439,35 @@ func _step_passives(dt: float) -> void:
 			ChampionDef.Passive.BARROWBLOOD:
 				if src.health < src.max_health * 0.5:
 					heal(src, src.def.passive_value * dt)
+			ChampionDef.Passive.REFRAIN:
+				if src.refrain_slot >= 0 and time - src.refrain_at > REFRAIN_TIME:
+					src.refrain_slot = -1  # the song lapsed
+			ChampionDef.Passive.FURY:
+				if time - src.champion_fight_at > FIGHT_TIME * 0.75:
+					src.passive_stacks = maxf(src.passive_stacks - FURY_FADE * dt, 0.0)
+
+
+## Burns tick twice a second (item damage: no on-hit effects); Cairnheart
+## mends a champion that has not been hit by a champion for a while.
+func _step_item_effects(dt: float) -> void:
+	for u in units:
+		if not u.alive:
+			continue
+		if u.burn_timer > 0.0:
+			u.burn_timer -= dt
+			var acc: float = u.item_counters.get("burn_acc", 0.0) + dt
+			if acc >= BURN_TICK or u.burn_timer <= 0.0:
+				if is_instance_valid(u.burn_source) and u.burn_source.alive:
+					apply_damage(u.burn_source, u, u.burn_dps * acc, null, 1)
+				acc = 0.0
+			u.item_counters["burn_acc"] = acc
+			if u.burn_timer <= 0.0:
+				u.burn_source = null
+		if u.def.kind == ChampionDef.Kind.CHAMPION and not u.items.is_empty() and u.health < u.max_health \
+				and time - u.last_champion_hit_at >= CAIRN_QUIET:
+			var cairn := item_with(u, ItemDef.Passive.CAIRNHEART)
+			if cairn:
+				heal(u, u.max_health * cairn.passive_value * dt)
 
 
 static func _flat(a: Vector3, b: Vector3) -> float:
@@ -323,9 +491,27 @@ func kill(target: Unit) -> void:
 		unit_died.emit(target, null)
 
 
-func heal(target: Unit, amount: float) -> void:
+## `source`: the champion whose ability heals (item passives read it).
+## `cast_id`: the area doing the healing, so FLAME counts each cast once.
+func heal(target: Unit, amount: float, source: Unit = null, cast_id: int = -1) -> void:
+	if source and source != target and cast_id >= 0 and is_instance_valid(source) \
+			and source.def.passive == ChampionDef.Passive.FLAME and target.def.kind == ChampionDef.Kind.CHAMPION \
+			and minf(time - target.champion_fight_at, time - source.champion_fight_at) <= FIGHT_TIME \
+			and not source.passive_marks.has("ember:%d" % cast_id):
+		source.passive_marks["ember:%d" % cast_id] = true
+		source.passive_stacks = minf(source.passive_stacks + 1.0, FLAME_MAX)
+	if source and source != target and is_instance_valid(source) and target.health < target.max_health * 0.35:
+		var lantern := item_with(source, ItemDef.Passive.LANTERN)
+		if lantern:
+			amount *= 1.0 + lantern.passive_value
+	amount *= 1.0 - target.heal_cut
+	if source and source != target and is_instance_valid(source) and target.def.kind == ChampionDef.Kind.CHAMPION:
+		_cantor(source, target)
 	if target.alive and amount > 0.0:
+		var before := target.health
 		target.health = minf(target.max_health, target.health + amount)
+		if source:
+			unit_healed.emit(target, target.health - before, source)
 
 
 func _step_projectiles(dt: float) -> void:
@@ -449,7 +635,7 @@ func _step_areas(dt: float) -> void:
 			for u in units:
 				if u.alive and u.team == ar.source.team and u.def.kind == ChampionDef.Kind.CHAMPION \
 						and Vector2(u.global_position.x - ar.center.x, u.global_position.z - ar.center.z).length() <= ar.ability.area_radius + u.def.radius:
-					heal(u, ar.ability.heal_per_second * dt)
+					heal(u, ar.ability.heal_per_second * dt, ar.source, ar.id)
 		if ar.ability.delivery == AbilityDef.Delivery.WARD and ar.ability.enemy_slow > 0.0 \
 				and is_instance_valid(ar.source):
 			for u in units:
@@ -489,16 +675,17 @@ func _burst(ar: SimArea) -> void:
 	for u: Unit in units.duplicate():
 		if not u.alive:
 			continue
-		if _flat(u.global_position, ar.center) > a.area_radius + u.def.radius:
+		if not in_area(ar, u.global_position, u.def.radius):
 			continue
 		if src_ok and not are_enemies(ar.source, u):
 			if a.ally_heal > 0.0 and u.def.kind == ChampionDef.Kind.CHAMPION:
-				heal(u, a.ally_heal)
+				heal(u, a.ally_heal, ar.source, ar.id)
 			continue
 		var dmg := a.damage
 		if src_ok and ar.source.def.passive == ChampionDef.Passive.STORMEYE \
 				and _flat(u.global_position, ar.center) <= a.area_radius * 0.4 + u.def.radius:
 			dmg *= 1.0 + ar.source.def.passive_value
+		dmg *= ar.power
 		var hurt := apply_damage(ar.source, u, dmg, a) if src_ok and dmg > 0.0 else true
 		if a.pull_distance > 0.0 and u.alive and hurt and u.def.kind != ChampionDef.Kind.STRUCTURE:
 			var to := ar.center - u.global_position
@@ -517,3 +704,229 @@ func _burst(ar: SimArea) -> void:
 		b.timer = area_lifetime(b.ability)
 		_new_areas.append(b)
 		area_spawned.emit(b)
+
+
+## The first owned item with this passive, or null.
+static func item_with(u: Unit, passive: ItemDef.Passive) -> ItemDef:
+	for it in u.items:
+		if it.passive == passive:
+			return it
+	return null
+
+
+## Item passives on a landed hit between champions (see data/items/adventurer).
+## Item damage passes proc_kind, so it never comes back here.
+func _item_passives(source: Unit, target: Unit, a: AbilityDef) -> void:
+	if source.def.kind != ChampionDef.Kind.CHAMPION or target.def.kind != ChampionDef.Kind.CHAMPION:
+		return
+	if not source.items.is_empty():
+		var basic := a == source.def.basic_attack
+		var duel := item_with(source, ItemDef.Passive.DUELIST)
+		if duel and basic:
+			# Every third basic hit on the same champion; stacks fade after the cooldown.
+			var key := "duelist:%d" % target.net_id
+			var last: Vector2 = source.item_counters.get(key, Vector2(0, -100))
+			var n := 1 if time - last.y > duel.passive_cooldown else int(last.x) + 1
+			if n >= 3:
+				n = 0
+				apply_damage(source, target, duel.passive_value, null, 0)
+			source.item_counters[key] = Vector2(n, time)
+		var kind := power_kind(source, a)
+		var giant := item_with(source, ItemDef.Passive.GIANTFALL)
+		if giant and basic and target.alive and target.health > 0.0:
+			var key := "giant:%d" % target.net_id
+			if source.item_ready_at.get(key, -100.0) <= time:
+				source.item_ready_at[key] = time + giant.passive_cooldown
+				apply_damage(source, target, minf(target.max_health * giant.passive_value, GIANTFALL_CAP), null, 0)
+		var ranger := item_with(source, ItemDef.Passive.RANGER)
+		if ranger and basic:
+			source.apply_quick(ranger.passive_value, 1.5)
+		var writ := item_with(source, ItemDef.Passive.WRIT)
+		if writ:
+			if not basic:
+				source.item_counters["writ"] = time  # an ability hit primes the next basic
+			elif time - float(source.item_counters.get("writ", -100.0)) <= PRIME_TIME \
+					and source.item_ready_at.get("writ", -100.0) <= time and target.alive and target.health > 0.0:
+				source.item_counters.erase("writ")
+				source.item_ready_at["writ"] = time + writ.passive_cooldown
+				apply_damage(source, target, writ.passive_value, null, 0)
+		var thread := item_with(source, ItemDef.Passive.STORMTHREAD)
+		if thread and basic and time - float(source.item_counters.get("stormthread", -100.0)) <= PRIME_TIME \
+				and target.alive and target.health > 0.0:
+			source.item_counters.erase("stormthread")
+			apply_damage(source, target, thread.passive_value, null, 1)
+		var ashen := item_with(source, ItemDef.Passive.ASHEN)
+		if ashen and kind == 0:
+			target.apply_heal_cut(ashen.passive_value, HEAL_CUT_TIME)
+		var glass := item_with(source, ItemDef.Passive.WITCHGLASS)
+		if glass and kind == 1 and not basic:
+			target.apply_heal_cut(glass.passive_value, HEAL_CUT_TIME)
+		var cinder := item_with(source, ItemDef.Passive.CINDER)
+		if cinder and kind == 1 and not basic:
+			target.burn_source = source
+			target.burn_dps = cinder.passive_value / BURN_TIME
+			target.burn_timer = BURN_TIME  # refreshes, never stacks
+		var codex := item_with(source, ItemDef.Passive.CODEX)
+		if codex and not basic and target.alive and target.health > 0.0:
+			# Two different abilities on the same champion within 4 s.
+			var key := "codex:%d" % target.net_id
+			var prev: Array = source.item_counters.get(key, [&"", -100.0])
+			if prev[0] != a.id and time - float(prev[1]) <= 4.0 and source.item_ready_at.get(key, -100.0) <= time:
+				source.item_ready_at[key] = time + codex.passive_cooldown
+				apply_damage(source, target, codex.passive_value, null, 1)
+			source.item_counters[key] = [a.id, time]
+	# Bastion Plate and Spellward Mantle share one low-health shield: owning
+	# both never gives two.
+	var bastion := item_with(target, ItemDef.Passive.BASTION)
+	if bastion == null:
+		bastion = item_with(target, ItemDef.Passive.SPELLWARD)
+	if bastion and target.alive and target.health > 0.0 and target.health < target.max_health * 0.35 \
+			and target.item_ready_at.get("bastion", -100.0) <= time:
+		target.item_ready_at["bastion"] = time + bastion.passive_cooldown
+		target.apply_shield(bastion.passive_value + target.max_health * 0.1, 4.0)
+		unit_shielded.emit(target, target.shield)
+
+
+const BURN_TIME := 3.0      # Cinder Reliquary: passive_value spread over this
+const BURN_TICK := 0.5
+const CAIRN_QUIET := 6.0    # Cairnheart: seconds without champion damage
+const HEAL_CUT_TIME := 2.5
+const PRIME_TIME := 4.0     # Headsman's Writ and Stormthread: primed this long
+const GIANTFALL_CAP := 40.0
+
+
+## A champion's shield on another unit (passives and items): applies it and
+## runs the shield giver's items (Cantor's Thread, Pilgrim's Bulwark).
+func give_shield(source: Unit, target: Unit, amount: float, duration: float) -> void:
+	target.apply_shield(amount, duration)
+	unit_shielded.emit(target, target.shield)
+	if source == null or source == target or not is_instance_valid(source) or source.items.is_empty():
+		return
+	if target.def.kind == ChampionDef.Kind.CHAMPION:
+		_cantor(source, target)
+		var bulwark := item_with(source, ItemDef.Passive.BULWARK)
+		if bulwark and source.item_ready_at.get("bulwark", -100.0) <= time:
+			source.item_ready_at["bulwark"] = time + bulwark.passive_cooldown
+			source.apply_shield(bulwark.passive_value, PASSIVE_SHIELD_TIME)
+			unit_shielded.emit(source, source.shield)
+
+
+## Cantor's Thread: an ally the owner heals or shields moves faster briefly.
+func _cantor(source: Unit, target: Unit) -> void:
+	if source.items.is_empty():
+		return
+	var cantor := item_with(source, ItemDef.Passive.CANTOR)
+	if cantor:
+		target.apply_quick(cantor.passive_value, 1.5)
+
+
+## Oathkeeper's Harness: hard crowd control on an enemy champion shields the
+## nearest allied champion within 8 m (the owner if nobody else).
+func _harness(source: Unit) -> void:
+	if source == null or source.items.is_empty():
+		return
+	var harness := item_with(source, ItemDef.Passive.HARNESS)
+	if harness == null or source.item_ready_at.get("harness", -100.0) > time:
+		return
+	source.item_ready_at["harness"] = time + harness.passive_cooldown
+	var best := source
+	var best_d := INF
+	for u in units:
+		if u != source and u.alive and u.team == source.team and u.def.kind == ChampionDef.Kind.CHAMPION:
+			var d := _flat(u.global_position, source.global_position)
+			if d <= 8.0 and d < best_d:
+				best = u
+				best_d = d
+	give_shield(source, best, harness.passive_value, PASSIVE_SHIELD_TIME)
+
+
+const SEAM_COOLDOWN := 6.0  # SEAM: per target
+const SEAM_BEHIND := 0.3    # how far behind counts (dot product)
+const SEAM_PRIME_TIME := 3.0
+const FIGHT_TIME := 4.0     # FLAME: "in a fight" = champion damage this recently
+const FLAME_MAX := 3.0
+const FURY_MAX := 100.0
+const FURY_DEALT := 10.0
+const FURY_TAKEN := 6.0
+const FURY_FADE := 15.0     # per second, once out of the fight
+const REFRAIN_TIME := 6.0
+const RESIDUAL_MAX := 2.0
+const RESIDUAL_WINDOW := 1.5  # longer than any one cast (Tempest strikes for 1.2 s)
+
+
+## REFRAIN: the stronger version of a Q or E that ends a pair, made once per
+## ability and kept. A song grows wider and quicker, a charm lasts longer and
+## reaches further, anything else hits harder.
+static var _empowered := {}
+static func empowered(a: AbilityDef) -> AbilityDef:
+	var key := a.get_instance_id()
+	if _empowered.has(key):
+		return _empowered[key]
+	var b := a.duplicate() as AbilityDef
+	if b.ally_haste > 0.0 or b.ally_quick > 0.0:
+		b.ally_haste *= 1.4
+		b.ally_quick *= 1.4
+		b.area_radius += 1.0
+	elif b.charm_duration > 0.0:
+		b.charm_duration += 0.4
+		b.range += 3.0
+	else:
+		b.damage *= 1.25
+	_empowered[key] = b
+	return b
+
+
+const MARK_TIME := 4.0      # MARGINALIA and QUARRY marks last this long
+const PASSIVE_SHIELD_TIME := 3.0
+const PRIMED_TIME := 6.0    # STAND_BEHIND: a cast primes the next hit this long
+const STAND_COOLDOWN := 8.0
+const MOMENTUM_TIME := 3.0   # MOMENTUM: the primed hit waits this long
+
+
+## Champions and training dummies take marks; minions and structures do not.
+static func _markable(u: Unit) -> bool:
+	return u.def.kind == ChampionDef.Kind.CHAMPION or u.def.kind == ChampionDef.Kind.DUMMY
+
+
+## Champion passives that react to a landed hit (MARGINALIA, STAND_BEHIND).
+## QUARRY changes the damage itself, in passive_damage_factor.
+func _hit_passives(source: Unit, target: Unit, a: AbilityDef) -> void:
+	if not _markable(target) or not source.alive:
+		return
+	match source.def.passive:
+		ChampionDef.Passive.SEAM:
+			if a == source.get_slot(2):
+				source.passive_marks["seamprime:%d" % target.net_id] = time  # the knife opens a seam
+		ChampionDef.Passive.RESIDUAL:
+			if (a == source.get_slot(4) or a.is_ultimate) and target.def.kind != ChampionDef.Kind.STRUCTURE:
+				var key := "rc:ult" if a.is_ultimate else "rc:%s" % a.id  # Tempest's strikes are one cast
+				if time - float(source.passive_marks.get(key, -100.0)) > RESIDUAL_WINDOW:
+					source.passive_marks[key] = time  # once per cast
+					source.passive_stacks = minf(source.passive_stacks + 1.0, RESIDUAL_MAX)
+		ChampionDef.Passive.MARGINALIA:
+			if a == source.get_slot(1):
+				source.passive_marks[target.net_id] = Vector2(1, time)
+			elif a == source.get_slot(2):
+				var m: Vector2 = source.passive_marks.get(target.net_id, Vector2(0, -100))
+				if m.x > 0 and time - m.y <= MARK_TIME:
+					source.passive_marks.erase(target.net_id)
+					source.apply_shield(source.def.passive_value, PASSIVE_SHIELD_TIME)
+					unit_shielded.emit(source, source.shield)
+		ChampionDef.Passive.STAND_BEHIND:
+			if a == source.def.basic_attack and time <= source.passive_primed_until and time >= source.passive_ready_at:
+				var best: Unit = null
+				for u in units:
+					if u.alive and u.team == source.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+							and _flat(u.global_position, source.global_position) <= source.def.passive_range \
+							and (best == null or _shield_need(u) > _shield_need(best)):
+						best = u
+				if best:
+					source.passive_primed_until = -1.0
+					source.passive_ready_at = time + STAND_COOLDOWN
+					give_shield(source, best, source.def.passive_value, PASSIVE_SHIELD_TIME)
+
+
+## Who needs a shield most: missing health share; the caster itself counts
+## a little less, so a hurt ally beside it wins a tie.
+static func _shield_need(u: Unit) -> float:
+	return 1.0 - u.health / u.max_health - (0.05 if u.def.passive == ChampionDef.Passive.STAND_BEHIND else 0.0)

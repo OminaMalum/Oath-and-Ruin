@@ -6,12 +6,17 @@
 [ext_resource type="Resource" path="res://data/abilities/shield_slam.tres" id="3_r0s6u"]
 [ext_resource type="Resource" path="res://data/abilities/unbroken_oath.tres" id="5_ult"]
 [ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_gn757"]
+[ext_resource type="Resource" path="res://data/abilities/shield_rush.tres" id="9_f"]
 
 [resource]
 script = ExtResource("4_gn757")
 id = &"oathwarden"
 display_name = "Oathwarden"
 role = "Frontline fighter"
+hero_name = "Ser Garran Holt"
+title = "The Last Witness"
+ancestry = "Human paladin"
+lore = "He watched a false renewal of the Pact condemn a whole district. Now his oath binds him to people, not institutions; their names are inside his shield."
 look = 8
 max_health = 820.0
 move_speed = 5.8
@@ -19,11 +24,14 @@ radius = 0.5
 height = 1.95
 fountain_heal = 80.0
 basic_attack = ExtResource("3_8um6y")
-abilities = Array[ExtResource("1_0iy75")]([ExtResource("2_r0s6u"), ExtResource("3_r0s6u"), ExtResource("5_ult")])
-passive = 2
-passive_name = "Resolve"
-passive_description = "Below half health the Oathwarden takes 15% less damage."
-passive_value = 0.15
+abilities = Array[ExtResource("1_0iy75")]([ExtResource("2_r0s6u"), ExtResource("3_r0s6u"), ExtResource("5_ult"), ExtResource("9_f")])
+passive = 11
+passive_name = "Stand Behind Me"
+passive_description = "After a Q or E cast, the next basic hit on a champion (within 6 s) shields the most hurt allied champion within 8 m for 90, 3 s. Every 8 s at most."
+passive_value = 90.0
+passive_range = 8.0
 primary_color = Color(0.34, 0.36, 0.38, 1)
 accent_color = Color(0.95, 0.8, 0.45, 1)
 item_build = Array[StringName]([&"oathbound_plate", &"ash_hourglass", &"wayfarer_greaves", &"ember_edge"])
+adventurer_build = Array[StringName]([&"pilgrims_seal", &"oathkeepers_harness", &"ironstride_boots", &"bastion_plate"])
+power = 0

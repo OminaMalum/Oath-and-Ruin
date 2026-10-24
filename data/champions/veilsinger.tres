@@ -6,23 +6,30 @@
 [ext_resource type="Resource" path="res://data/abilities/war_song.tres" id="4_a"]
 [ext_resource type="Resource" path="res://data/abilities/lure.tres" id="5_a"]
 [ext_resource type="Resource" path="res://data/abilities/rally_chorus.tres" id="6_a"]
+[ext_resource type="Resource" path="res://data/abilities/discord.tres" id="9_f"]
 
 [resource]
 script = ExtResource("1_ch")
 id = &"veilsinger"
 display_name = "Veilsinger"
 role = "Support"
+hero_name = "Mirren Thale"
+title = "Voice Between Worlds"
+ancestry = "Half-elf bard"
+lore = "She knows a forbidden verse the Pact's seals answer to. Each song reveals more truth, and lets something beyond the seals listen."
 look = 14
 max_health = 540.0
 move_speed = 6.4
 fountain_heal = 80.0
 basic_attack = ExtResource("3_b")
-abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a")])
-passive = 8
-passive_name = "Encore"
-passive_description = "Allied champions within 8 m of the Veilsinger, and the Veilsinger, move 8% faster."
-passive_value = 0.08
-passive_range = 8.0
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("9_f")])
+passive = 17
+passive_name = "Refrain"
+passive_description = "War Song then Lure, or Lure then War Song, within 6 s: the second one is stronger. War Song grows wider and quicker, Lure lasts longer and reaches further."
+passive_value = 0.0
+passive_range = 0.0
 primary_color = Color(0.4, 0.26, 0.36, 1)
 accent_color = Color(0.95, 0.66, 0.78, 1)
 item_build = Array[StringName]([&"wayfarer_greaves", &"ash_hourglass", &"oathbound_plate", &"ember_edge"])
+adventurer_build = Array[StringName]([&"pilgrims_seal", &"cantors_thread", &"spellwalkers_boots", &"lantern_of_returning"])
+power = 1

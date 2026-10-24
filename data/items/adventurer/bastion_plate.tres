@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/iron_links.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/vital_cord.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"bastion_plate"
+display_name = "Bastion Plate"
+short_name = "Bastion"
+description = "+24 armor, +180 health. Dropping below 35% health from a champion hit gives a shield (100 + 10% max health) for 4 s"
+cost = 1040
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+armor = 24.0
+health = 180.0
+passive = 3
+passive_value = 100.0
+passive_cooldown = 45.0

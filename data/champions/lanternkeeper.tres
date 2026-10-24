@@ -6,23 +6,30 @@
 [ext_resource type="Resource" path="res://data/abilities/lantern_light.tres" id="4_a"]
 [ext_resource type="Resource" path="res://data/abilities/ravens_mark.tres" id="5_a"]
 [ext_resource type="Resource" path="res://data/abilities/dawnlight.tres" id="6_a"]
+[ext_resource type="Resource" path="res://data/abilities/searing_light.tres" id="9_f"]
 
 [resource]
 script = ExtResource("1_ch")
 id = &"lanternkeeper"
 display_name = "Lanternkeeper"
 role = "Support"
+hero_name = "Brother Oren Wick"
+title = "Bearer of the Returning Flame"
+ancestry = "Dwarf cleric"
+lore = "He guides the dying home. Lately his lantern answers voices of people still alive, and they lead toward the oath engines."
 look = 10
 max_health = 600.0
 move_speed = 6.1
 fountain_heal = 80.0
 basic_attack = ExtResource("3_b")
-abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a")])
-passive = 4
-passive_name = "Kindled"
-passive_description = "Allied champions within 7 m of the Lanternkeeper, and the Lanternkeeper, regain 4 health a second."
-passive_value = 4.0
-passive_range = 7.0
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("9_f")])
+passive = 15
+passive_name = "Keep the Flame"
+passive_description = "Healing an allied champion in a fight stores an ember (once per cast, up to 3). The next Lantern Light shields every allied champion inside it for 25 per ember, 3 s."
+passive_value = 25.0
+passive_range = 0.0
 primary_color = Color(0.78, 0.7, 0.52, 1)
 accent_color = Color(1.0, 0.82, 0.4, 1)
 item_build = Array[StringName]([&"oathbound_plate", &"ash_hourglass", &"wayfarer_greaves", &"ember_edge"])
+adventurer_build = Array[StringName]([&"pilgrims_seal", &"lantern_of_returning", &"spellwalkers_boots", &"cantors_thread"])
+power = 1

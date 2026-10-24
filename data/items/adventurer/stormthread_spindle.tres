@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/etched_focus.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/quickstring.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"stormthread_spindle"
+display_name = "Stormthread Spindle"
+short_name = "Spindle"
+description = "+16 spell power, attacks 15% faster. Casting an ability makes your next basic hit on a champion add 30 spell damage"
+cost = 1000
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+spell_power = 16.0
+attack_speed = 0.15
+passive = 11
+passive_value = 30.0

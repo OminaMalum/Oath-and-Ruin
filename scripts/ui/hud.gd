@@ -20,6 +20,11 @@ var _notice: String = ""
 var _notice_t: float = 0.0
 var _hits_taken: Array[Dictionary] = []  # {from: Vector3, t}
 var _font: Font
+## Adventurer shop hit boxes from the last draw: {rect, buy|sell, index}.
+var _shop_hits: Array[Dictionary] = []
+var _shop_hover: ItemDef
+## Adventurer shop page: 0 parts (starters, boots, components), 1 finished.
+var shop_tab: int = 0
 
 
 func setup(a: CombatAuthority, p: Unit, r: CameraRig, b: SparringBot) -> void:
@@ -35,7 +40,8 @@ func setup(a: CombatAuthority, p: Unit, r: CameraRig, b: SparringBot) -> void:
 	p.gold_earned.connect(func(g: float, at: Vector3) -> void:
 		_numbers.append({"pos": at + Vector3(0, 2.2, 0), "text": "+%d gold" % roundi(g), "t": 0.0, "gold": true, "life": 1.4}))
 	p.recall_cancelled.connect(func(reason: String) -> void: notice(reason))
-	p.item_bought.connect(func(it: ItemDef) -> void: notice("Bought %s: %s" % [it.display_name, it.description]))
+	p.item_bought.connect(func(it: ItemDef) -> void: notice("Bought %s" % it.display_name))
+	p.item_sold.connect(func(it: ItemDef, g: float) -> void: notice("Sold %s for %d gold" % [it.display_name, roundi(g)]))
 
 
 ## A short message above the ability bar explaining why something did not happen.
@@ -58,7 +64,7 @@ func _on_damaged(target: Unit, amount: float, source: Unit) -> void:
 	if target != player and source != player:
 		return
 	_numbers.append({"pos": target.global_position + Vector3(0, target.def.height + 0.4, 0),
-		"text": str(roundi(amount)), "t": 0.0, "enemy": target.team != player.team})
+		"text": str(roundi(amount)) if amount >= 0.5 else "Shield", "t": 0.0, "enemy": target.team != player.team})
 
 
 func _process(delta: float) -> void:
@@ -185,6 +191,11 @@ func _draw() -> void:
 	var hb := Rect2(Vector2(c.x - 220, vs.y - 128), Vector2(440, 26))
 	draw_rect(Rect2(Vector2(c.x - 470, vs.y - 140), Vector2(940, 128)), Color(0.06, 0.05, 0.04, 0.55))
 	_bar(hb, player.health / player.max_health, Palette.SELF_HEALTH)
+	if player.shield > 0.0:
+		# The shield sits after the health, pale gold, as far as the bar goes.
+		var from := hb.size.x * clampf(player.health / player.max_health, 0.0, 1.0)
+		var w := minf(hb.size.x * player.shield / player.max_health, hb.size.x - from)
+		draw_rect(Rect2(hb.position + Vector2(from, 0), Vector2(maxf(w, 3.0), hb.size.y)), Color(0.98, 0.92, 0.72))
 	_text(Vector2(hb.position.x, hb.position.y + 22), "%d / %d" % [ceili(player.health), ceili(player.max_health)], 24, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	_text(Vector2(hb.position.x - 230, hb.position.y + 21), player.def.display_name, FONT_SIZE, Color(0.95, 0.88, 0.7), HORIZONTAL_ALIGNMENT_RIGHT, 220)
 	if player.xp > 0.0 or player.level > 1:
@@ -194,7 +205,7 @@ func _draw() -> void:
 		if player.level < Unit.LEVEL_XP.size():
 			var lo := Unit.LEVEL_XP[player.level - 1]
 			var hi := Unit.LEVEL_XP[player.level]
-			_bar(Rect2(Vector2(hb.position.x + hb.size.x + 14, hb.position.y + 30), Vector2(120, 6)), (player.xp - lo) / (hi - lo), Palette.BRASS)
+			_bar(Rect2(Vector2(hb.position.x + hb.size.x + 14, hb.position.y + 26), Vector2(120, 6)), (player.xp - lo) / (hi - lo), Palette.BRASS)
 	var shop := HumanController.shop_open and player.shop_point.is_finite() and not following
 	if player.shop_point.is_finite():
 		# Gold, right above the level, in big pale yellow digits.
@@ -220,13 +231,17 @@ func _draw() -> void:
 
 	# Ability slots.
 	var q := player.get_slot(1)
-	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB", "E", "R"]
+	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB", "E", "R", "F"]
 	var slot_w := 150.0
-	var x0 := c.x - (slot_w * player.def.slot_count() + 12 * (player.def.slot_count() - 1)) * 0.5
-	for i in player.def.slot_count():
+	var n := player.def.slot_count()
+	var x0 := c.x - (slot_w * n + 12 * (n - 1)) * 0.5
+	# Drawn in keyboard order, so the ultimate (slot 3, R) sits last after F.
+	var order := [0, 1, 2, 4, 3] if n == 5 else range(n)
+	for pos in n:
+		var i: int = order[pos]
 		var a := player.get_slot(i)
-		var r := Rect2(Vector2(x0 + i * (slot_w + 12), vs.y - 92), Vector2(slot_w, 70))
-		var cd := player.cooldowns[i] if player.alive else 0.0
+		var r := Rect2(Vector2(x0 + pos * (slot_w + 12), vs.y - 92), Vector2(slot_w, 70))
+		var cd := player.ready_in(i) if player.alive else 0.0
 		var casting := player.cast_slot == i and player.is_casting()
 		var locked := a.is_ultimate and not player.ultimate_ready_level()
 		var unavailable := not player.alive or player.is_stunned()
@@ -241,7 +256,11 @@ func _draw() -> void:
 			draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * f)), Color(0, 0, 0, 0.6))
 		if unavailable:
 			draw_rect(r, Color(0.3, 0.3, 0.3, 0.5))
-		_text(r.position + Vector2(0, 24), a.display_name, SMALL, Color(0.95, 0.92, 0.85) if not locked else Color(0.6, 0.58, 0.55), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		# Long names shrink to fit the slot instead of being cut off.
+		var name_size := SMALL
+		while name_size > 14 and _font.get_string_size(a.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > r.size.x - 10:
+			name_size -= 1
+		_text(r.position + Vector2(0, 24), a.display_name, name_size, Color(0.95, 0.92, 0.85) if not locked else Color(0.6, 0.58, 0.55), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 		var label: String = keys[i] if i < keys.size() else ""
 		var lcol := Palette.TEAL
 		if locked:
@@ -251,13 +270,26 @@ func _draw() -> void:
 			draw_arc(lp + Vector2(7, 8), 5, PI, TAU, 10, Color(0.75, 0.72, 0.68), 2.5)
 			label = "Lv %d" % Unit.ULT_LEVEL
 			lcol = Color(0.75, 0.72, 0.68)
-		elif cd > 0.0 and a.cooldown >= 1.5:
+		elif cd > 0.0 and a.cooldown >= 1.5 and not (player.is_charged(i) and player.charges[i] > 0):
 			label = "%.1f" % cd
 			lcol = Color(0.95, 0.9, 0.8)
 		elif unavailable:
 			lcol = Color(0.6, 0.6, 0.6)
 		_text(r.position + Vector2(0, 58), label, 26 if cd > 0.0 and not locked else FONT_SIZE, lcol, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		if player.is_charged(i):
+			# Charges: one big pip per use, filled while it is ready.
+			for k in a.max_charges:
+				var pc := r.position + Vector2(r.size.x - 16 - k * 20, 50)
+				draw_circle(pc, 7, Color(0.05, 0.05, 0.05, 0.9))
+				if k < player.charges[i]:
+					draw_circle(pc, 5.5, Palette.TEAL)
 
+	var pr := passive_readout(player)
+	if not pr.is_empty() and not player.upgrade_pending:
+		# The passive's count, left of the gold, on its own dark plate.
+		var prr := Rect2(Vector2(c.x + 20, vs.y - 182), Vector2(270, 38))
+		draw_rect(prr, Color(0.06, 0.05, 0.04, 0.7))
+		_text(prr.position + Vector2(0, 27), pr, FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, prr.size.x)
 	if player.recall_timer > 0.0:
 		# Recall: a bar filling toward home above the ability bar.
 		var rr := Rect2(Vector2(c.x - 200, vs.y - 236), Vector2(400, 22))
@@ -277,6 +309,8 @@ func _draw() -> void:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Rooted: you can attack but not move", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.mark_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Marked: you take more damage", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	elif player.weaken_timer > 0.0:
+		_text(Vector2(hb.position.x, hb.position.y - 10), "Weakened: you deal less damage", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.slow_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Slowed", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.haste_timer > 0.0:
@@ -289,7 +323,10 @@ func _draw() -> void:
 		_text(Vector2(0, dy + 46), "Respawning in %.1f" % maxf(player.respawn_timer, 0.0), 30, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		if player.shop_point.is_finite() and not shop:
 			_text(Vector2(0, dy + 90), "Press B to shop while you wait", FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-	if shop:
+	_shop_hits.clear()
+	if shop and ItemShop.adventurer():
+		_draw_adventurer_shop(vs, c)
+	elif shop:
 		_draw_shop(vs, c)
 	if following:
 		# Spectating a bot: a small line instead of the death overlay, so the
@@ -302,7 +339,7 @@ func _draw() -> void:
 
 	if not status.is_empty():
 		_text(Vector2(0, vs.y * 0.22), status, 30, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-	if not rig.mouse_captured() and not rig.follow_unit_yaw:
+	if not rig.mouse_captured() and not rig.follow_unit_yaw and not HumanController.shop_open:
 		_text(Vector2(0, vs.y * 0.30), "Click to play", 36, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if not show_help:
 		draw_rect(Rect2(Vector2(16, 16), Vector2(150, 30)), Color(0.06, 0.05, 0.04, 0.6))
@@ -314,6 +351,7 @@ func _draw() -> void:
 			("Q hold and release, or right mouse  %s" if player.get_slot(1).delivery == AbilityDef.Delivery.GROUND_AREA \
 				else "Q or right mouse  %s") % player.get_slot(1).display_name,
 			("E  %s" % player.get_slot(2).display_name) if player.get_slot(2) else "",
+			("F  %s" % player.get_slot(4).display_name) if player.get_slot(4) else "",
 			("R  %s (ultimate, level %d)" % [player.get_slot(3).display_name, Unit.ULT_LEVEL]) if player.get_slot(3) else "",
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			"B  shop at your fountain or while dead, then 1 to 4 to buy" if player.shop_point.is_finite() else "",
@@ -396,3 +434,180 @@ func _aim_state() -> String:
 		var d := UnitController.flat_distance(player.global_position, enemy.global_position) - enemy.def.radius
 		return "in_range" if d <= player.def.basic_attack.range else "out_of_range"
 	return "none"
+
+
+## Adventurer shop: suggestion, catalog in columns, own items. Click to buy,
+## right click an own item to sell, 1 buys the suggestion. Big type, one line
+## per fact; the hovered item's full text sits at the bottom.
+func _draw_adventurer_shop(vs: Vector2, c: Vector2) -> void:
+	var eco := Unit.ECONOMY
+	var w := minf(vs.x - 40.0, 1240.0)
+	var top := 64.0
+	var panel := Rect2(Vector2(c.x - w * 0.5, top), Vector2(w, vs.y - 215.0 - top))
+	draw_rect(panel.grow(2), Palette.BRASS)
+	draw_rect(panel, Color(0.10, 0.09, 0.08, 0.96))
+	var open := player.can_shop()
+	var x0 := panel.position.x + 16.0
+	var y := panel.position.y + 38.0
+	var head := "Shop    %d gold" % floori(player.gold) if open else "The shop opens at your fountain or while you respawn"
+	_text(Vector2(x0, y), head, 26, Palette.GOLD if open else Color(0.85, 0.82, 0.75), HORIZONTAL_ALIGNMENT_LEFT, w - 300)
+	_text(Vector2(x0, y), "B closes", FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_RIGHT, w - 32)
+	# Two pages, picked by clicking a tab: parts and boots, or finished items.
+	var tab_w := 190.0
+	for t in 2:
+		var tr := Rect2(Vector2(panel.end.x - 16.0 - 130.0 - (2 - t) * (tab_w + 8.0), panel.position.y + 10.0), Vector2(tab_w, 38))
+		var on := shop_tab == t
+		draw_rect(tr, Color(0.22, 0.20, 0.16, 0.98) if on else Color(0.13, 0.12, 0.10, 0.95))
+		if on:
+			draw_rect(Rect2(Vector2(tr.position.x, tr.end.y - 4.0), Vector2(tr.size.x, 4.0)), Palette.TEAL)
+		_text(tr.position + Vector2(0, 27), ["Parts and boots", "Finished items"][t], FONT_SIZE, Color(0.96, 0.93, 0.86) if on else Color(0.72, 0.70, 0.66), HORIZONTAL_ALIGNMENT_CENTER, tr.size.x)
+		_shop_hits.append({"rect": tr, "tab": t})
+	# Suggestion along the champion's build.
+	y += 16.0
+	var next := ItemShop.next_step(player)
+	var sug := Rect2(Vector2(x0, y), Vector2(w - 32, 52))
+	if next > 0:
+		var it: ItemDef = eco.items[next - 1]
+		var plan := player.purchase_plan(next)
+		var ready: bool = (plan.problem as String).is_empty()
+		draw_rect(sug, Color(0.18, 0.16, 0.13, 0.95) if ready else Color(0.13, 0.12, 0.10, 0.95))
+		if ready:
+			draw_rect(Rect2(sug.position, Vector2(6, sug.size.y)), Palette.TEAL)
+		_text(sug.position + Vector2(18, 35), "1", 28, Palette.TEAL if ready else Color(0.6, 0.6, 0.58), HORIZONTAL_ALIGNMENT_LEFT, 30)
+		_text(sug.position + Vector2(56, 35), "Next for you:  %s" % it.display_name, 24, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_LEFT, sug.size.x - 300)
+		_text(sug.position + Vector2(0, 35), _price_text(next, plan), FONT_SIZE, Palette.GOLD if ready else Color(0.75, 0.72, 0.68), HORIZONTAL_ALIGNMENT_RIGHT, sug.size.x - 16)
+		_shop_hits.append({"rect": sug, "buy": next, "item": it})
+	else:
+		draw_rect(sug, Color(0.13, 0.12, 0.10, 0.95))
+		_text(sug.position + Vector2(18, 35), "Your build is complete", 24, Color(0.75, 0.72, 0.68), HORIZONTAL_ALIGNMENT_LEFT, sug.size.x)
+	y += 70.0
+	# Catalog, four columns of up to four. Parts page: Starters | Boots |
+	# Components (two columns). Finished page: Weapon | Spell | Defence | Utility.
+	var cols := [["Starters", "starter", 1], ["Boots", "boots", 1], ["Components", "component", 2]]
+	if shop_tab == 1:
+		cols = [["Weapon", "weapon", 1], ["Spell", "spell", 1], ["Defence", "defence", 1], ["Utility", "utility", 1]]
+	var col_w := (w - 32.0 - 3 * 10.0) / 4.0
+	var cell_h := minf(70.0, (panel.end.y - y - 150.0) / 4.0)
+	var cx := x0
+	for col in cols:
+		var group: String = col[1]
+		var span: int = col[2]
+		_text(Vector2(cx, y + 20), col[0], FONT_SIZE, Color(0.85, 0.80, 0.70), HORIZONTAL_ALIGNMENT_LEFT, col_w * span)
+		var n := 0
+		for i in eco.items.size():
+			var it: ItemDef = eco.items[i]
+			if shop_group(it) != group:
+				continue
+			var r := Rect2(Vector2(cx + (n / 4) * (col_w + 10.0), y + 32.0 + (n % 4) * (cell_h + 6.0)), Vector2(col_w, cell_h))
+			_draw_item_cell(r, i + 1)
+			n += 1
+		cx += span * (col_w + 10.0)
+	# Own items: right click sells.
+	var iy := panel.end.y - 112.0
+	_text(Vector2(x0, iy), "Your items  (right click to sell)", FONT_SIZE, Color(0.85, 0.80, 0.70), HORIZONTAL_ALIGNMENT_LEFT, w)
+	var sw := (w - 32.0 - (eco.slots - 1) * 10.0) / eco.slots
+	for s in eco.slots:
+		var r := Rect2(Vector2(x0 + s * (sw + 10.0), iy + 10.0), Vector2(sw, 48))
+		draw_rect(r, Color(0.16, 0.14, 0.12, 0.95))
+		if s < player.items.size():
+			var it: ItemDef = player.items[s]
+			_text(r.position + Vector2(10, 22), it.display_name, 20, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_LEFT, sw - 16)
+			_text(r.position + Vector2(10, 43), "sell %d" % roundi(player.sell_value(s + 1)), 20, Palette.GOLD, HORIZONTAL_ALIGNMENT_LEFT, sw - 16)
+			_shop_hits.append({"rect": r, "sell": s + 1, "item": it})
+		else:
+			_text(r.position + Vector2(0, 31), "empty", SMALL, Color(0.5, 0.48, 0.45), HORIZONTAL_ALIGNMENT_CENTER, sw)
+	if _shop_hover:
+		_text(Vector2(x0, panel.end.y - 14.0), "%s:  %s" % [_shop_hover.display_name, _shop_hover.description], 20, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_LEFT, w - 32)
+
+
+## Which shop column an adventurer item sits in.
+static func shop_group(it: ItemDef) -> String:
+	match it.kind:
+		ItemDef.Kind.STARTER:
+			return "starter"
+		ItemDef.Kind.BOOTS:
+			return "boots"
+		ItemDef.Kind.COMPONENT:
+			return "component"
+	if it.passive in [ItemDef.Passive.ASHEN, ItemDef.Passive.LANTERN, ItemDef.Passive.CANTOR, ItemDef.Passive.HARNESS]:
+		return "utility"
+	if it.weapon_power > 0.0:
+		return "weapon"
+	if it.spell_power > 0.0:
+		return "spell"
+	return "defence"
+
+
+func _draw_item_cell(r: Rect2, index: int) -> void:
+	var it: ItemDef = Unit.ECONOMY.items[index - 1]
+	var plan := player.purchase_plan(index)
+	var owned := it.kind != ItemDef.Kind.COMPONENT and player.items.has(it)
+	var ready: bool = (plan.problem as String).is_empty()
+	draw_rect(r, Color(0.18, 0.16, 0.13, 0.95) if ready else Color(0.13, 0.12, 0.10, 0.95))
+	if ready:
+		draw_rect(Rect2(r.position, Vector2(5, r.size.y)), Palette.TEAL)
+	var main := Color(0.96, 0.93, 0.86) if ready else Color(0.72, 0.70, 0.66)
+	# Long names step down a size rather than being cut.
+	var name_size := FONT_SIZE
+	while name_size > 16 and _font.get_string_size(it.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > r.size.x - 20:
+		name_size -= 1
+	_text(r.position + Vector2(12, 26), it.display_name, name_size, main, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18)
+	var line := "Owned" if owned else _price_text(index, plan)
+	_text(r.position + Vector2(12, r.size.y - 10), line, 20, Palette.GOLD if ready else main, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18)
+	_shop_hits.append({"rect": r, "buy": index, "item": it})
+
+
+## "160", "640 with your parts", "need 40 more".
+func _price_text(index: int, plan: Dictionary) -> String:
+	var it: ItemDef = Unit.ECONOMY.items[index - 1]
+	var price: int = plan.price
+	var short := ceili(price - player.gold)
+	var s := "%d" % price
+	if price < it.cost:
+		s = "%d with your parts" % price
+	if short > 0:
+		s += ", need %d" % short
+	return s
+
+
+func _input(event: InputEvent) -> void:
+	if not (HumanController.shop_open and ItemShop.adventurer()) or player == null:
+		return
+	if event is InputEventMouseMotion:
+		_shop_hover = null
+		for h in _shop_hits:
+			if (h.rect as Rect2).has_point(event.position) and h.has("item"):
+				_shop_hover = h.item
+		return
+	if not (event is InputEventMouseButton and event.pressed):
+		return
+	for h in _shop_hits:
+		if not (h.rect as Rect2).has_point(event.position):
+			continue
+		if event.button_index == MOUSE_BUTTON_LEFT and h.has("tab"):
+			shop_tab = h.tab
+		elif event.button_index == MOUSE_BUTTON_LEFT and h.has("buy"):
+			HumanController.pending_buy = h.buy
+		elif event.button_index == MOUSE_BUTTON_RIGHT and h.has("sell"):
+			HumanController.pending_sell = h.sell
+		get_viewport().set_input_as_handled()
+		return
+
+
+## The passive's stored count, when it has one worth watching (embers, fury,
+## charges, the half-sung refrain). Empty otherwise.
+static func passive_readout(u: Unit) -> String:
+	match u.def.passive:
+		ChampionDef.Passive.FLAME:
+			return "Embers %d/%d" % [floori(u.passive_stacks), roundi(CombatAuthority.FLAME_MAX)] if u.passive_stacks >= 1.0 else ""
+		ChampionDef.Passive.FURY:
+			if u.passive_stacks >= CombatAuthority.FURY_MAX:
+				return "Fury full: Q heals"
+			return "Fury %d" % floori(u.passive_stacks) if u.passive_stacks >= 1.0 else ""
+		ChampionDef.Passive.RESIDUAL:
+			return "Charges %d/%d" % [floori(u.passive_stacks), roundi(CombatAuthority.RESIDUAL_MAX)] if u.passive_stacks >= 1.0 else ""
+		ChampionDef.Passive.REFRAIN:
+			if u.refrain_slot > 0:
+				var other := u.get_slot(3 - u.refrain_slot)
+				return "Refrain: %s next" % other.display_name if other else ""
+	return ""

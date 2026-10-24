@@ -12,6 +12,9 @@ static var mouse_sensitivity: float = 1.0
 static var fullscreen: bool = false
 ## Enemy bots: 0 Easy, 1 Normal, 2 Hard.
 static var difficulty: int = 1
+## Shop catalog: true the adventurer items (recipes, boots, selling), false
+## the four classic items.
+static var adventurer_items: bool = true
 ## Matches finished from the menu, per difficulty.
 static var wins: Array[int] = [0, 0, 0]
 static var losses: Array[int] = [0, 0, 0]
@@ -29,6 +32,7 @@ static func load_once() -> void:
 	mouse_sensitivity = clampf(float(cf.get_value("controls", "mouse_sensitivity", mouse_sensitivity)), 0.4, 2.5)
 	fullscreen = bool(cf.get_value("display", "fullscreen", fullscreen))
 	difficulty = clampi(int(cf.get_value("match", "difficulty", difficulty)), 0, 2)
+	adventurer_items = bool(cf.get_value("match", "adventurer_items", adventurer_items))
 	for i in 3:
 		wins[i] = maxi(0, int(cf.get_value("record", "wins_%d" % i, 0)))
 		losses[i] = maxi(0, int(cf.get_value("record", "losses_%d" % i, 0)))
@@ -40,6 +44,7 @@ static func save() -> void:
 	cf.set_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	cf.set_value("display", "fullscreen", fullscreen)
 	cf.set_value("match", "difficulty", difficulty)
+	cf.set_value("match", "adventurer_items", adventurer_items)
 	for i in 3:
 		cf.set_value("record", "wins_%d" % i, wins[i])
 		cf.set_value("record", "losses_%d" % i, losses[i])

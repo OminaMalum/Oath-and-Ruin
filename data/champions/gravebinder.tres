@@ -6,18 +6,23 @@
 [ext_resource type="Resource" path="res://data/abilities/binding_chains.tres" id="4_a"]
 [ext_resource type="Resource" path="res://data/abilities/grasping_earth.tres" id="5_a"]
 [ext_resource type="Resource" path="res://data/abilities/grave_pact.tres" id="6_a"]
+[ext_resource type="Resource" path="res://data/abilities/withering_curse.tres" id="9_f"]
 
 [resource]
 script = ExtResource("1_ch")
 id = &"gravebinder"
 display_name = "Gravebinder"
 role = "Controller"
+hero_name = "Maelin Dusk"
+title = "Advocate of the Unburied"
+ancestry = "Human necromancer"
+lore = "Some oath engines burn souls denied their rest. She bargains with the willing dead to free the others."
 look = 12
 max_health = 590.0
 move_speed = 6.0
 fountain_heal = 80.0
 basic_attack = ExtResource("3_b")
-abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a")])
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("9_f")])
 passive = 6
 passive_name = "Soul Tithe"
 passive_description = "20% more damage to enemies that are rooted, slowed or stunned."
@@ -26,3 +31,5 @@ passive_range = 0.0
 primary_color = Color(0.22, 0.18, 0.28, 1)
 accent_color = Color(0.72, 0.58, 0.92, 1)
 item_build = Array[StringName]([&"ash_hourglass", &"oathbound_plate", &"ember_edge", &"wayfarer_greaves"])
+adventurer_build = Array[StringName]([&"apprentices_focus", &"cinder_reliquary", &"spellwalkers_boots", &"runecasters_codex"])
+power = 1

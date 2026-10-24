@@ -12,6 +12,7 @@ var _launch_offsets := {}  # SimProjectile -> {off, t}: drawn start blends from 
 var _areas := {}        # SimArea -> Node3D
 var _tells := {}        # Unit -> Node3D
 var _effects: Array[Dictionary] = []
+var _chains := {}       # Unit -> MeshInstance3D: a grapple chain in flight
 var _preview: Node3D
 
 
@@ -34,6 +35,10 @@ func setup(a: CombatAuthority, local_unit: Unit) -> void:
 	add_child(spell_fx)
 	spell_fx.setup(a, self)
 	a.unit_removed.connect(func(u: Unit) -> void:
+		var ch: Node3D = _chains.get(u)
+		if ch:
+			ch.queue_free()
+		_chains.erase(u)
 		var t: Node3D = _tells.get(u)
 		if t:
 			t.queue_free()
@@ -146,6 +151,9 @@ func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
 		sfx("ward_rise", ar.center, 0.0)
 		_spawn_wall(ar)
 		return
+	if ar.ability.line_width > 0.0:
+		_spawn_line(ar)
+		return
 	var n := Node3D.new()
 	var col := _team_color(ar.source)
 	var r := ar.ability.area_radius
@@ -164,6 +172,82 @@ func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
 	n.global_position = ar.center + Vector3(0, 0.03 + Palette.DECAL_LIFT, 0)
 	fill.scale = Vector3(0.01, 1, 0.01)
 	_areas[ar] = n
+
+
+## A line burst: a long strip with a bold edge on both long sides and a fill
+## that grows from the caster's end toward the far end as the burst nears.
+func _spawn_line(ar: CombatAuthority.SimArea) -> void:
+	var n := Node3D.new()
+	var col := _team_color(ar.source)
+	var length := ar.ability.range
+	var width := ar.ability.line_width
+	var base := MeshInstance3D.new()
+	base.mesh = BoxMesh.new()
+	(base.mesh as BoxMesh).size = Vector3(width, 0.02, length)
+	base.material_override = Palette.ground_decal(col, 0.12)
+	base.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	n.add_child(base)
+	for x: float in [-width * 0.5, width * 0.5]:
+		var edge := MeshInstance3D.new()
+		edge.mesh = BoxMesh.new()
+		(edge.mesh as BoxMesh).size = Vector3(0.16, 0.03, length)
+		edge.material_override = Palette.ground_decal(col, 0.95)
+		edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		edge.position = Vector3(x, 0.01, 0)
+		n.add_child(edge)
+	# The fill is parented to a pivot at the near end, so scaling it in z
+	# grows it away from the caster.
+	var pivot := Node3D.new()
+	pivot.name = "Fill"
+	pivot.position = Vector3(0, 0.02, length * 0.5)
+	var fill := MeshInstance3D.new()
+	fill.mesh = BoxMesh.new()
+	(fill.mesh as BoxMesh).size = Vector3(width, 0.02, length)
+	fill.material_override = Palette.ground_decal(col, 0.32)
+	fill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fill.position = Vector3(0, 0, -length * 0.5)
+	pivot.add_child(fill)
+	n.add_child(pivot)
+	add_child(n)
+	n.global_position = ar.center + Vector3(0, 0.03 + Palette.DECAL_LIFT, 0)
+	# Local -Z runs along ar.dir, away from the caster.
+	n.look_at(n.global_position + ar.dir, Vector3.UP)
+	pivot.scale = Vector3(1, 1, 0.01)
+	_areas[ar] = n
+
+
+## A grapple chain: a thin bright line from the champion's chest to the wall
+## point it holds, drawn while the pull lasts.
+func _update_chains() -> void:
+	for u in authority.units:
+		var m: MeshInstance3D = _chains.get(u)
+		if u.alive and u.is_grappling():
+			if m == null:
+				m = MeshInstance3D.new()
+				var cm := CylinderMesh.new()
+				cm.top_radius = 0.05
+				cm.bottom_radius = 0.05
+				cm.height = 1.0
+				cm.radial_segments = 6
+				m.mesh = cm
+				m.material_override = Palette.glow(u.def.accent_color, 2.5)
+				m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				add_child(m)
+				_chains[u] = m
+			var from := u.get_global_transform_interpolated().origin + Vector3(0, u.def.height * 0.6, 0)
+			var to := u.grapple_anchor
+			var d := to - from
+			if d.length() < 0.05:
+				m.visible = false
+				continue
+			m.visible = true
+			m.global_position = (from + to) * 0.5
+			m.look_at(to, Vector3.UP if absf(d.normalized().y) < 0.99 else Vector3.RIGHT)
+			m.rotate_object_local(Vector3.RIGHT, PI * 0.5)  # the cylinder runs along local Y
+			m.scale = Vector3(1, d.length(), 1)
+		elif m:
+			m.queue_free()
+			_chains.erase(u)
 
 
 ## A ward: a solid ring and a faint dome in the caster's team colour, with an
@@ -261,6 +345,12 @@ func _on_area_detonated(ar: CombatAuthority.SimArea) -> void:
 		_areas.erase(ar)
 	if CombatAuthority._stands(ar.ability):
 		return
+	if ar.ability.line_width > 0.0:
+		for k in 5:
+			var p := ar.center + ar.dir * (ar.ability.range * (k / 4.0 - 0.5))
+			_spawn_burst(p + Vector3(0, 0.3, 0), ar.source.def.accent_color, ar.ability.line_width * 0.6, 0.3)
+		sfx("area_land", ar.center, 2.0)
+		return
 	_spawn_burst(ar.center + Vector3(0, 0.3, 0), ar.source.def.accent_color, ar.ability.area_radius, 0.3)
 	sfx("area_land", ar.center, 2.0)
 
@@ -311,8 +401,12 @@ func _process(delta: float) -> void:
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)
 		if CombatAuthority._stands(ar.ability):
 			k = clampf(ar.timer / maxf(ar.ability.ward_duration, 0.01), 0.0, 1.0)  # time left
-		fill.scale = Vector3(maxf(k, 0.01), 1, maxf(k, 0.01))
+		if ar.ability.line_width > 0.0:
+			fill.scale = Vector3(1, 1, maxf(k, 0.01))
+		else:
+			fill.scale = Vector3(maxf(k, 0.01), 1, maxf(k, 0.01))
 	_update_tells()
+	_update_chains()
 	_update_stun_marks()
 	_update_preview()
 	for e in _effects:
@@ -369,7 +463,7 @@ func _update_tells() -> void:
 		if a.delivery == AbilityDef.Delivery.MELEE_ARC:
 			tell.global_position = u.get_global_transform_interpolated().origin + Vector3(0, 0.04 + Palette.DECAL_LIFT, 0)
 			tell.rotation.y = u.aim_yaw
-		elif a.delivery == AbilityDef.Delivery.PROJECTILE or a.delivery == AbilityDef.Delivery.DASH:
+		elif a.delivery == AbilityDef.Delivery.PROJECTILE or a.delivery == AbilityDef.Delivery.DASH or a.line_width > 0.0:
 			var from := u.get_global_transform_interpolated().origin
 			var flat := Vector3(u.cast_target.x - from.x, 0, u.cast_target.z - from.z)
 			if flat.length() > 0.01:
@@ -460,10 +554,10 @@ func _make_tell(u: Unit, a: AbilityDef) -> Node3D:
 		n.add_child(lane)
 		add_child(n)
 		return n
-	if a.delivery == AbilityDef.Delivery.PROJECTILE:
+	if a.delivery == AbilityDef.Delivery.PROJECTILE or a.line_width > 0.0:
 		var lane := MeshInstance3D.new()
 		var b := BoxMesh.new()
-		b.size = Vector3(maxf(a.projectile_radius * 2.0, 0.3), 0.02, a.range)
+		b.size = Vector3(a.line_width if a.line_width > 0.0 else maxf(a.projectile_radius * 2.0, 0.3), 0.02, a.range)
 		lane.mesh = b
 		lane.position = Vector3(0, 0, -a.range * 0.5)
 		lane.material_override = Palette.ground_decal(col, 0.28)
