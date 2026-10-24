@@ -239,7 +239,7 @@ func _draw() -> void:
 		var i: int = order[pos]
 		var a := player.get_slot(i)
 		var r := Rect2(Vector2(x0 + pos * (slot_w + 12), vs.y - 92), Vector2(slot_w, 70))
-		var cd := player.cooldowns[i] if player.alive else 0.0
+		var cd := player.ready_in(i) if player.alive else 0.0
 		var casting := player.cast_slot == i and player.is_casting()
 		var locked := a.is_ultimate and not player.ultimate_ready_level()
 		var unavailable := not player.alive or player.is_stunned()
@@ -254,7 +254,11 @@ func _draw() -> void:
 			draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * f)), Color(0, 0, 0, 0.6))
 		if unavailable:
 			draw_rect(r, Color(0.3, 0.3, 0.3, 0.5))
-		_text(r.position + Vector2(0, 24), a.display_name, SMALL, Color(0.95, 0.92, 0.85) if not locked else Color(0.6, 0.58, 0.55), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		# Long names shrink to fit the slot instead of being cut off.
+		var name_size := SMALL
+		while name_size > 14 and _font.get_string_size(a.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > r.size.x - 10:
+			name_size -= 1
+		_text(r.position + Vector2(0, 24), a.display_name, name_size, Color(0.95, 0.92, 0.85) if not locked else Color(0.6, 0.58, 0.55), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 		var label: String = keys[i] if i < keys.size() else ""
 		var lcol := Palette.TEAL
 		if locked:
@@ -264,12 +268,19 @@ func _draw() -> void:
 			draw_arc(lp + Vector2(7, 8), 5, PI, TAU, 10, Color(0.75, 0.72, 0.68), 2.5)
 			label = "Lv %d" % Unit.ULT_LEVEL
 			lcol = Color(0.75, 0.72, 0.68)
-		elif cd > 0.0 and a.cooldown >= 1.5:
+		elif cd > 0.0 and a.cooldown >= 1.5 and not (player.is_charged(i) and player.charges[i] > 0):
 			label = "%.1f" % cd
 			lcol = Color(0.95, 0.9, 0.8)
 		elif unavailable:
 			lcol = Color(0.6, 0.6, 0.6)
 		_text(r.position + Vector2(0, 58), label, 26 if cd > 0.0 and not locked else FONT_SIZE, lcol, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		if player.is_charged(i):
+			# Charges: one big pip per use, filled while it is ready.
+			for k in a.max_charges:
+				var pc := r.position + Vector2(r.size.x - 16 - k * 20, 50)
+				draw_circle(pc, 7, Color(0.05, 0.05, 0.05, 0.9))
+				if k < player.charges[i]:
+					draw_circle(pc, 5.5, Palette.TEAL)
 
 	if player.recall_timer > 0.0:
 		# Recall: a bar filling toward home above the ability bar.
@@ -290,6 +301,8 @@ func _draw() -> void:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Rooted: you can attack but not move", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.mark_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Marked: you take more damage", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	elif player.weaken_timer > 0.0:
+		_text(Vector2(hb.position.x, hb.position.y - 10), "Weakened: you deal less damage", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.slow_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Slowed", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.haste_timer > 0.0:

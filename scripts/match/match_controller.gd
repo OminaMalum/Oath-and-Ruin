@@ -22,6 +22,9 @@ const STORM := preload("res://data/champions/stormscald.tres")
 ## first) and both teams field the same three, so neither side gets the
 ## better draft. Slot 0 holds the lane; slots 1 and 2 may go for the objective.
 const ROSTER: Array[ChampionDef] = [SCRIBE, WARDEN, RUNNER, LANTERN, THORN, GRAVE, BARROW, VEIL, STORM]
+## Champions still being proved out: pickable (menu, --lineup) but never drawn
+## at random, so seeded bot matches stay comparable with earlier builds.
+const PROTOTYPES: Array[ChampionDef] = [preload("res://data/champions/chainbound.tres")]
 const TOWER := preload("res://data/units/tower.tres")
 const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")
@@ -120,6 +123,9 @@ func setup(a: CombatAuthority, parent: Node3D) -> void:
 	a.unit_shielded.connect(func(u: Unit, amount: float) -> void:
 		if not over and stats.champions.has(u.name):
 			stats.champions[u.name].shield_received += amount)
+	a.grapple_started.connect(func(u: Unit, _ab: AbilityDef) -> void:
+		if not over and stats.champions.has(u.name):
+			stats.champions[u.name].grapples.append(snappedf(authority.time, 0.1)))
 	a.unit_died.connect(_on_died)
 
 
@@ -146,7 +152,7 @@ func start() -> void:
 				if human_slot and team == 1:
 					b.set_difficulty(difficulty)
 				u.controller = b
-			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0, "gold_earned": 0.0, "items": [], "recalls": 0, "healing_done": 0.0, "shield_received": 0.0, "gold_by_minute": [], "xp_by_minute": []}
+			stats.champions[u.name] = {"team": team, "champion": String(roster[slot].id), "kills": 0, "deaths": 0, "damage_to_champions": 0.0, "damage_to_structures": 0.0, "minion_kills": 0, "level": 1, "upgrade": "", "upgrade_at": -1.0, "gold_earned": 0.0, "items": [], "recalls": 0, "healing_done": 0.0, "shield_received": 0.0, "gold_by_minute": [], "xp_by_minute": [], "grapples": []}
 			u.upgraded.connect(func(_slot: int, a: AbilityDef) -> void:
 				stats.champions[u.name].upgrade = String(a.id)
 				stats.champions[u.name].upgrade_at = snappedf(authority.time, 0.1)
@@ -171,14 +177,14 @@ func _draw_lineup() -> Array[ChampionDef]:
 	var out: Array[ChampionDef] = []
 	if not lineup_ids.is_empty():
 		for id in lineup_ids:
-			for d in ROSTER:
+			for d in ROSTER + PROTOTYPES:
 				if d.id == id and not out.has(d):
 					out.append(d)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = bot_seed * 7919 + 13
 	var pool: Array[ChampionDef] = ROSTER.duplicate()
 	if out.is_empty() and human_slot:
-		for d in pool:
+		for d in pool + PROTOTYPES:
 			if d.id == human_pick:
 				out.append(d)
 	if out.is_empty():

@@ -448,6 +448,46 @@ menu under the champion picks. Lore is text only; no ancestry stats.
 
 Soak f1 (24 seeds, adventurer items): every match ended, sides 10/14, median 10.1 min (6.2 to 15.5), 18.7 kills per match. Highest team kill share Stormscald 54%, Gravebinder 52%, both under the 55% line. Oathwarden sits at 15% kill share, which fits a frontline shield role.
 
+## Phase 4: Chainbound prototype (added 2026-10-24)
+
+Veyra Sable, the Broken Covenant (tiefling warlock), the tenth champion. She
+is a **prototype**: pickable in the menu (its own row under the grid) and with
+`--lineup`, but never drawn at random, so seeded bot matches stay comparable
+with earlier builds. She borrows the Ashrunner body until the graphics pass
+gives her one of her own.
+
+| Slot | Ability | How it works |
+|---|---|---|
+| Passive | Borrowed Momentum | A Chain Traverse that carries her at least 4 m primes her next basic hit on a champion within 3 s for 60% more. One stored hit, no stacking, no chain refund. |
+| LMB | Pactlash | Short narrow chain-blade cut (3.2 m, 70 degrees). |
+| Q | Debt Collector | 9 m chain thrust: 55 damage and a 30% slow for 1 s on the first enemy. Pulls nobody. |
+| E | Chain Traverse | Grapple to a marked wall within 12 m. Two charges, each back after 8 s, one at a time. A second cast in flight hooks another wall and redirects. |
+| F | Break the Seal | Wide close sweep: 45 damage, champions struck deal 30% less for 2.5 s. No dash, stun or heal. |
+| R | Covenant Severed | A 14 m by 2.4 m chain line shows for 1 s, then 160 damage and a 1 s root. Does not refresh E. |
+
+Grapple rules (`Unit.grapple_endpoint`, `GrappleAnchors`):
+- Legal surfaces are marked: walls at least 2 m tall standing on the floor
+  inside the playable stretch get `Unit.LAYER_ANCHOR`. The floor, the base
+  plazas (spawn and fountain) and everything without collision (trees,
+  banners, rubble) are never anchors. Units are never anchors.
+- The chain flies flat from chest height. The first world surface it meets
+  must be a marked wall face, so it never passes through a wall.
+- The landing point stands off the wall by the body radius, must have ground
+  under it, and the body's capsule must fit along the whole route. The route
+  is checked again at release, from where she is then.
+- A press with no valid anchor spends nothing, shows why ("No wall in reach",
+  "The chain cannot hold there", "The way to that wall is blocked") and waits
+  0.3 s before the next try.
+- Rooted: no launch, the charge stays. A stun or root during travel stops her
+  where she is; the launched charge stays spent. Death clears it.
+- She stays targetable in flight. The camera simply follows.
+- New sim pieces: `AbilityDef.max_charges` and `charge_lock`, line shaped
+  ground areas (`line_width`), a weaken status, snapshot version 7 (charges and
+  weaken on the wire). Bots grapple to close on a hurt champion or to escape
+  home when an enemy champion is close, and step sideways out of lines.
+
+P4_SOAK
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

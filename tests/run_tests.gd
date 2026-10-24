@@ -18,6 +18,7 @@ const GRAVE := preload("res://data/champions/gravebinder.tres")
 const BARROW := preload("res://data/champions/barrowking.tres")
 const VEIL := preload("res://data/champions/veilsinger.tres")
 const STORM := preload("res://data/champions/stormscald.tres")
+const CHAIN := preload("res://data/champions/chainbound.tres")
 const DT := 1.0 / 60.0
 
 var failures: int = 0
@@ -53,6 +54,9 @@ func _run() -> void:
 		"test_fourth_ability_data", "test_fold_step", "test_searing_light", "test_smoke_veil",
 		"test_adventurer_shop", "test_adventurer_stats", "test_item_passives", "test_adventurer_snapshot",
 		"test_adventurer_build_path", "test_adventurer_bot_match",
+		"test_chainbound_data", "test_grapple_to_wall", "test_grapple_rejects", "test_grapple_interrupt",
+		"test_grapple_redirect", "test_grapple_charges", "test_momentum", "test_weaken", "test_covenant_line",
+		"test_anchor_marking", "test_chainbound_snapshot", "test_chainbound_bot_match",
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
@@ -93,9 +97,9 @@ func _make_world(with_wall := false) -> void:
 	world.add_child(authority)
 
 
-func add_wall(pos: Vector3, size: Vector3) -> void:
+func add_wall(pos: Vector3, size: Vector3, anchor := false) -> void:
 	var b := StaticBody3D.new()
-	b.collision_layer = Unit.LAYER_WORLD
+	b.collision_layer = Unit.LAYER_WORLD | (Unit.LAYER_ANCHOR if anchor else 0)
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = size
@@ -1878,3 +1882,286 @@ func test_asset_contract() -> void:
 	check(is_equal_approx(AssetContract.windup_speed(0.3, 0.3), 1.0) and AssetContract.windup_speed(0.6, 0.3) > AssetContract.MAX_SPEED,
 		"windup speed is clip release over sim cast time")
 
+
+
+# --- Phase 4: Chainbound -------------------------------------------------
+
+func test_chainbound_data() -> void:
+	check(CHAIN.slot_count() == 5 and CHAIN.get_slot(3).is_ultimate, "Chainbound has Q, E, F and an ultimate R")
+	var e := CHAIN.get_slot(2)
+	check(e.delivery == AbilityDef.Delivery.GRAPPLE and e.max_charges == 2, "E is a two charge grapple")
+	check(CHAIN.get_slot(3).line_width > 0.0, "R is a line on the ground")
+	check(CHAIN.get_slot(4).weaken_amount > 0.0 and CHAIN.get_slot(4).stun_duration == 0.0, "F weakens and does not stun")
+	check(CHAIN.passive == ChampionDef.Passive.MOMENTUM and not CHAIN.passive_name.is_empty(), "Borrowed Momentum passive")
+	check(CHAIN.hero_name == "Veyra Sable", "lore name")
+	for slot in CHAIN.slot_count():
+		check(not CHAIN.get_slot(slot).description.is_empty(), "slot %d is described" % slot)
+	check(not MatchController.ROSTER.has(CHAIN) and MatchController.PROTOTYPES.has(CHAIN), "a prototype: pickable, never drawn at random")
+	var mc := MatchController.new()
+	mc.human_slot = true
+	mc.human_pick = &"chainbound"
+	world.add_child(mc)
+	mc.setup(authority, world)
+	check(mc.team_roster(0)[0] == CHAIN, "the player can pick Chainbound")
+	await ticks(1)
+
+
+## Press E aimed at `at`.
+func _grapple(u: Unit, at: Vector3) -> void:
+	aim(u, at)
+	cmd(u).buttons = UnitCommand.ability_button(2)
+	await ticks(1)
+	cmd(u).buttons = 0
+
+
+func test_grapple_to_wall() -> void:
+	add_wall(Vector3(0, 1.5, -10), Vector3(8, 3, 1), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	await ticks(2)
+	var e := CHAIN.get_slot(2)
+	var land := -9.5 + CHAIN.radius + 0.15
+	check(me.grapple_endpoint(e, Vector3(0, 0, -20)).distance_to(Vector3(0, 0, land)) < 0.05, "the landing point stands off the wall")
+	await _grapple(me, Vector3(0, 0, -20))
+	check(me.charges[2] == 1, "a launch spends one charge")
+	await secs(e.cast_time + 0.1)
+	check(me.is_grappling(), "the chain pulls her")
+	check(absf(me.grapple_anchor.z + 9.5) < 0.1, "the chain holds the wall face")
+	await secs(0.6)
+	check(not me.is_grappling() and absf(me.global_position.z - land) < 0.15, "she lands in front of the wall (z %.2f)" % me.global_position.z)
+	check(me.alive and absf(me.global_position.x) < 0.1, "straight line, still standing")
+
+
+func test_grapple_rejects() -> void:
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var why := []
+	me.cast_rejected.connect(func(_s: int, r: String) -> void: why.append(r))
+	await ticks(2)
+	# Nothing in reach.
+	await _grapple(me, Vector3(0, 0, -20))
+	await ticks(2)
+	check(me.charges[2] == 2 and not me.is_casting() and not why.is_empty(), "no wall: no cast, no charge, a message")
+	check(me.cooldowns[2] > 0.0 and me.cooldowns[2] <= Unit.GRAPPLE_RETRY, "a short retry wait")
+	# A wall out of range.
+	add_wall(Vector3(0, 1.5, -15), Vector3(8, 3, 1), true)
+	await ticks(2)
+	check(not me.grapple_endpoint(CHAIN.get_slot(2), Vector3(0, 0, -20)).is_finite(), "a wall beyond 12 m does not count")
+	# A wall that is not marked as an anchor.
+	add_wall(Vector3(8, 1.5, 0), Vector3(1, 3, 8), false)
+	await ticks(2)
+	check(not me.grapple_endpoint(CHAIN.get_slot(2), Vector3(20, 0, 0)).is_finite(), "an unmarked wall does not hold")
+	check(me.grapple_problem.contains("cannot hold"), "and says why")
+	# An unmarked wall in front of a marked one blocks the chain: no passing through.
+	add_wall(Vector3(-10, 1.5, 0), Vector3(1, 3, 8), true)
+	add_wall(Vector3(-5, 1.5, 0), Vector3(0.5, 3, 8), false)
+	await ticks(2)
+	check(not me.grapple_endpoint(CHAIN.get_slot(2), Vector3(-20, 0, 0)).is_finite(), "the chain never passes through a wall")
+	# A low block under the chain: the chain reaches, the body would not.
+	add_wall(Vector3(0, 1.5, 10), Vector3(8, 3, 1), true)
+	add_wall(Vector3(0, 0.3, 5), Vector3(4, 0.6, 1), false)
+	await ticks(2)
+	check(not me.grapple_endpoint(CHAIN.get_slot(2), Vector3(0, 0, 20)).is_finite() and me.grapple_problem.contains("blocked"), "a blocked route is refused")
+	# Rooted: no launch, the charge stays.
+	add_wall(Vector3(0, 1.5, -11), Vector3(8, 3, 1), true)
+	await ticks(2)
+	me.cooldowns[2] = 0.0
+	me.apply_root(1.0)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(0.3)
+	check(me.charges[2] == 2 and not me.is_grappling(), "rooted: no launch, no charge spent")
+
+
+func test_grapple_interrupt() -> void:
+	add_wall(Vector3(0, 1.5, -11.5), Vector3(8, 3, 1), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	await ticks(2)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(CHAIN.get_slot(2).cast_time + 0.1)
+	check(me.is_grappling(), "in flight")
+	me.apply_stun(0.5)
+	var at := me.global_position
+	await secs(0.2)
+	check(not me.is_grappling() and me.global_position.distance_to(at) < 0.1, "a stun stops the pull where she is")
+	check(me.charges[2] == 1, "the launched charge stays spent")
+	await secs(0.5)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(CHAIN.get_slot(2).cast_time + 0.05)
+	check(me.is_grappling(), "second launch")
+	me.apply_root(0.5)
+	at = me.global_position
+	await secs(0.2)
+	check(not me.is_grappling() and me.global_position.distance_to(at) < 0.1, "a root pulls her down too")
+	check(me.charges[2] == 0, "both charges spent")
+	await _grapple(me, Vector3(0, 0, -20))
+	await ticks(2)
+	check(not me.is_casting(), "no charges left: no cast")
+
+
+func test_grapple_redirect() -> void:
+	add_wall(Vector3(0, 1.5, -11.5), Vector3(6, 3, 1), true)
+	add_wall(Vector3(10, 1.5, -4), Vector3(1, 3, 16), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	await ticks(2)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(0.33)
+	check(me.is_grappling(), "flying toward the first wall")
+	await _grapple(me, me.global_position + Vector3(20, 0, 0))
+	check(me.charges[2] == 0, "the redirect spends the second charge")
+	await secs(0.8)
+	check(not me.is_grappling() and me.global_position.x > 8.5, "she ends at the second wall (x %.2f)" % me.global_position.x)
+	check(me.global_position.z > -11.0, "and never reached the first one")
+
+
+func test_grapple_charges() -> void:
+	add_wall(Vector3(0, 1.5, -6), Vector3(8, 3, 1), true)
+	add_wall(Vector3(0, 1.5, 6), Vector3(8, 3, 1), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var e := CHAIN.get_slot(2)
+	await ticks(2)
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(0.6)
+	await _grapple(me, Vector3(0, 0, 20))
+	await secs(0.8)
+	check(me.charges[2] == 0 and me.global_position.z > 4.5, "two grapples back to back (z %.2f)" % me.global_position.z)
+	check(me.ready_in(2) > e.cooldown - 2.0, "then a wait for the first charge (%.1f s)" % me.ready_in(2))
+	await secs(me.ready_in(2) + 0.1)
+	check(me.charges[2] == 1, "charges come back one at a time")
+	await secs(e.cooldown)
+	check(me.charges[2] == 2, "and the second after another full wait")
+	me.set_dead(null)
+	me.respawn()
+	check(me.charges[2] == 2, "respawn refills charges")
+
+
+func test_momentum() -> void:
+	add_wall(Vector3(0, 1.5, -11), Vector3(8, 3, 1), true)
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(3, 0, -9))
+	await ticks(2)
+	var lash := CHAIN.basic_attack
+	var h := foe.health
+	authority.apply_damage(me, foe, 100.0, lash)
+	check(is_equal_approx(h - foe.health, 100.0), "a plain basic hit")
+	await _grapple(me, Vector3(0, 0, -20))
+	await secs(1.0)
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, lash)
+	check(is_equal_approx(h - foe.health, 100.0 * (1.0 + CHAIN.passive_value)), "after a long grapple the next hit deals +%d%%" % roundi(CHAIN.passive_value * 100.0))
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, lash)
+	check(is_equal_approx(h - foe.health, 100.0), "one stored hit only")
+	# A short pull (under 4 m) does not count.
+	var me2 := spawn(CHAIN, 0, Vector3(20, 0, -8))
+	add_wall(Vector3(20, 1.5, -11.5), Vector3(4, 3, 1), true)
+	await ticks(2)
+	await _grapple(me2, Vector3(20, 0, -20))
+	await secs(0.6)
+	h = foe.health
+	authority.apply_damage(me2, foe, 100.0, lash)
+	check(is_equal_approx(h - foe.health, 100.0), "a short pull primes nothing")
+
+
+func test_weaken() -> void:
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var foe := spawn(WARDEN, 1, Vector3(0, 0, -2))
+	var dummy := spawn(DUMMY, 0, Vector3(0, 0, -4))
+	await ticks(2)
+	var h := dummy.health
+	authority.apply_damage(foe, dummy, 100.0, null)
+	var plain := h - dummy.health
+	await _cast(me, 4, foe.global_position, CHAIN.get_slot(4).cast_time + 0.1)
+	check(foe.weaken_timer > 0.0 and is_equal_approx(foe.weaken_amount, CHAIN.get_slot(4).weaken_amount), "Break the Seal weakens the champion struck")
+	check(foe.stun_timer <= 0.0, "and does not stun")
+	h = dummy.health
+	authority.apply_damage(foe, dummy, 100.0, null)
+	check(is_equal_approx(h - dummy.health, plain * (1.0 - CHAIN.get_slot(4).weaken_amount)), "a weakened champion deals 30% less")
+	await secs(CHAIN.get_slot(4).weaken_duration + 0.1)
+	check(foe.weaken_timer <= 0.0, "it wears off")
+
+
+func test_covenant_line() -> void:
+	var me := spawn(CHAIN, 0, Vector3.ZERO)
+	var far := spawn(DUMMY, 1, Vector3(0.5, 0, -13))
+	var side := spawn(DUMMY, 1, Vector3(3.5, 0, -6))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	var r := CHAIN.get_slot(3)
+	await _cast(me, 3, Vector3(0, 0, -4), r.cast_time + 0.1)
+	check(authority.areas.size() == 1 and authority.areas[0].ability == r, "the chain line is drawn")
+	check(far.health == DUMMY.max_health, "nothing before the delay")
+	await secs(r.area_delay + 0.1)
+	check(far.health < DUMMY.max_health and far.root_timer > 0.0, "the far end of the line hits and roots, though the aim was short")
+	check(side.health == DUMMY.max_health, "beside the line is safe")
+	check(CombatAuthority.in_area(_line_at(me, r), Vector3(0, 0, -7), 0.3), "in_area: inside the strip")
+	check(not CombatAuthority.in_area(_line_at(me, r), Vector3(0, 0, 2), 0.3), "in_area: behind the caster is outside")
+
+
+func _line_at(me: Unit, r: AbilityDef) -> CombatAuthority.SimArea:
+	var ar := CombatAuthority.SimArea.new()
+	ar.ability = r
+	ar.dir = Vector3(0, 0, -1)
+	ar.center = me.global_position + ar.dir * r.range * 0.5
+	return ar
+
+
+func test_anchor_marking() -> void:
+	var map := LaneMapBuilder.new()
+	world.add_child(map)
+	var n := GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0)
+	check(n > 20, "lane and flank walls are anchors (%d)" % n)
+	var floor_marked := false
+	var base_marked := false
+	for body: StaticBody3D in map.find_children("*", "StaticBody3D", true, false):
+		if body.collision_layer & Unit.LAYER_ANCHOR:
+			if body.global_position.y <= 0.0:
+				floor_marked = true
+			if absf(body.global_position.z) > LaneMapBuilder.BASE_Z + 1.0:
+				base_marked = true
+	check(not floor_marked, "the floor is never an anchor")
+	check(not base_marked, "base plazas (spawn) are never anchors")
+	# From the lane, a lane wall holds.
+	var me := spawn(CHAIN, 0, Vector3(0, 0, 20))
+	await ticks(2)
+	check(me.grapple_endpoint(CHAIN.get_slot(2), Vector3(20, 0, 20)).is_finite(), "a chain to the lane wall holds")
+	map.queue_free()
+
+
+func test_chainbound_snapshot() -> void:
+	var u := spawn(CHAIN, 1, Vector3(1, 0, 2))
+	await ticks(2)
+	u.charges[2] = 1
+	u.recharge[2] = 5.25
+	u.apply_weaken(0.3, 1.5)
+	var snap := SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([u])))
+	var s: Array = snap.units[u.net_id]
+	check((s[SnapshotCodec.CHARGES] as PackedInt32Array)[2] == 1, "charges survive the wire")
+	check(absf((s[SnapshotCodec.RECHARGE] as PackedFloat32Array)[2] - 5.25) < 0.002, "recharge timer survives")
+	check(absf(s[SnapshotCodec.WEAKEN] - 0.3) < 0.005 and absf(s[SnapshotCodec.WEAKEN_TIMER] - 1.5) < 0.002, "weaken survives")
+	var v := spawn(CHAIN, 1, Vector3(5, 0, 2))
+	await ticks(1)
+	SnapshotCodec.apply(v, s)
+	check(v.charges[2] == 1 and v.weaken_timer > 1.0, "a client unit takes them")
+	var plain := spawn(SCRIBE, 0, Vector3(9, 0, 0))
+	await ticks(1)
+	var bytes := SnapshotCodec.encode_units([plain])
+	check(SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, bytes)).units[plain.net_id][SnapshotCodec.CHARGES] == null, "champions without charges send none")
+
+
+func test_chainbound_bot_match() -> void:
+	var mc := MatchController.new()
+	mc.human_slot = false
+	mc.lineup_ids = [&"chainbound", &"oathwarden", &"ruinscribe"]
+	mc.bot_seed = 5
+	var map := LaneMapBuilder.new()
+	world.add_child(map)
+	GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0)
+	world.add_child(mc)
+	mc.setup(authority, world)
+	var grapples := [0]
+	authority.grapple_started.connect(func(_c: Unit, _a: AbilityDef) -> void: grapples[0] += 1)
+	mc.start()
+	await secs(120.0)
+	check(mc.champions.any(func(c: Unit) -> bool: return c.def == CHAIN), "Chainbound fields in a bot match")
+	check(grapples[0] > 0, "bots use Chain Traverse (%d grapples in 120 s)" % grapples[0])
+	for c: Unit in mc.champions:
+		check(c.global_position.y > -1.0 and absf(c.global_position.x) < 30.0, "%s stays on the map" % c.def.id)
+	map.queue_free()

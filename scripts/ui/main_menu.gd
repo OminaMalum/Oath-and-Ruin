@@ -92,6 +92,20 @@ func _ready() -> void:
 			Session.champion = id
 			show_lore.call(id))
 		row.add_child(b)
+	# Prototype champions: playable, marked as unfinished, never drawn at random.
+	for c in [["Chainbound", "Prototype", &"chainbound"]]:
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_group = group
+		b.text = "%s  (%s)" % [c[0], c[1]]
+		b.custom_minimum_size = Vector2(519, 52)
+		b.add_theme_font_size_override("font_size", 22)
+		var id: StringName = c[2]
+		b.button_pressed = Session.champion == id
+		b.pressed.connect(func() -> void:
+			Session.champion = id
+			show_lore.call(id))
+		left.add_child(b)
 	left.add_child(who)
 	left.add_child(story)
 	show_lore.call(Session.champion)

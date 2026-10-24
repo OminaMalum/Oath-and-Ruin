@@ -9,7 +9,9 @@ extends Resource
 ## caster along its move direction and hits enemies it passes through. WARD
 ## plants a circle on the caster that shields allied champions inside. WALL
 ## raises a line across the aim at a ground point that stops enemy shots.
-enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD, WALL }
+## GRAPPLE throws a chain at a marked wall within range and pulls the caster
+## to a safe point in front of it (see Unit.grapple_endpoint).
+enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD, WALL, GRAPPLE }
 
 @export var id: StringName
 @export var display_name: String = ""
@@ -58,6 +60,9 @@ enum Scaling { CHAMPION, WEAPON, SPELL, NONE }
 @export var area_delay: float = 0.8
 ## On the burst: every enemy hit is dragged up to this far toward the centre.
 @export var pull_distance: float = 0.0
+## Above 0 the area is a line instead of a circle: this wide, `range` long,
+## running from the caster along the aim.
+@export var line_width: float = 0.0
 ## On the burst: health for each allied champion inside.
 @export var ally_heal: float = 0.0
 ## On the burst: a second area left where it landed (a WARD-delivery
@@ -79,6 +84,9 @@ enum Scaling { CHAMPION, WEAPON, SPELL, NONE }
 @export var taunt_duration: float = 0.0
 ## Charm: the target walks straight away from the caster and cannot act.
 @export var charm_duration: float = 0.0
+## Weaken: a champion hit deals this much less damage (0.3 = 30% less).
+@export var weaken_amount: float = 0.0
+@export var weaken_duration: float = 0.0
 
 @export_group("Melee arc")
 ## Full width of the cone in degrees (120 = 60 each side of the aim).
@@ -87,6 +95,18 @@ enum Scaling { CHAMPION, WEAPON, SPELL, NONE }
 @export_group("Dash")
 @export var dash_distance: float = 8.0
 @export var dash_duration: float = 0.22
+
+@export_group("Charges")
+## Above 1 the ability holds this many uses; `cooldown` brings one back at a
+## time, and `charge_lock` is the short gap between two uses.
+@export var max_charges: int = 1
+@export var charge_lock: float = 0.3
+
+@export_group("Grapple")
+## Travel speed toward the anchor (range is how far the chain reaches).
+@export var grapple_speed: float = 24.0
+## Travel shorter than this does not count as meaningful (no MOMENTUM).
+@export var grapple_min_travel: float = 4.0
 
 @export_group("Ward")
 ## How long the ward stands (area_radius sets its size).

@@ -21,6 +21,8 @@ signal damage_blocked(target: Unit, source: Unit)
 signal melee_swung(caster: Unit, a: AbilityDef)
 ## A dash started (for trail visuals; the unit's own position replicates).
 signal dash_started(caster: Unit, a: AbilityDef)
+## A grapple launched (the unit holds grapple_anchor while it travels).
+signal grapple_started(caster: Unit, a: AbilityDef)
 
 ## Tests turn this off and call step() themselves.
 @export var auto_step: bool = true
@@ -151,6 +153,10 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 			ar.center = Vector3(target.x, 0.0, target.z)
 			var d := Vector3(target.x - caster.global_position.x, 0.0, target.z - caster.global_position.z)
 			ar.dir = d.normalized() if d.length() > 0.1 else caster.forward()
+			if a.line_width > 0.0:
+				# A line from the caster along the aim: centre at its middle.
+				var p := caster.global_position + ar.dir * (a.range * 0.5)
+				ar.center = Vector3(p.x, 0.0, p.z)
 			ar.timer = area_lifetime(a)
 			areas.append(ar)
 			area_spawned.emit(ar)
@@ -170,6 +176,29 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 		AbilityDef.Delivery.DASH:
 			caster.start_dash(a, target)
 			dash_started.emit(caster, a)
+		AbilityDef.Delivery.GRAPPLE:
+			if caster.start_grapple(a, target):
+				grapple_started.emit(caster, a)
+
+
+## A grapple reached its wall. MOMENTUM: a long enough route primes the
+## next basic hit on a champion.
+func grapple_finished(u: Unit, a: AbilityDef) -> void:
+	if u.def.passive == ChampionDef.Passive.MOMENTUM \
+			and _flat(u.global_position, u.grapple_from) >= a.grapple_min_travel:
+		u.passive_primed_until = time + MOMENTUM_TIME
+
+
+## Is a circle at `pos` (radius r) inside the area? Lines are rectangles
+## along ar.dir, `range` long and line_width wide; the rest are circles.
+static func in_area(ar: SimArea, pos: Vector3, r: float) -> bool:
+	var a := ar.ability
+	if a.line_width > 0.0:
+		var to := Vector3(pos.x - ar.center.x, 0.0, pos.z - ar.center.z)
+		var along := absf(to.dot(ar.dir))
+		var across := absf(to.dot(Vector3(-ar.dir.z, 0.0, ar.dir.x)))
+		return along <= a.range * 0.5 + r and across <= a.line_width * 0.5 + r
+	return Vector2(pos.x - ar.center.x, pos.z - ar.center.z).length() <= a.area_radius + r
 
 
 ## Ground areas burst after their delay; wards and walls stand for their duration.
@@ -260,6 +289,8 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef, proc
 			amount *= 1.0 + (source.weapon_power if kind == 0 else source.spell_power) / 100.0
 	amount = mitigate(target, amount, kind)
 	amount *= passive_damage_factor(source, target, a)
+	if source.weaken_timer > 0.0:
+		amount *= 1.0 - source.weaken_amount
 	if target.mark_timer > 0.0:
 		amount *= 1.0 + target.mark_amount
 	if target.shield > 0.0:
@@ -282,6 +313,8 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef, proc
 		target.apply_root(a.root_duration)
 	if a != null and a.mark_duration > 0.0 and target.def.kind != ChampionDef.Kind.STRUCTURE:
 		target.apply_mark(a.mark_amount, a.mark_duration)
+	if a != null and a.weaken_duration > 0.0 and _markable(target):
+		target.apply_weaken(a.weaken_amount, a.weaken_duration)
 	if a != null and (a.taunt_duration > 0.0 or a.charm_duration > 0.0) and _compellable(target):
 		if a.taunt_duration > 0.0:
 			target.apply_compel(Unit.Compel.TAUNT, source, a.taunt_duration)
@@ -329,6 +362,10 @@ func passive_damage_factor(source: Unit, target: Unit, a: AbilityDef) -> float:
 		elif a == source.get_slot(1) and n > 0:
 			f *= 1.0 + source.def.passive_value * n
 			source.passive_marks.erase(key)
+	if source.def.passive == ChampionDef.Passive.MOMENTUM and a != null and a == source.def.basic_attack \
+			and _markable(target) and time <= source.passive_primed_until:
+		f *= 1.0 + source.def.passive_value
+		source.passive_primed_until = -1.0  # one stored hit, no stacking
 	if source.def.passive == ChampionDef.Passive.TITHE and target.def.kind != ChampionDef.Kind.STRUCTURE and target.is_impaired():
 		f *= 1.0 + source.def.passive_value
 	return f
@@ -550,7 +587,7 @@ func _burst(ar: SimArea) -> void:
 	for u: Unit in units.duplicate():
 		if not u.alive:
 			continue
-		if _flat(u.global_position, ar.center) > a.area_radius + u.def.radius:
+		if not in_area(ar, u.global_position, u.def.radius):
 			continue
 		if src_ok and not are_enemies(ar.source, u):
 			if a.ally_heal > 0.0 and u.def.kind == ChampionDef.Kind.CHAMPION:
@@ -626,6 +663,7 @@ const MARK_TIME := 4.0      # MARGINALIA and QUARRY marks last this long
 const PASSIVE_SHIELD_TIME := 3.0
 const PRIMED_TIME := 6.0    # STAND_BEHIND: a cast primes the next hit this long
 const STAND_COOLDOWN := 8.0
+const MOMENTUM_TIME := 3.0   # MOMENTUM: the primed hit waits this long
 
 
 ## Champions and training dummies take marks; minions and structures do not.

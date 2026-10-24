@@ -14,7 +14,7 @@ extends RefCounted
 ##           u16 health, then each block present in `blocks`, in bit order.
 ## Decoding gives the same per-unit Array the client used before (see FIELDS).
 
-const VERSION := 6
+const VERSION := 7
 ## Packet budget: ENet's default MTU in Godot 4.7.2 (thirdparty/enet/enet.h,
 ## ENET_HOST_DEFAULT_MTU). Godot warns above it for unreliable sends.
 const MTU := 1392
@@ -22,7 +22,8 @@ const MTU := 1392
 ## Indices of the decoded per-unit Array.
 enum { POS, YAW, HEALTH, ALIVE, PHASE, SLOT, CAST_TIMER, CAST_TARGET, COOLDOWNS, SLOW, SLOW_TIMER,
 	RESPAWN, STUN, DASH_TIMER, DASH_VEL, LEVEL, UPGRADE, MAX_HEALTH, GOLD, ITEMS, RECALL, ROOT, MARK, MARK_TIMER,
-	COMPEL, COMPEL_TIMER, COMPEL_POINT, HASTE, HASTE_TIMER, QUICK, QUICK_TIMER, SHIELD, SHIELD_TIMER, FIELD_COUNT }
+	COMPEL, COMPEL_TIMER, COMPEL_POINT, HASTE, HASTE_TIMER, QUICK, QUICK_TIMER, SHIELD, SHIELD_TIMER,
+	CHARGES, RECHARGE, WEAKEN, WEAKEN_TIMER, FIELD_COUNT }
 
 const F_ALIVE := 1
 ## Bits 1-2: cast phase. Bits 3-4: upgrade option picked for slot 1 (0 none).
@@ -40,6 +41,8 @@ const B_MARK := 512      # u8 amount /255, u16 timer
 const B_COMPEL := 1024   # u8 kind, u16 timer, s16 x2 caster position cm
 const B_BUFF := 2048     # u8 haste /255, u16 timer, u8 quick /255, u16 timer
 const B_SHIELD := 4096   # u16 shield, u16 timer
+const B_CHARGES := 8192  # u8 n, (u8 charges, u16 recharge) x n
+const B_WEAKEN := 16384  # u8 amount /255, u16 timer
 ## Most items a record carries (Unit.ECONOMY.slots is 6 at most today).
 const MAX_ITEMS := 8
 
@@ -116,6 +119,10 @@ static func encode_units(units: Array[Unit]) -> PackedByteArray:
 			blocks |= B_BUFF
 		if u.shield_timer > 0.0 and u.shield > 0.0:
 			blocks |= B_SHIELD
+		if champion and _has_charges(u):
+			blocks |= B_CHARGES
+		if u.weaken_timer > 0.0:
+			blocks |= B_WEAKEN
 		b.put_u8(flags)
 		b.put_u16(blocks)
 		_put_vec(b, u.global_position)
@@ -169,7 +176,22 @@ static func encode_units(units: Array[Unit]) -> PackedByteArray:
 		if blocks & B_SHIELD:
 			b.put_u16(_u16(ceilf(u.shield)))
 			b.put_u16(_timer(u.shield_timer))
+		if blocks & B_CHARGES:
+			b.put_u8(mini(u.charges.size(), 255))
+			for i in mini(u.charges.size(), 255):
+				b.put_u8(clampi(u.charges[i], 0, 255))
+				b.put_u16(_timer(u.recharge[i]))
+		if blocks & B_WEAKEN:
+			b.put_u8(clampi(roundi(u.weaken_amount * 255.0), 0, 255))
+			b.put_u16(_timer(u.weaken_timer))
 	return b.data_array
+
+
+static func _has_charges(u: Unit) -> bool:
+	for i in u.charges.size():
+		if u.is_charged(i):
+			return true
+	return false
 
 
 static func encode(tick: int, ack: int, count: int, unit_bytes: PackedByteArray) -> PackedByteArray:
@@ -233,6 +255,10 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 		s[QUICK_TIMER] = 0.0
 		s[SHIELD] = 0.0
 		s[SHIELD_TIMER] = 0.0
+		s[CHARGES] = null
+		s[RECHARGE] = null
+		s[WEAKEN] = 0.0
+		s[WEAKEN_TIMER] = 0.0
 		if b.get_available_bytes() < _blocks_size(blocks):
 			return {}
 		if blocks & B_CAST:
@@ -290,6 +316,20 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 		if blocks & B_SHIELD:
 			s[SHIELD] = float(b.get_u16())
 			s[SHIELD_TIMER] = b.get_u16() / TIMER_SCALE
+		if blocks & B_CHARGES:
+			var n_ch := b.get_u8()
+			if b.get_available_bytes() < n_ch * 3 + _blocks_size(blocks & B_WEAKEN):
+				return {}
+			var ch := PackedInt32Array()
+			var rc := PackedFloat32Array()
+			for i in n_ch:
+				ch.append(b.get_u8())
+				rc.append(b.get_u16() / TIMER_SCALE)
+			s[CHARGES] = ch
+			s[RECHARGE] = rc
+		if blocks & B_WEAKEN:
+			s[WEAKEN] = b.get_u8() / 255.0
+			s[WEAKEN_TIMER] = b.get_u16() / TIMER_SCALE
 		units[id] = s
 	return {"tick": tick, "ack": ack, "units": units}
 
@@ -310,6 +350,8 @@ static func _blocks_size(blocks: int) -> int:
 	n += 7 if blocks & B_COMPEL else 0
 	n += 6 if blocks & B_BUFF else 0
 	n += 4 if blocks & B_SHIELD else 0
+	n += 1 if blocks & B_CHARGES else 0
+	n += 3 if blocks & B_WEAKEN else 0
 	return n
 
 
@@ -345,6 +387,11 @@ static func apply(u: Unit, s: Array) -> void:
 	u.quick_timer = s[QUICK_TIMER]
 	u.shield = s[SHIELD]
 	u.shield_timer = s[SHIELD_TIMER]
+	u.weaken_amount = s[WEAKEN]
+	u.weaken_timer = s[WEAKEN_TIMER]
+	if s[CHARGES] != null and (s[CHARGES] as PackedInt32Array).size() == u.charges.size():
+		u.charges = s[CHARGES]
+		u.recharge = s[RECHARGE]
 	if s[LEVEL] >= 0:
 		u.level = s[LEVEL]
 		if s[ITEMS] != null:

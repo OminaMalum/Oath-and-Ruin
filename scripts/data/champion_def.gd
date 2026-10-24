@@ -22,8 +22,10 @@ enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 ## the most hurt allied champion within passive_range for passive_value.
 ## QUARRY: basic hits on one champion stack marks (up to 3); the next slot 1
 ## hit on it spends them for passive_value more damage per mark.
+## MOMENTUM: a grapple that carries the unit far enough primes the next basic
+## hit on a champion (within a short time) for passive_value more damage.
 enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE, BARROWBLOOD, ENCORE, STORMEYE,
-	MARGINALIA, STAND_BEHIND, QUARRY }
+	MARGINALIA, STAND_BEHIND, QUARRY, MOMENTUM }
 
 @export var id: StringName
 @export var display_name: String = ""

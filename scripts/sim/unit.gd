@@ -20,6 +20,11 @@ const LAYER_WORLD := 1
 const LAYER_UNITS := 2
 ## Structures also sit on this layer so the camera arm can avoid them.
 const LAYER_STRUCTURE := 4
+## World geometry a grapple chain may hook onto (set beside LAYER_WORLD on
+## approved walls only; see GrappleAnchors).
+const LAYER_ANCHOR := 8
+## After a grapple press with no valid anchor, the next try waits this long.
+const GRAPPLE_RETRY := 0.3
 
 @export var def: ChampionDef
 @export var team: int = 0
@@ -117,6 +122,10 @@ var cast_slot: int = -1
 var cast_timer: float = 0.0
 var cast_target: Vector3 = Vector3.ZERO
 var cooldowns: PackedFloat32Array = PackedFloat32Array()
+## Abilities with max_charges > 1: uses left, and time until the next comes
+## back (one at a time). cooldowns[slot] is then only the short charge_lock.
+var charges: PackedInt32Array = PackedInt32Array()
+var recharge: PackedFloat32Array = PackedFloat32Array()
 var buffered_slot: int = -1
 var buffer_timer: float = 0.0
 
@@ -140,6 +149,15 @@ var haste_amount: float = 0.0
 var haste_timer: float = 0.0
 var quick_amount: float = 0.0
 var quick_timer: float = 0.0
+## Weakened: this unit's damage is cut by weaken_amount (strongest wins).
+var weaken_amount: float = 0.0
+var weaken_timer: float = 0.0
+## Grapple in flight: the wall point the chain holds, and where travel began
+## (kept across a redirect, so MOMENTUM measures the whole route).
+var grapple_anchor: Vector3 = Vector3.ZERO
+var grapple_from: Vector3 = Vector3.ZERO
+## Why the last grapple_endpoint call found no anchor (player feedback).
+var grapple_problem: String = ""
 
 ## Lock-on target for homing abilities, chosen at cast start.
 var cast_target_unit: Unit
@@ -168,8 +186,63 @@ func _ready() -> void:
 	spawn_transform = global_transform
 	aim_yaw = rotation.y
 	cooldowns.resize(def.slot_count())
+	charges.resize(def.slot_count())
+	recharge.resize(def.slot_count())
+	_fill_charges()
 	max_health = def.max_health
 	health = max_health
+
+
+func _fill_charges() -> void:
+	for i in charges.size():
+		var a := get_slot(i)
+		charges[i] = a.max_charges if a else 0
+		recharge[i] = 0.0
+
+
+func is_charged(slot: int) -> bool:
+	var a := get_slot(slot)
+	return a != null and a.max_charges > 1
+
+
+## Charges come back one at a time, each taking the ability's cooldown.
+func _step_charges(dt: float) -> void:
+	for i in recharge.size():
+		if recharge[i] <= 0.0:
+			continue
+		recharge[i] -= dt
+		if recharge[i] <= 0.0:
+			var a := get_slot(i)
+			charges[i] = mini(charges[i] + 1, a.max_charges if a else 1)
+			recharge[i] = cooldown_for(i, a) + recharge[i] if a and charges[i] < a.max_charges else 0.0
+
+
+## Seconds until a press of `slot` can start a cast (0 = now).
+func ready_in(slot: int) -> float:
+	if is_charged(slot) and charges[slot] <= 0:
+		return maxf(cooldowns[slot], recharge[slot])
+	return cooldowns[slot]
+
+
+## A committed cast spends its cooldown, or one charge and the short lock.
+func _commit_cooldown(slot: int, a: AbilityDef) -> void:
+	if a.max_charges > 1:
+		charges[slot] = maxi(charges[slot] - 1, 0)
+		cooldowns[slot] = a.charge_lock
+		if recharge[slot] <= 0.0:
+			recharge[slot] = cooldown_for(slot, a)
+	else:
+		cooldowns[slot] = cooldown_for(slot, a)
+
+
+## A charge given back (a launch that could not happen).
+func _refund_charge(slot: int) -> void:
+	var a := get_slot(slot)
+	if a == null or a.max_charges <= 1:
+		return
+	charges[slot] = mini(charges[slot] + 1, a.max_charges)
+	if charges[slot] >= a.max_charges:
+		recharge[slot] = 0.0
 
 
 ## The ability in a slot for this unit (an upgrade pick replaces the def's).
@@ -394,6 +467,10 @@ func cooldown_fraction(slot: int) -> float:
 	var a := get_slot(slot)
 	if a == null or a.cooldown <= 0.0:
 		return 0.0
+	if a.max_charges > 1:
+		if charges[slot] > 0:
+			return clampf(cooldowns[slot] / maxf(a.charge_lock, 0.01), 0.0, 1.0)
+		return clampf(ready_in(slot) / cooldown_for(slot, a), 0.0, 1.0)
 	return clampf(cooldowns[slot] / cooldown_for(slot, a), 0.0, 1.0)
 
 
@@ -428,6 +505,7 @@ func sim_step(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> void:
 		return
 	for i in cooldowns.size():
 		cooldowns[i] = maxf(0.0, cooldowns[i] - dt)
+	_step_charges(dt)
 	if slow_timer > 0.0:
 		slow_timer -= dt
 		if slow_timer <= 0.0:
@@ -471,9 +549,12 @@ func step_motion(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> voi
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	if dash_timer > 0.0:
+		var part := 1.0
+		if dash_ability and dash_ability.delivery == AbilityDef.Delivery.GRAPPLE and dash_timer < dt:
+			part = dash_timer / dt  # land on the checked point, not a tick past it
 		dash_timer -= dt
-		velocity.x = dash_velocity.x
-		velocity.z = dash_velocity.z
+		velocity.x = dash_velocity.x * part
+		velocity.z = dash_velocity.z * part
 		top_speed = dash_velocity.length()
 	velocity.y = 0.0 if is_on_floor() else velocity.y - GRAVITY * dt
 	var before := global_position
@@ -481,6 +562,8 @@ func step_motion(cmd: UnitCommand, dt: float, authority: CombatAuthority) -> voi
 	if authority and (dash_timer > 0.0 or dash_ability != null):
 		authority.dash_contact(self, before)
 		if dash_timer <= 0.0:
+			if dash_ability and dash_ability.delivery == AbilityDef.Delivery.GRAPPLE:
+				authority.grapple_finished(self, dash_ability)
 			dash_ability = null
 	# Guard: the physics step may never carry a unit faster than its speed.
 	var moved := Vector2(global_position.x - before.x, global_position.z - before.z)
@@ -500,6 +583,7 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 		return
 	for i in cooldowns.size():
 		cooldowns[i] = maxf(0.0, cooldowns[i] - dt)
+	_step_charges(dt)
 	if slow_timer > 0.0:
 		slow_timer -= dt
 		if slow_timer <= 0.0:
@@ -523,6 +607,8 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 		if cast_phase == CastPhase.WINDUP and cast_timer <= 0.0:
 			if a and a.delivery == AbilityDef.Delivery.DASH:
 				start_dash(a, clamp_target(a, aim_point))
+			elif a and a.delivery == AbilityDef.Delivery.GRAPPLE:
+				start_grapple(a, cast_target)
 			cast_phase = CastPhase.RECOVERY
 			cast_timer += a.recovery if a else 0.0
 		if cast_phase == CastPhase.RECOVERY and cast_timer <= 0.0:
@@ -530,14 +616,17 @@ func predict_step(cmd: UnitCommand, dt: float) -> void:
 			cast_slot = -1
 	if cast_phase == CastPhase.NONE and buffered_slot >= 0:
 		var a := get_slot(buffered_slot)
-		if a != null and cooldowns[buffered_slot] <= 0.0 and not a.homing \
+		var grapple_at := clamp_target(a, aim_point) if a and a.delivery == AbilityDef.Delivery.GRAPPLE else Vector3.ZERO
+		if a != null and ready_in(buffered_slot) <= 0.0 and not a.homing and grapple_at.is_finite() \
 				and not (a.is_ultimate and not ultimate_ready_level()):
 			cast_slot = buffered_slot
 			cast_phase = CastPhase.WINDUP
 			cast_timer = a.cast_time
-			cooldowns[buffered_slot] = cooldown_for(buffered_slot, a)
+			if a.delivery == AbilityDef.Delivery.GRAPPLE:
+				cast_target = grapple_at
+			_commit_cooldown(buffered_slot, a)
 			buffered_slot = -1
-		elif a == null or cooldowns[buffered_slot] > buffer_timer:
+		elif a == null or ready_in(buffered_slot) > buffer_timer or not grapple_at.is_finite():
 			buffered_slot = -1
 	step_motion(cmd, dt, null)
 
@@ -561,6 +650,10 @@ func _step_status(dt: float) -> void:
 		quick_timer -= dt
 		if quick_timer <= 0.0:
 			quick_amount = 0.0
+	if weaken_timer > 0.0:
+		weaken_timer -= dt
+		if weaken_timer <= 0.0:
+			weaken_amount = 0.0
 	if compel_timer > 0.0:
 		compel_timer -= dt
 		if compel_source != null and (not is_instance_valid(compel_source) or not compel_source.alive):
@@ -612,7 +705,7 @@ func _update_buffer(cmd: UnitCommand, dt: float) -> void:
 	# once, a ready one wins over one still on cooldown.
 	var want := -1
 	for slot in range(1, def.slot_count()):
-		if cmd.pressed(UnitCommand.ability_button(slot)) and (want < 0 or (cooldowns[want] > 0.0 and cooldowns[slot] <= 0.0)):
+		if cmd.pressed(UnitCommand.ability_button(slot)) and (want < 0 or (ready_in(want) > 0.0 and ready_in(slot) <= 0.0)):
 			want = slot
 	if want > 0:
 		buffered_slot = want
@@ -632,16 +725,27 @@ func _try_start_cast(slot: int, cmd: UnitCommand, authority: CombatAuthority) ->
 		cast_rejected.emit(slot, "%s unlocks at level %d" % [a.display_name, ULT_LEVEL])
 		buffered_slot = -1
 		return
-	if a == null or cooldowns[slot] > 0.0:
+	if a == null or ready_in(slot) > 0.0:
 		# Keep an ability press only if it will come off cooldown within the
 		# buffer window; otherwise drop it so the basic attack is not blocked.
-		if a == null or slot == 0 or cooldowns[slot] > buffer_timer:
+		if a == null or slot == 0 or ready_in(slot) > buffer_timer:
 			if a != null and slot != 0:
-				cast_rejected.emit(slot, "%s ready in %.1f s" % [a.display_name, cooldowns[slot]])
+				cast_rejected.emit(slot, "%s ready in %.1f s" % [a.display_name, ready_in(slot)])
 			buffered_slot = -1
 		return
 	buffered_slot = -1
 	cast_target_unit = null
+	if a.delivery == AbilityDef.Delivery.GRAPPLE:
+		# The anchor is checked before anything is spent: no anchor, no charge,
+		# a short wait and a message saying why.
+		var at := clamp_target(a, aim_point)
+		if not at.is_finite():
+			cooldowns[slot] = maxf(cooldowns[slot], GRAPPLE_RETRY)
+			cast_rejected.emit(slot, grapple_problem)
+			return
+		if root_timer > 0.0:
+			cast_rejected.emit(slot, "Rooted: you cannot grapple")
+			return
 	if a.homing:
 		var t := authority.find_unit(cmd.target_id)
 		if t == null or not t.alive or not authority.are_enemies(self, t) \
@@ -653,7 +757,7 @@ func _try_start_cast(slot: int, cmd: UnitCommand, authority: CombatAuthority) ->
 	cast_timer = a.cast_time
 	# Cooldown runs from the moment the cast commits, so "cooldown 0.85"
 	# means one attack every 0.85 s when held.
-	cooldowns[slot] = cooldown_for(slot, a)
+	_commit_cooldown(slot, a)
 	cast_target = clamp_target(a, aim_point)
 	cast_started.emit(slot, a, cast_target)
 
@@ -668,12 +772,16 @@ func clamp_target(a: AbilityDef, point: Vector3) -> Vector3:
 	var flat := Vector3(point.x - from.x, 0.0, point.z - from.z)
 	if flat.length() < 0.5:
 		flat = forward()
-	if a.delivery == AbilityDef.Delivery.GROUND_AREA:
+	if a.delivery == AbilityDef.Delivery.GROUND_AREA and a.line_width <= 0.0:
 		flat = flat.limit_length(a.range)
 	elif a.delivery == AbilityDef.Delivery.WARD:
 		return Vector3(from.x, from.y, from.z)
 	elif a.delivery == AbilityDef.Delivery.WALL:
 		flat = flat.limit_length(a.range)
+	elif a.delivery == AbilityDef.Delivery.GRAPPLE:
+		return grapple_endpoint(a, point)
+	elif a.delivery == AbilityDef.Delivery.GROUND_AREA and a.line_width > 0.0:
+		flat = flat.normalized() * a.range  # a line: only the direction counts
 	elif a.delivery == AbilityDef.Delivery.DASH:
 		# Dashes go the way the unit is moving (WASD), forward when standing.
 		var d := move_dir if move_dir.length() > 0.1 else forward()
@@ -692,8 +800,10 @@ func _advance_cast(dt: float, authority: CombatAuthority) -> void:
 	cast_timer -= dt
 	if cast_phase == CastPhase.WINDUP:
 		# Ground targets follow the aim during windup; projectiles too, so the
-		# release goes where the player is looking at that moment.
-		cast_target = clamp_target(a, aim_point)
+		# release goes where the player is looking at that moment. A grapple
+		# keeps the anchor checked when the cast began.
+		if a.delivery != AbilityDef.Delivery.GRAPPLE:
+			cast_target = clamp_target(a, aim_point)
 		if a.homing and cast_target_unit:
 			cast_target = cast_target_unit.global_position
 		if cast_timer <= 0.0:
@@ -720,6 +830,104 @@ func start_dash(a: AbilityDef, target: Vector3) -> void:
 	dash_timer = a.dash_duration
 	dash_ability = a
 	dash_hit.clear()
+
+
+## Where a grapple aimed at `point` would land, or Vector3.INF with the reason
+## in grapple_problem. The chain flies flat from chest height along the aim;
+## the first world surface it meets must be a marked anchor (LAYER_ANCHOR)
+## and a wall (not a floor or a ledge top). The landing point stands off the
+## wall by the unit's radius, must have ground under it, and the unit's own
+## capsule must fit along the whole route (no passing through walls).
+func grapple_endpoint(a: AbilityDef, point: Vector3) -> Vector3:
+	var space := get_world_3d().direct_space_state if is_inside_tree() else null
+	if space == null:
+		grapple_problem = "No anchor"
+		return Vector3.INF
+	var dir := Vector3(point.x - global_position.x, 0.0, point.z - global_position.z)
+	if dir.length() < 0.5:
+		dir = forward()
+	dir = dir.normalized()
+	var chest := global_position + Vector3(0.0, def.height * 0.6, 0.0)
+	var ray := PhysicsRayQueryParameters3D.create(chest, chest + dir * a.range, LAYER_WORLD)
+	var hit := space.intersect_ray(ray)
+	if hit.is_empty():
+		grapple_problem = "No wall in reach: aim at a wall within %d m" % roundi(a.range)
+		return Vector3.INF
+	var body := hit.collider as CollisionObject3D
+	var normal: Vector3 = hit.normal
+	if body == null or body.collision_layer & LAYER_ANCHOR == 0 or absf(normal.y) > 0.3:
+		grapple_problem = "The chain cannot hold there"
+		return Vector3.INF
+	var flat_n := Vector3(normal.x, 0.0, normal.z).normalized()
+	var hit_pos: Vector3 = hit.position
+	var end := Vector3(hit_pos.x, global_position.y, hit_pos.z) + flat_n * (def.radius + 0.15)
+	var travel := Vector3(end.x - global_position.x, 0.0, end.z - global_position.z)
+	if travel.length() < 2.0:
+		grapple_problem = "Too close to the wall"
+		return Vector3.INF
+	# Ground under the landing point.
+	var down := PhysicsRayQueryParameters3D.create(end + Vector3(0, 1.0, 0), end - Vector3(0, 1.5, 0), LAYER_WORLD)
+	var ground := space.intersect_ray(down)
+	if ground.is_empty() or (ground.normal as Vector3).y < 0.7:
+		grapple_problem = "No safe ground there"
+		return Vector3.INF
+	end.y = (ground.position as Vector3).y
+	if not _route_clear(end):
+		grapple_problem = "The way to that wall is blocked"
+		return Vector3.INF
+	grapple_problem = ""
+	return end
+
+
+## The unit's capsule can travel straight to `end` without touching a wall
+## (checked a little off the floor so the floor itself does not count).
+func _route_clear(end: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state if is_inside_tree() else null
+	if space == null:
+		return false
+	var shape := CapsuleShape3D.new()
+	shape.radius = def.radius
+	shape.height = def.height
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = shape
+	q.collision_mask = LAYER_WORLD
+	q.transform = Transform3D(Basis(), global_position + Vector3(0, def.height * 0.5 + 0.25, 0))
+	q.motion = Vector3(end.x - global_position.x, end.y - global_position.y, end.z - global_position.z)
+	var free := space.cast_motion(q)
+	return not free.is_empty() and free[0] >= 0.999
+
+
+## Launch along a checked grapple route. Roots keep the unit on the ground
+## (the charge comes back); a launch that starts stays spent even if a stun
+## or root cuts it short. A second grapple during travel redirects from here.
+func start_grapple(a: AbilityDef, target: Vector3) -> bool:
+	if not target.is_finite():
+		return false
+	var slot := cast_slot
+	if root_timer > 0.0:
+		cast_rejected.emit(slot, "Rooted: you cannot grapple")
+		_refund_charge(slot)
+		return false
+	var d := Vector3(target.x - global_position.x, 0.0, target.z - global_position.z)
+	if d.length() < 0.3:
+		return false
+	if not _route_clear(target):
+		# Checked again at release: the unit may have moved since the press.
+		cast_rejected.emit(slot, "The way to that wall is blocked")
+		_refund_charge(slot)
+		return false
+	if dash_timer <= 0.0 or dash_ability == null or dash_ability.delivery != AbilityDef.Delivery.GRAPPLE:
+		grapple_from = global_position
+	dash_velocity = d.normalized() * a.grapple_speed
+	dash_timer = d.length() / a.grapple_speed
+	dash_ability = a
+	dash_hit.clear()
+	grapple_anchor = target + d.normalized() * (def.radius + 0.15) + Vector3(0, def.height * 0.6, 0)
+	return true
+
+
+func is_grappling() -> bool:
+	return dash_timer > 0.0 and dash_ability != null and dash_ability.delivery == AbilityDef.Delivery.GRAPPLE
 
 
 ## Recall: a press starts it when the champion is free (not casting, not
@@ -797,6 +1005,15 @@ func is_stunned() -> bool:
 func apply_root(duration: float) -> void:
 	if duration > 0.0:
 		root_timer = maxf(root_timer, duration)
+		if is_grappling():
+			dash_timer = 0.0  # a root pulls a grappling unit down where it is
+			dash_ability = null
+
+
+func apply_weaken(amount: float, duration: float) -> void:
+	if duration > 0.0 and (amount >= weaken_amount or weaken_timer <= 0.0):
+		weaken_amount = amount
+		weaken_timer = maxf(weaken_timer, duration)
 
 
 func apply_mark(amount: float, duration: float) -> void:
@@ -875,6 +1092,8 @@ func set_dead(killer: Unit) -> void:
 	haste_timer = 0.0
 	quick_amount = 0.0
 	quick_timer = 0.0
+	weaken_amount = 0.0
+	weaken_timer = 0.0
 	shield = 0.0
 	shield_timer = 0.0
 	_end_compel()
@@ -894,6 +1113,7 @@ func respawn() -> void:
 	health = max_health
 	for i in cooldowns.size():
 		cooldowns[i] = 0.0
+	_fill_charges()
 	hit_streak.clear()
 	passive_marks.clear()
 	passive_primed_until = -1.0

@@ -39,6 +39,9 @@ var _last_yaw_logged: float = 0.0
 ## noise (per tick noise made a melee target's facing jitter 30 degrees).
 var _aim_off: Vector3 = Vector3.ZERO
 var _aim_off_timer: float = 0.0
+## Grapple routes cost a few physics queries: looked for at most this often.
+const GRAPPLE_LOOK := 0.25
+var _grapple_look_t: float = 0.0
 ## A bot turns no faster than this (degrees per second), like a hand on a mouse.
 const MAX_TURN_DEG := 720.0
 var _last_yaw: float = 0.0
@@ -164,21 +167,32 @@ func _decide(unit: Unit) -> UnitCommand:
 			c.aim_yaw = yaw_towards(pos, fountain)
 			c.move = world_to_move(dir.normalized(), c.aim_yaw)
 			# A dash is also an escape: use it when an enemy champion is close.
+			# A grapple too, when a wall lies on the way home.
 			if _enemy_champion_within(unit, 7.0):
 				for slot in range(1, unit.def.slot_count()):
 					var d := unit.get_slot(slot)
 					if d and d.delivery == AbilityDef.Delivery.DASH and not d.is_ultimate and unit.cooldowns[slot] <= 0.0:
 						c.buttons |= UnitCommand.ability_button(slot)
 						break
+					if d and d.delivery == AbilityDef.Delivery.GRAPPLE and unit.ready_in(slot) <= 0.0 and not unit.is_grappling():
+						var g := _grapple_toward(unit, d, fountain, 4.0, dt)
+						if g.is_finite():
+							c.aim_point = g
+							c.buttons |= UnitCommand.ability_button(slot)
+							break
 		return c
 
-	# Step out of any hostile circle on the ground (it is visible to everyone).
+	# Step out of any hostile circle or line on the ground (visible to everyone).
 	for ar in authority.areas:
 		if ar.source and is_instance_valid(ar.source) and authority.are_enemies(unit, ar.source) \
 				and ar.ability.delivery == AbilityDef.Delivery.GROUND_AREA \
-				and flat_distance(pos, ar.center) <= ar.ability.area_radius + unit.def.radius:
+				and CombatAuthority.in_area(ar, pos, unit.def.radius):
 			var away := pos - ar.center
 			away.y = 0.0
+			if ar.ability.line_width > 0.0:
+				# Out of a line: sideways, the short way.
+				var side := Vector3(-ar.dir.z, 0.0, ar.dir.x)
+				away = side * (1.0 if away.dot(side) >= 0.0 else -1.0)
 			if away.length() < 0.1:
 				away = Vector3(1, 0, 0)
 			c.aim_yaw = yaw_towards(pos, pos + away)
@@ -281,7 +295,22 @@ func _decide(unit: Unit) -> UnitCommand:
 		var dist := flat_distance(pos, _target.global_position)
 		for slot in range(1, unit.def.slot_count()):
 			var ab := unit.get_slot(slot)
-			if unit.cooldowns[slot] > 0.0 or ab == null:
+			if ab == null or unit.ready_in(slot) > 0.0:
+				continue
+			if ab.delivery == AbilityDef.Delivery.GRAPPLE:
+				# Chain in onto a champion out of reach, when the fight looks good
+				# and the landing is not under the enemy tower. One charge stays
+				# kept for the way out, unless the kill looks likely.
+				var t_hp := _target.health / _target.max_health
+				var spare := unit.charges[slot] >= ab.max_charges or t_hp < 0.35
+				if _target.def.kind == ChampionDef.Kind.CHAMPION and not unit.is_grappling() and spare \
+						and dist > basic.range + 2.0 and dist <= ab.range + 6.0 and (t_hp < 0.5 or hp > 0.6) \
+						and _safe_from_tower(unit, _target.global_position):
+					var g := _grapple_toward(unit, ab, _target.global_position, 4.0, dt)
+					if g.is_finite():
+						c.aim_point = g
+						c.buttons |= UnitCommand.ability_button(slot)
+						break
 				continue
 			if ab.ally_heal > 0.0:
 				# A healing burst goes where the hurt ally stands, not on the enemy.
@@ -330,6 +359,28 @@ func _decide(unit: Unit) -> UnitCommand:
 	return c
 
 
+## An aim point whose grapple lands at least `gain` metres nearer `goal`,
+## trying the straight line first and then a few angles either side; INF when
+## no marked wall serves (or the last look was too recent).
+func _grapple_toward(unit: Unit, a: AbilityDef, goal: Vector3, gain: float, dt: float) -> Vector3:
+	_grapple_look_t -= dt
+	if _grapple_look_t > 0.0:
+		return Vector3.INF
+	_grapple_look_t = GRAPPLE_LOOK
+	var pos := unit.global_position
+	var to := Vector3(goal.x - pos.x, 0.0, goal.z - pos.z)
+	if to.length() < 0.5:
+		return Vector3.INF
+	var now := to.length()
+	for deg: float in [0.0, 25.0, -25.0, 50.0, -50.0]:
+		var dir := to.normalized().rotated(Vector3.UP, deg_to_rad(deg))
+		var aim := pos + dir * a.range
+		var end := unit.grapple_endpoint(a, aim)
+		if end.is_finite() and flat_distance(end, goal) <= now - gain:
+			return aim
+	return Vector3.INF
+
+
 ## When to press the ability, by what it does. Same information a player has.
 func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: float) -> bool:
 	if a == null:
@@ -361,6 +412,9 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 		# A slowing throw: stick it on a champion that is getting away.
 		return champ and dist <= a.range and dist > unit.def.basic_attack.range
 	match a.delivery:
+		AbilityDef.Delivery.MELEE_ARC:
+			# A close sweep (Break the Seal): on a champion in reach.
+			return champ and dist <= a.range + target.def.radius
 		AbilityDef.Delivery.GROUND_AREA:
 			return dist <= a.range and (champ or _clump(unit, target.global_position, a.area_radius) >= 3)
 		AbilityDef.Delivery.WARD:

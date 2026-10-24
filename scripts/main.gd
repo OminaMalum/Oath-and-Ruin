@@ -77,7 +77,9 @@ func _ready() -> void:
 			layer.add_child(menu)
 			menu.chosen.connect(_on_menu)
 			return
-	add_child(LaneMapBuilder.new() if mode == "match" else ArenaBuilder.new())
+	var map: Node3D = LaneMapBuilder.new() if mode == "match" else ArenaBuilder.new()
+	add_child(map)
+	GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0 if mode == "match" else INF)
 	authority = CombatAuthority.new()
 	authority.name = "CombatAuthority"
 	add_child(authority)
