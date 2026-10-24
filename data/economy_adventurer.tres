@@ -20,10 +20,22 @@
 [ext_resource type="Resource" path="res://data/items/adventurer/runecasters_codex.tres" id="25_it"]
 [ext_resource type="Resource" path="res://data/items/adventurer/bastion_plate.tres" id="26_it"]
 [ext_resource type="Resource" path="res://data/items/adventurer/lantern_of_returning.tres" id="27_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/giantfall_spear.tres" id="28_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/rangers_covenant.tres" id="29_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/headsmans_writ.tres" id="30_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/ashen_brand.tres" id="31_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/cinder_reliquary.tres" id="32_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/witchglass_lens.tres" id="33_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/stormthread_spindle.tres" id="34_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/spellward_mantle.tres" id="35_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/cairnheart.tres" id="36_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/pilgrims_bulwark.tres" id="37_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/cantors_thread.tres" id="38_it"]
+[ext_resource type="Resource" path="res://data/items/adventurer/oathkeepers_harness.tres" id="39_it"]
 
 [resource]
 script = ExtResource("1_econ")
 slots = 6
 sell_fraction = 0.7
 haste_cap = 40.0
-items = Array[ExtResource("2_item")]([ExtResource("10_it"), ExtResource("11_it"), ExtResource("12_it"), ExtResource("13_it"), ExtResource("14_it"), ExtResource("15_it"), ExtResource("16_it"), ExtResource("17_it"), ExtResource("18_it"), ExtResource("19_it"), ExtResource("20_it"), ExtResource("21_it"), ExtResource("22_it"), ExtResource("23_it"), ExtResource("24_it"), ExtResource("25_it"), ExtResource("26_it"), ExtResource("27_it")])
+items = Array[ExtResource("2_item")]([ExtResource("10_it"), ExtResource("11_it"), ExtResource("12_it"), ExtResource("13_it"), ExtResource("14_it"), ExtResource("15_it"), ExtResource("16_it"), ExtResource("17_it"), ExtResource("18_it"), ExtResource("19_it"), ExtResource("20_it"), ExtResource("21_it"), ExtResource("22_it"), ExtResource("23_it"), ExtResource("24_it"), ExtResource("25_it"), ExtResource("26_it"), ExtResource("27_it"), ExtResource("28_it"), ExtResource("29_it"), ExtResource("30_it"), ExtResource("31_it"), ExtResource("32_it"), ExtResource("33_it"), ExtResource("34_it"), ExtResource("35_it"), ExtResource("36_it"), ExtResource("37_it"), ExtResource("38_it"), ExtResource("39_it")])

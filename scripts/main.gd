@@ -21,7 +21,7 @@ extends Node3D
 ##   --settings                         menu: open the settings panel (screenshots)
 ##   --lineup=A,B,C                     match: these three champions on both teams
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
-##   --shop                             open the shop panel (screenshots)
+##   --shop[=finished]                  open the shop panel (screenshots), on its second page
 ##   --scoreboard                       show the scoreboard (screenshots)
 ##   --warp=S                           run without drawing until S seconds (needs --fixed-fps 60)
 ##   --follow=N                         spectate: follow champion N (0-2 Oath, 3-5 Ruin)
@@ -275,6 +275,8 @@ func _setup_presentation(local_unit: Unit) -> void:
 	hud = Hud.new()
 	layer.add_child(hud)
 	hud.setup(authority, local_unit, rig, bot if net == null and match_ctl == null else null)
+	if args.get("shop", "") == "finished":
+		hud.shop_tab = 1  # screenshots of the second shop page
 	if DisplayServer.get_name() != "headless" and not rig.follow_unit_yaw:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var top := CanvasLayer.new()

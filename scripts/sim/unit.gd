@@ -116,6 +116,13 @@ var passive_marks := {}
 ## STAND_BEHIND: primed until this authority time; ready again at the other.
 var passive_primed_until: float = -1.0
 var passive_ready_at: float = -1.0
+## FLAME embers, FURY fury (0 to 100), RESIDUAL charges.
+var passive_stacks: float = 0.0
+## Authority time this champion last dealt or took champion damage.
+var champion_fight_at: float = -100.0
+## REFRAIN: the last of slot 1 or 2 cast, and when (authority time).
+var refrain_slot: int = -1
+var refrain_at: float = -100.0
 
 var cast_phase: CastPhase = CastPhase.NONE
 var cast_slot: int = -1
@@ -149,6 +156,16 @@ var haste_amount: float = 0.0
 var haste_timer: float = 0.0
 var quick_amount: float = 0.0
 var quick_timer: float = 0.0
+## Healing cut: heals on this unit are cut by heal_cut (strongest wins).
+var heal_cut: float = 0.0
+var heal_cut_timer: float = 0.0
+## Burn (Cinder Reliquary): damage per second from burn_source, one at a time;
+## a new burn refreshes it rather than stacking.
+var burn_source: Unit
+var burn_dps: float = 0.0
+var burn_timer: float = 0.0
+## Authority time of the last damage taken from a champion (Cairnheart).
+var last_champion_hit_at: float = -100.0
 ## Weakened: this unit's damage is cut by weaken_amount (strongest wins).
 var weaken_amount: float = 0.0
 var weaken_timer: float = 0.0
@@ -654,6 +671,10 @@ func _step_status(dt: float) -> void:
 		weaken_timer -= dt
 		if weaken_timer <= 0.0:
 			weaken_amount = 0.0
+	if heal_cut_timer > 0.0:
+		heal_cut_timer -= dt
+		if heal_cut_timer <= 0.0:
+			heal_cut = 0.0
 	if compel_timer > 0.0:
 		compel_timer -= dt
 		if compel_source != null and (not is_instance_valid(compel_source) or not compel_source.alive):
@@ -1010,6 +1031,12 @@ func apply_root(duration: float) -> void:
 			dash_ability = null
 
 
+func apply_heal_cut(amount: float, duration: float) -> void:
+	if duration > 0.0 and (amount >= heal_cut or heal_cut_timer <= 0.0):
+		heal_cut = amount
+		heal_cut_timer = maxf(heal_cut_timer, duration)
+
+
 func apply_weaken(amount: float, duration: float) -> void:
 	if duration > 0.0 and (amount >= weaken_amount or weaken_timer <= 0.0):
 		weaken_amount = amount
@@ -1094,6 +1121,11 @@ func set_dead(killer: Unit) -> void:
 	quick_timer = 0.0
 	weaken_amount = 0.0
 	weaken_timer = 0.0
+	heal_cut = 0.0
+	heal_cut_timer = 0.0
+	burn_source = null
+	burn_dps = 0.0
+	burn_timer = 0.0
 	shield = 0.0
 	shield_timer = 0.0
 	_end_compel()
@@ -1117,6 +1149,8 @@ func respawn() -> void:
 	hit_streak.clear()
 	passive_marks.clear()
 	passive_primed_until = -1.0
+	passive_stacks = 0.0
+	refrain_slot = -1
 	collision_layer = LAYER_UNITS
 	reset_physics_interpolation()  # drawn position jumps to the spawn, no slide across the map
 	respawned.emit()

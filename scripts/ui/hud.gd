@@ -23,6 +23,8 @@ var _font: Font
 ## Adventurer shop hit boxes from the last draw: {rect, buy|sell, index}.
 var _shop_hits: Array[Dictionary] = []
 var _shop_hover: ItemDef
+## Adventurer shop page: 0 parts (starters, boots, components), 1 finished.
+var shop_tab: int = 0
 
 
 func setup(a: CombatAuthority, p: Unit, r: CameraRig, b: SparringBot) -> void:
@@ -282,6 +284,12 @@ func _draw() -> void:
 				if k < player.charges[i]:
 					draw_circle(pc, 5.5, Palette.TEAL)
 
+	var pr := passive_readout(player)
+	if not pr.is_empty() and not player.upgrade_pending:
+		# The passive's count, left of the gold, on its own dark plate.
+		var prr := Rect2(Vector2(c.x + 20, vs.y - 182), Vector2(270, 38))
+		draw_rect(prr, Color(0.06, 0.05, 0.04, 0.7))
+		_text(prr.position + Vector2(0, 27), pr, FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, prr.size.x)
 	if player.recall_timer > 0.0:
 		# Recall: a bar filling toward home above the ability bar.
 		var rr := Rect2(Vector2(c.x - 200, vs.y - 236), Vector2(400, 22))
@@ -443,7 +451,17 @@ func _draw_adventurer_shop(vs: Vector2, c: Vector2) -> void:
 	var y := panel.position.y + 38.0
 	var head := "Shop    %d gold" % floori(player.gold) if open else "The shop opens at your fountain or while you respawn"
 	_text(Vector2(x0, y), head, 26, Palette.GOLD if open else Color(0.85, 0.82, 0.75), HORIZONTAL_ALIGNMENT_LEFT, w - 300)
-	_text(Vector2(x0, y), "Click buys    B closes", FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_RIGHT, w - 32)
+	_text(Vector2(x0, y), "B closes", FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_RIGHT, w - 32)
+	# Two pages, picked by clicking a tab: parts and boots, or finished items.
+	var tab_w := 190.0
+	for t in 2:
+		var tr := Rect2(Vector2(panel.end.x - 16.0 - 130.0 - (2 - t) * (tab_w + 8.0), panel.position.y + 10.0), Vector2(tab_w, 38))
+		var on := shop_tab == t
+		draw_rect(tr, Color(0.22, 0.20, 0.16, 0.98) if on else Color(0.13, 0.12, 0.10, 0.95))
+		if on:
+			draw_rect(Rect2(Vector2(tr.position.x, tr.end.y - 4.0), Vector2(tr.size.x, 4.0)), Palette.TEAL)
+		_text(tr.position + Vector2(0, 27), ["Parts and boots", "Finished items"][t], FONT_SIZE, Color(0.96, 0.93, 0.86) if on else Color(0.72, 0.70, 0.66), HORIZONTAL_ALIGNMENT_CENTER, tr.size.x)
+		_shop_hits.append({"rect": tr, "tab": t})
 	# Suggestion along the champion's build.
 	y += 16.0
 	var next := ItemShop.next_step(player)
@@ -463,20 +481,22 @@ func _draw_adventurer_shop(vs: Vector2, c: Vector2) -> void:
 		draw_rect(sug, Color(0.13, 0.12, 0.10, 0.95))
 		_text(sug.position + Vector2(18, 35), "Your build is complete", 24, Color(0.75, 0.72, 0.68), HORIZONTAL_ALIGNMENT_LEFT, sug.size.x)
 	y += 70.0
-	# Catalog: Starters | Boots | Components (two columns) | Finished.
-	var cols := [["Starters", [ItemDef.Kind.STARTER], 1], ["Boots", [ItemDef.Kind.BOOTS], 1],
-		["Components", [ItemDef.Kind.COMPONENT], 2], ["Finished", [ItemDef.Kind.FINISHED], 1]]
-	var col_w := (w - 32.0 - 4 * 10.0) / 5.0
+	# Catalog, four columns of up to four. Parts page: Starters | Boots |
+	# Components (two columns). Finished page: Weapon | Spell | Defence | Utility.
+	var cols := [["Starters", "starter", 1], ["Boots", "boots", 1], ["Components", "component", 2]]
+	if shop_tab == 1:
+		cols = [["Weapon", "weapon", 1], ["Spell", "spell", 1], ["Defence", "defence", 1], ["Utility", "utility", 1]]
+	var col_w := (w - 32.0 - 3 * 10.0) / 4.0
 	var cell_h := minf(70.0, (panel.end.y - y - 150.0) / 4.0)
 	var cx := x0
 	for col in cols:
-		var kinds: Array = col[1]
+		var group: String = col[1]
 		var span: int = col[2]
 		_text(Vector2(cx, y + 20), col[0], FONT_SIZE, Color(0.85, 0.80, 0.70), HORIZONTAL_ALIGNMENT_LEFT, col_w * span)
 		var n := 0
 		for i in eco.items.size():
 			var it: ItemDef = eco.items[i]
-			if it.kind not in kinds:
+			if shop_group(it) != group:
 				continue
 			var r := Rect2(Vector2(cx + (n / 4) * (col_w + 10.0), y + 32.0 + (n % 4) * (cell_h + 6.0)), Vector2(col_w, cell_h))
 			_draw_item_cell(r, i + 1)
@@ -498,6 +518,24 @@ func _draw_adventurer_shop(vs: Vector2, c: Vector2) -> void:
 			_text(r.position + Vector2(0, 31), "empty", SMALL, Color(0.5, 0.48, 0.45), HORIZONTAL_ALIGNMENT_CENTER, sw)
 	if _shop_hover:
 		_text(Vector2(x0, panel.end.y - 14.0), "%s:  %s" % [_shop_hover.display_name, _shop_hover.description], 20, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_LEFT, w - 32)
+
+
+## Which shop column an adventurer item sits in.
+static func shop_group(it: ItemDef) -> String:
+	match it.kind:
+		ItemDef.Kind.STARTER:
+			return "starter"
+		ItemDef.Kind.BOOTS:
+			return "boots"
+		ItemDef.Kind.COMPONENT:
+			return "component"
+	if it.passive in [ItemDef.Passive.ASHEN, ItemDef.Passive.LANTERN, ItemDef.Passive.CANTOR, ItemDef.Passive.HARNESS]:
+		return "utility"
+	if it.weapon_power > 0.0:
+		return "weapon"
+	if it.spell_power > 0.0:
+		return "spell"
+	return "defence"
 
 
 func _draw_item_cell(r: Rect2, index: int) -> void:
@@ -538,7 +576,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_shop_hover = null
 		for h in _shop_hits:
-			if (h.rect as Rect2).has_point(event.position):
+			if (h.rect as Rect2).has_point(event.position) and h.has("item"):
 				_shop_hover = h.item
 		return
 	if not (event is InputEventMouseButton and event.pressed):
@@ -546,9 +584,30 @@ func _input(event: InputEvent) -> void:
 	for h in _shop_hits:
 		if not (h.rect as Rect2).has_point(event.position):
 			continue
-		if event.button_index == MOUSE_BUTTON_LEFT and h.has("buy"):
+		if event.button_index == MOUSE_BUTTON_LEFT and h.has("tab"):
+			shop_tab = h.tab
+		elif event.button_index == MOUSE_BUTTON_LEFT and h.has("buy"):
 			HumanController.pending_buy = h.buy
 		elif event.button_index == MOUSE_BUTTON_RIGHT and h.has("sell"):
 			HumanController.pending_sell = h.sell
 		get_viewport().set_input_as_handled()
 		return
+
+
+## The passive's stored count, when it has one worth watching (embers, fury,
+## charges, the half-sung refrain). Empty otherwise.
+static func passive_readout(u: Unit) -> String:
+	match u.def.passive:
+		ChampionDef.Passive.FLAME:
+			return "Embers %d/%d" % [floori(u.passive_stacks), roundi(CombatAuthority.FLAME_MAX)] if u.passive_stacks >= 1.0 else ""
+		ChampionDef.Passive.FURY:
+			if u.passive_stacks >= CombatAuthority.FURY_MAX:
+				return "Fury full: Q heals"
+			return "Fury %d" % floori(u.passive_stacks) if u.passive_stacks >= 1.0 else ""
+		ChampionDef.Passive.RESIDUAL:
+			return "Charges %d/%d" % [floori(u.passive_stacks), roundi(CombatAuthority.RESIDUAL_MAX)] if u.passive_stacks >= 1.0 else ""
+		ChampionDef.Passive.REFRAIN:
+			if u.refrain_slot > 0:
+				var other := u.get_slot(3 - u.refrain_slot)
+				return "Refrain: %s next" % other.display_name if other else ""
+	return ""

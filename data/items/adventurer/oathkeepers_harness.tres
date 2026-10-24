@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/vital_cord.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/hourglass_chip.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"oathkeepers_harness"
+display_name = "Oathkeeper's Harness"
+short_name = "Harness"
+description = "+150 health, +12 haste. Stunning, rooting, taunting or charming a champion shields the nearest ally within 8 m for 70 (8 s cooldown)"
+cost = 960
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+health = 150.0
+haste = 12.0
+passive = 16
+passive_value = 70.0
+passive_cooldown = 8.0

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/etched_focus.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/vital_cord.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"cinder_reliquary"
+display_name = "Cinder Reliquary"
+short_name = "Cinder"
+description = "+16 spell power, +150 health. Spell ability hits burn a champion for 36 over 3 s (refreshes, never stacks)"
+cost = 1000
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+spell_power = 16.0
+health = 150.0
+passive = 9
+passive_value = 36.0

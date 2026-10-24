@@ -8,7 +8,8 @@ extends Resource
 
 enum Kind {CLASSIC, COMPONENT, STARTER, BOOTS, FINISHED}
 ## Item passives the combat authority knows. Numbers live in the fields below.
-enum Passive {NONE, DUELIST, CODEX, BASTION, LANTERN}
+enum Passive {NONE, DUELIST, CODEX, BASTION, LANTERN, GIANTFALL, RANGER, WRIT, ASHEN, CINDER, WITCHGLASS,
+	STORMTHREAD, SPELLWARD, CAIRNHEART, BULWARK, CANTOR, HARNESS}
 
 @export var id: StringName
 @export var display_name: String = ""

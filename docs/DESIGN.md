@@ -495,6 +495,41 @@ and 25% beside carries, under the 55% line. She dies often (4.7 to 5.7 deaths
 a game in two lineups): the bots commit with the chain, which is the
 counterplay working. Bots grapple about 20 times a match each.
 
+## Phase 5: the other six kits and the full item catalog (added 2026-10-24)
+
+Items (adventurer catalog, 30 items, the twelve new ones appended so old
+indices hold): Giantfall Spear, Ranger's Covenant, Headsman's Writ, Ashen
+Brand, Cinder Reliquary, Witchglass Lens, Stormthread Spindle, Spellward
+Mantle, Cairnheart, Pilgrim's Bulwark, Cantor's Thread, Oathkeeper's Harness.
+Prices stay at 40% of the brief. Healing reduction (Ashen, Witchglass) takes
+the strongest active cut, burns refresh and do not stack, item damage never
+triggers item damage, Bastion and Spellward share one shield cooldown. The
+shop has two pages: parts and boots, and finished items in four columns.
+Bot builds follow the brief's teaching paths.
+
+Passives, reconciled with the kits that exist (the brief's slot names differ):
+- Ashrunner, Exposed Seam: a hit from behind, or on a target Ember Knife cut
+  in the last 3 s, deals 40% more. Once every 6 s per target. Replaces Ember.
+- Lanternkeeper, Keep the Flame: healing an allied champion in a fight stores
+  an ember (once per cast, up to 3); the next Lantern Light shields everyone
+  in it for 25 per ember. Replaces Kindled (the aura heal).
+- Barrowking, Ancestral Fury: 10 fury per hit dealt and 6 per hit taken on
+  champions; at 100 the next Q heals 12% of max health once; fades after 3 s
+  out of the fight. Replaces Barrow Blood.
+- Veilsinger, Refrain: Q then E (or E then Q) within 6 s empowers the second:
+  War Song wider and quicker, Lure longer and further. Replaces Encore.
+- Stormscald, Residual Charge: Arc Bolt (F) or Tempest hitting a champion
+  stores a charge (once per cast, up to 2); the next Called Lightning (his
+  delayed ground strike) deals 20% more per charge. Replaces Eye of the Storm.
+- Gravebinder keeps Soul Tithe until summons exist (Names Remembered needs
+  Willing Dead). That lands with Phase 6, next to the Brasswright sentry.
+- The HUD shows embers, fury, charges and the waiting half of a refrain.
+  Snapshot version 8 carries passive stacks and the refrain.
+
+Soak (adventurer items, seeds 18 to 41): all 24 ended, sides 10/14, median
+10.4 min (7.2 to 16.0), 23.2 kills a match (was 18.7). Highest team kill share
+Gravebinder 54%, Thornwright 49%: under the 55% line.
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

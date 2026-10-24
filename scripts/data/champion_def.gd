@@ -24,8 +24,18 @@ enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 ## hit on it spends them for passive_value more damage per mark.
 ## MOMENTUM: a grapple that carries the unit far enough primes the next basic
 ## hit on a champion (within a short time) for passive_value more damage.
+## SEAM: a hit on a champion from behind (or one slot 2 primed) deals
+## passive_value more, once per SEAM_COOLDOWN for each target.
+## FLAME: healing another champion in a fight stores an ember (once per cast,
+## up to 3); the next slot 1 cast shields allies near it for passive_value each.
+## FURY: champion fighting fills fury (0 to 100, fades out of combat); at full
+## fury the next slot 1 cast heals the unit for passive_value of max health.
+## REFRAIN: slot 1 then slot 2 (or 2 then 1) within REFRAIN_TIME empowers the
+## second cast (see CombatAuthority.empowered).
+## RESIDUAL: slot 4 or ultimate hits on champions store charges (once per cast,
+## up to 2); the next slot 1 cast spends them for passive_value more damage each.
 enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE, BARROWBLOOD, ENCORE, STORMEYE,
-	MARGINALIA, STAND_BEHIND, QUARRY, MOMENTUM }
+	MARGINALIA, STAND_BEHIND, QUARRY, MOMENTUM, SEAM, FLAME, FURY, REFRAIN, RESIDUAL }
 
 @export var id: StringName
 @export var display_name: String = ""
