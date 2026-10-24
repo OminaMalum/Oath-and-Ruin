@@ -21,11 +21,13 @@ const LOOKS := {
 	"ClothDark": ["hessian_230", Color(0.2, 0.19, 0.18), 0.95, 0.0, 3.0],
 	"Wood": ["bark_willow_02", Color(0.55, 0.42, 0.34), 0.8, 0.0, 1.2],
 	"Skin": ["", Color(0.66, 0.5, 0.42), 0.55, 0.0, 1.0],
-	"Brass": ["", Color(0.8, 0.6, 0.3), 0.32, 1.0, 1.0],
+	"Brass": ["forged_steel", Color(0.8, 0.6, 0.3), 0.6, 1.0, 2.0],
 	"Paper": ["", Color(0.88, 0.82, 0.66), 0.9, 0.0, 1.0],
-	"Trim": ["", Color(0.86, 0.64, 0.3), 0.4, 0.7, 1.0],
-	"Steel": ["", Color(0.6, 0.62, 0.64), 0.34, 0.9, 1.0],
-	"Iron": ["", Color(0.3, 0.3, 0.33), 0.5, 0.75, 1.0],
+	"Trim": ["forged_steel", Color(0.86, 0.64, 0.3), 0.7, 0.8, 2.0],
+	# Worn plate (tools/make_steel_maps.py): satin with rubbed patches and
+	# scratches instead of the flat chrome of a bare metal value.
+	"Steel": ["forged_steel", Color(0.62, 0.63, 0.65), 0.75, 0.9, 2.0],
+	"Iron": ["forged_steel", Color(0.32, 0.32, 0.34), 0.95, 0.75, 2.0],
 	# Woven hessian bumps read as rings of mail once it is metal.
 	"Mail": ["hessian_230", Color(0.38, 0.4, 0.43), 0.5, 0.85, 8.0, true],
 	"Bone": ["", Color(0.84, 0.79, 0.66), 0.6, 0.0, 1.0],
@@ -35,7 +37,7 @@ const LOOKS := {
 }
 const SETS := {
 	"poly_wool_herringbone": "poly_wool_herringbone", "brown_leather": "brown_leather", "hessian_230": "hessian_230",
-	"bark_willow_02": "bark_willow_02", "castle_wall_slates": "castle_wall_slates",
+	"bark_willow_02": "bark_willow_02", "castle_wall_slates": "castle_wall_slates", "forged_steel": "forged_steel",
 }
 
 
