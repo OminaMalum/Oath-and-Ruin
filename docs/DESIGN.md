@@ -430,6 +430,24 @@ champion by the end. A first pass let item power raise structure damage by
 Stormscald sits at the 55% kill share line (12 games): watch it. The same
 seeds with classic items gave exactly the old results.
 
+## Phase 3: deeper kits and lore (added 2026-10-24)
+
+Three passives from the roster brief replace the old ones (Inscribed,
+Resolve, Steady Aim). The Q, E, F and R abilities stay as they were.
+
+| Champion | New passive | How it works |
+|---|---|---|
+| Ruinscribe | Marginalia | Binding Glyph inscribes champions it hits for 4 s. Unmaking Lance on an inscribed champion wipes the mark and gives her a 70 shield for 3 s. |
+| Oathwarden | Stand Behind Me | A Q or E cast primes his next basic hit on a champion (6 s). That hit shields the most hurt allied champion within 8 m (him if nobody else) for 90, 3 s. 8 s cooldown. |
+| Thornwright | Patient Quarry | Longbow hits on a champion stack up to 3 marks (4 s). Charged Shot spends them for 15% more damage each. |
+
+Marks only go on champions (and training dummies). Shields use the Phase 2
+rule: the bigger shield stays. Every champion file now carries a character
+name, title, ancestry and two lines of story from the brief, shown in the
+menu under the champion picks. Lore is text only; no ancestry stats.
+
+Soak f1 (24 seeds, adventurer items): every match ended, sides 10/14, median 10.1 min (6.2 to 15.5), 18.7 kills per match. Highest team kill share Stormscald 54%, Gravebinder 52%, both under the 55% line. Oathwarden sits at 15% kill share, which fits a frontline shield role.
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

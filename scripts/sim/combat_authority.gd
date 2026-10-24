@@ -127,6 +127,8 @@ func are_enemies(a: Unit, b: Unit) -> bool:
 
 
 func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: Unit = null) -> void:
+	if caster.def.passive == ChampionDef.Passive.STAND_BEHIND and (a == caster.get_slot(1) or a == caster.get_slot(2)):
+		caster.passive_primed_until = time + PRIMED_TIME
 	match a.delivery:
 		AbilityDef.Delivery.PROJECTILE:
 			var p := SimProjectile.new()
@@ -286,6 +288,7 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef, proc
 		else:
 			target.apply_compel(Unit.Compel.CHARM, source, a.charm_duration)
 	if proc_kind < 0 and a != null:
+		_hit_passives(source, target, a)
 		_item_passives(source, target, a)
 	if target.alive and target.health <= 0.0:
 		target.set_dead(source)
@@ -317,6 +320,15 @@ func passive_damage_factor(source: Unit, target: Unit, a: AbilityDef) -> float:
 			and target.def.kind != ChampionDef.Kind.STRUCTURE \
 			and Vector2(target.global_position.x - source.global_position.x, target.global_position.z - source.global_position.z).length() > source.def.passive_range:
 		f *= 1.0 + source.def.passive_value
+	if source.def.passive == ChampionDef.Passive.QUARRY and a != null and _markable(target):
+		var key := target.net_id
+		var m: Vector2 = source.passive_marks.get(key, Vector2(0, -100))
+		var n := int(m.x) if time - m.y <= MARK_TIME else 0
+		if a == source.def.basic_attack:
+			source.passive_marks[key] = Vector2(mini(n + 1, 3), time)
+		elif a == source.get_slot(1) and n > 0:
+			f *= 1.0 + source.def.passive_value * n
+			source.passive_marks.erase(key)
 	if source.def.passive == ChampionDef.Passive.TITHE and target.def.kind != ChampionDef.Kind.STRUCTURE and target.is_impaired():
 		f *= 1.0 + source.def.passive_value
 	return f
@@ -608,3 +620,50 @@ func _item_passives(source: Unit, target: Unit, a: AbilityDef) -> void:
 		target.item_ready_at["bastion"] = time + bastion.passive_cooldown
 		target.apply_shield(bastion.passive_value + target.max_health * 0.1, 4.0)
 		unit_shielded.emit(target, target.shield)
+
+
+const MARK_TIME := 4.0      # MARGINALIA and QUARRY marks last this long
+const PASSIVE_SHIELD_TIME := 3.0
+const PRIMED_TIME := 6.0    # STAND_BEHIND: a cast primes the next hit this long
+const STAND_COOLDOWN := 8.0
+
+
+## Champions and training dummies take marks; minions and structures do not.
+static func _markable(u: Unit) -> bool:
+	return u.def.kind == ChampionDef.Kind.CHAMPION or u.def.kind == ChampionDef.Kind.DUMMY
+
+
+## Champion passives that react to a landed hit (MARGINALIA, STAND_BEHIND).
+## QUARRY changes the damage itself, in passive_damage_factor.
+func _hit_passives(source: Unit, target: Unit, a: AbilityDef) -> void:
+	if not _markable(target) or not source.alive:
+		return
+	match source.def.passive:
+		ChampionDef.Passive.MARGINALIA:
+			if a == source.get_slot(1):
+				source.passive_marks[target.net_id] = Vector2(1, time)
+			elif a == source.get_slot(2):
+				var m: Vector2 = source.passive_marks.get(target.net_id, Vector2(0, -100))
+				if m.x > 0 and time - m.y <= MARK_TIME:
+					source.passive_marks.erase(target.net_id)
+					source.apply_shield(source.def.passive_value, PASSIVE_SHIELD_TIME)
+					unit_shielded.emit(source, source.shield)
+		ChampionDef.Passive.STAND_BEHIND:
+			if a == source.def.basic_attack and time <= source.passive_primed_until and time >= source.passive_ready_at:
+				var best: Unit = null
+				for u in units:
+					if u.alive and u.team == source.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+							and _flat(u.global_position, source.global_position) <= source.def.passive_range \
+							and (best == null or _shield_need(u) > _shield_need(best)):
+						best = u
+				if best:
+					source.passive_primed_until = -1.0
+					source.passive_ready_at = time + STAND_COOLDOWN
+					best.apply_shield(source.def.passive_value, PASSIVE_SHIELD_TIME)
+					unit_shielded.emit(best, best.shield)
+
+
+## Who needs a shield most: missing health share; the caster itself counts
+## a little less, so a hurt ally beside it wins a tie.
+static func _shield_need(u: Unit) -> float:
+	return 1.0 - u.health / u.max_health - (0.05 if u.def.passive == ChampionDef.Passive.STAND_BEHIND else 0.0)

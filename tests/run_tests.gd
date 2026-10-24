@@ -44,10 +44,10 @@ func _run() -> void:
 		"test_upgrade_choice", "test_roster",
 		"test_second_slot_and_pierce", "test_stun", "test_knife_slow",
 		"test_ultimate_unlock", "test_unmaking_word", "test_unbroken_oath", "test_ashfall",
-		"test_passive_inscribe", "test_passive_resolve", "test_passive_ember", "test_last_hit_xp",
+		"test_marginalia", "test_stand_behind", "test_passive_ember", "test_last_hit_xp",
 		"test_gold_and_shop", "test_items_change_stats", "test_bots_buy_items", "test_recall",
 		"test_batch_b_data", "test_root", "test_pull", "test_bramble_field", "test_mark",
-		"test_lantern_heals", "test_dawnlight", "test_longshot", "test_tithe",
+		"test_lantern_heals", "test_dawnlight", "test_quarry", "test_tithe",
 		"test_batch_c_data", "test_taunt", "test_charm", "test_war_song", "test_encore", "test_storm_wall",
 		"test_tempest", "test_barrow_blood", "test_kings_wrath",
 		"test_fourth_ability_data", "test_fold_step", "test_searing_light", "test_smoke_veil",
@@ -831,36 +831,6 @@ func test_ashfall() -> void:
 	check(missed.health == SCRIBE.max_health and not missed.is_stunned(), "an enemy off the line is untouched")
 
 
-func test_passive_inscribe() -> void:
-	var me := spawn(SCRIBE, 0, Vector3.ZERO)
-	var target := spawn(DUMMY, 1, Vector3(0, 0, -6))
-	var other := spawn(DUMMY, 1, Vector3(3, 0, -6))
-	await ticks(2)
-	var bolt := SCRIBE.basic_attack
-	var hits: Array[float] = []
-	target.damaged.connect(func(amount: float, _src: Unit) -> void: hits.append(amount))
-	for i in 3:
-		authority.apply_damage(me, target, bolt.damage, bolt)
-	check(hits.size() == 3 and is_equal_approx(hits[0], bolt.damage) and is_equal_approx(hits[1], bolt.damage), "the first two bolts hit normally")
-	check(is_equal_approx(hits[2], bolt.damage * (1.0 + SCRIBE.passive_value)), "the third bolt on the same target hits for +%.0f%%" % (SCRIBE.passive_value * 100.0))
-	authority.apply_damage(me, other, bolt.damage, bolt)
-	check(is_equal_approx(DUMMY.max_health - other.health, bolt.damage), "the count is per target")
-	authority.apply_damage(me, target, 10.0, SCRIBE.get_slot(1))
-	check(is_equal_approx(DUMMY.max_health - target.health, bolt.damage * (3.0 + SCRIBE.passive_value) + 10.0), "abilities do not count or get the bonus")
-
-
-func test_passive_resolve() -> void:
-	var warden := spawn(WARDEN, 0, Vector3.ZERO)
-	var enemy := spawn(SCRIBE, 1, Vector3(0, 0, -6))
-	await ticks(2)
-	authority.apply_damage(enemy, warden, 100.0, null)
-	check(is_equal_approx(WARDEN.max_health - warden.health, 100.0), "above half health a hit lands in full")
-	warden.health = warden.max_health * 0.4
-	var before := warden.health
-	authority.apply_damage(enemy, warden, 100.0, null)
-	check(is_equal_approx(before - warden.health, 100.0 * (1.0 - WARDEN.passive_value)), "below half health hits are softened by %.0f%%" % (WARDEN.passive_value * 100.0))
-
-
 func test_passive_ember() -> void:
 	var me := spawn(RUNNER, 0, Vector3.ZERO)
 	var victim := spawn(SCRIBE, 1, Vector3(0, 0, -3))
@@ -1347,6 +1317,79 @@ func test_adventurer_bot_match() -> void:
 	check(finished >= 6, "bots at the fountain with gold buy finished items (%d)" % finished)
 
 
+func test_marginalia() -> void:
+	var me := spawn(SCRIBE, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -6))
+	await ticks(2)
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(2))
+	check(me.shield == 0.0, "Marginalia: the lance alone gives no shield")
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(1))
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(2))
+	check(is_equal_approx(me.shield, SCRIBE.passive_value), "glyph then lance on the same target: a %d shield" % roundi(SCRIBE.passive_value))
+	me.shield = 0.0
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(2))
+	check(me.shield == 0.0, "the mark is spent")
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(1))
+	await secs(CombatAuthority.MARK_TIME + 0.2)
+	authority.apply_damage(me, foe, 10.0, SCRIBE.get_slot(2))
+	check(me.shield == 0.0, "a mark older than %d s does nothing" % roundi(CombatAuthority.MARK_TIME))
+	var minion := spawn(MELEE, 1, Vector3(3, 0, -6))
+	await ticks(1)
+	authority.apply_damage(me, minion, 1.0, SCRIBE.get_slot(1))
+	authority.apply_damage(me, minion, 1.0, SCRIBE.get_slot(2))
+	check(me.shield == 0.0, "minions cannot be inscribed")
+
+
+func test_stand_behind() -> void:
+	var warden := spawn(WARDEN, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	var far := spawn(SCRIBE, 0, Vector3(30, 0, 0))
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -2))
+	await ticks(2)
+	ally.health = ally.max_health * 0.5
+	far.health = far.max_health * 0.2
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	check(ally.shield == 0.0, "Stand Behind Me: an unprimed hit shields nobody")
+	await _cast(warden, 1, warden.global_position, 0.6)
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	check(is_equal_approx(ally.shield, WARDEN.passive_value) and far.shield == 0.0, "after a cast, the next hit shields the most hurt ally in reach")
+	ally.shield = 0.0
+	await _cast(warden, 2, foe.global_position, 0.6)
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	check(ally.shield == 0.0, "then it waits %d s" % roundi(CombatAuthority.STAND_COOLDOWN))
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	ally.health = ally.max_health
+	warden.health = warden.max_health * 0.5
+	await secs(CombatAuthority.STAND_COOLDOWN)
+	warden.cooldowns.fill(0.0)
+	await _cast(warden, 2, foe.global_position, 0.6)
+	authority.apply_damage(warden, foe, 10.0, WARDEN.basic_attack)
+	check(warden.shield > 0.0, "with no hurt ally it shields the Oathwarden")
+
+
+func test_quarry() -> void:
+	var me := spawn(THORN, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	var shot := THORN.get_slot(1)
+	var h := foe.health
+	authority.apply_damage(me, foe, 100.0, shot)
+	check(is_equal_approx(h - foe.health, 100.0), "Patient Quarry: an unmarked target takes plain damage")
+	for i in 5:
+		authority.apply_damage(me, foe, 1.0, THORN.basic_attack)
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, shot)
+	check(is_equal_approx(h - foe.health, 100.0 * (1.0 + 3.0 * THORN.passive_value)), "three marks at most: +%d%%" % roundi(300.0 * THORN.passive_value))
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, shot)
+	check(is_equal_approx(h - foe.health, 100.0), "the marks are spent")
+	authority.apply_damage(me, foe, 1.0, THORN.basic_attack)
+	await secs(CombatAuthority.MARK_TIME + 0.2)
+	h = foe.health
+	authority.apply_damage(me, foe, 100.0, shot)
+	check(is_equal_approx(h - foe.health, 100.0), "marks fade after %d s" % roundi(CombatAuthority.MARK_TIME))
+
+
 func test_root() -> void:
 	var me := spawn(GRAVE, 0, Vector3.ZERO)
 	var foe := spawn(WARDEN, 1, Vector3(0, 0, -8))
@@ -1438,19 +1481,6 @@ func test_dawnlight() -> void:
 	var dawn := LANTERN.get_slot(3)
 	check(ally.health >= 100.0 + dawn.ally_heal, "dawnlight heals the ally in it (%.0f)" % ally.health)
 	check(foe.health < DUMMY.max_health, "and burns the enemy")
-
-
-func test_longshot() -> void:
-	var me := spawn(THORN, 0, Vector3.ZERO)
-	var near := spawn(DUMMY, 1, Vector3(-3, 0, -8))
-	await ticks(2)
-	var bow := THORN.basic_attack
-	await _cast(me, 0, near.global_position, 0.8)
-	check(is_equal_approx(DUMMY.max_health - near.health, bow.damage), "Longbow at 8.5 m: plain damage")
-	var far := spawn(DUMMY, 1, Vector3(3, 0, -18))
-	await secs(0.5)  # the bow's cooldown
-	await _cast(me, 0, far.global_position, 1.4)
-	check(is_equal_approx(DUMMY.max_health - far.health, bow.damage * (1.0 + THORN.passive_value)), "Steady Aim: beyond %.0f m it hits %d%% harder" % [THORN.passive_range, roundi(THORN.passive_value * 100.0)])
 
 
 func test_tithe() -> void:

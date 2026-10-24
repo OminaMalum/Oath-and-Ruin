@@ -60,6 +60,23 @@ func _ready() -> void:
 	left.add_child(grid)
 	var row := grid
 	var group := ButtonGroup.new()
+	# Who the picked champion is: name, title, class and a few lines of story.
+	var who := Label.new()
+	who.add_theme_font_size_override("font_size", 24)
+	who.add_theme_color_override("font_color", Color(0.92, 0.84, 0.66))
+	var story := Label.new()
+	story.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	story.custom_minimum_size = Vector2(519, 0)
+	story.add_theme_font_size_override("font_size", 20)
+	story.add_theme_color_override("font_color", Color(0.85, 0.82, 0.76))
+	var show_lore := func(id: StringName) -> void:
+		var d := load("res://data/champions/%s.tres" % id) as ChampionDef
+		if d == null or d.hero_name.is_empty():
+			who.text = ""
+			story.text = ""
+			return
+		who.text = "%s, %s" % [d.hero_name, d.title]
+		story.text = "%s.  %s" % [d.ancestry, d.lore]
 	for c in [["Ruinscribe", "Ranged caster", &"ruinscribe"], ["Oathwarden", "Frontline", &"oathwarden"], ["Ashrunner", "Skirmisher", &"ashrunner"],
 			["Lanternkeeper", "Support", &"lanternkeeper"], ["Thornwright", "Marksman", &"thornwright"], ["Gravebinder", "Controller", &"gravebinder"],
 			["Barrowking", "Frontline", &"barrowking"], ["Veilsinger", "Support", &"veilsinger"], ["Stormscald", "Spellcaster", &"stormscald"]]:
@@ -71,8 +88,13 @@ func _ready() -> void:
 		b.add_theme_font_size_override("font_size", 22)
 		var id: StringName = c[2]
 		b.button_pressed = Session.champion == id
-		b.pressed.connect(func() -> void: Session.champion = id)
+		b.pressed.connect(func() -> void:
+			Session.champion = id
+			show_lore.call(id))
 		row.add_child(b)
+	left.add_child(who)
+	left.add_child(story)
+	show_lore.call(Session.champion)
 	# Enemy bot difficulty: three toggles in a row, saved with the settings.
 	var diff_row := HBoxContainer.new()
 	diff_row.add_theme_constant_override("separation", 12)

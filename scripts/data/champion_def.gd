@@ -16,11 +16,27 @@ enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 ## this unit regains passive_value health per second. ENCORE: allied champions
 ## within passive_range (and this one) move passive_value faster. STORMEYE:
 ## ground area bursts deal passive_value more to targets near their centre.
-enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE, BARROWBLOOD, ENCORE, STORMEYE }
+## MARGINALIA: a slot 1 hit inscribes a champion; a slot 2 hit on an
+## inscribed one wipes the mark and shields this unit for passive_value.
+## STAND_BEHIND: after a Q or E cast, the next basic hit on a champion shields
+## the most hurt allied champion within passive_range for passive_value.
+## QUARRY: basic hits on one champion stack marks (up to 3); the next slot 1
+## hit on it spends them for passive_value more damage per mark.
+enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE, BARROWBLOOD, ENCORE, STORMEYE,
+	MARGINALIA, STAND_BEHIND, QUARRY }
 
 @export var id: StringName
 @export var display_name: String = ""
 @export var role: String = ""
+@export_group("Lore")
+## The person behind the champion name, e.g. "Ilyra Voss".
+@export var hero_name: String = ""
+@export var title: String = ""
+## Ancestry and class, e.g. "Human wizard".
+@export var ancestry: String = ""
+## Two or three short sentences for the menu.
+@export_multiline var lore: String = ""
+@export_group("")
 @export var look: Look = Look.SPELLCASTER
 @export var kind: Kind = Kind.CHAMPION
 

@@ -105,6 +105,12 @@ var slot_overrides := {}
 var upgrade_pending: bool = false
 ## INSCRIBE passive: basic attack hits landed per target (net_id -> count).
 var hit_streak := {}
+## MARGINALIA and QUARRY marks this unit has put on others:
+## net_id -> Vector2(count, authority time placed).
+var passive_marks := {}
+## STAND_BEHIND: primed until this authority time; ready again at the other.
+var passive_primed_until: float = -1.0
+var passive_ready_at: float = -1.0
 
 var cast_phase: CastPhase = CastPhase.NONE
 var cast_slot: int = -1
@@ -889,6 +895,8 @@ func respawn() -> void:
 	for i in cooldowns.size():
 		cooldowns[i] = 0.0
 	hit_streak.clear()
+	passive_marks.clear()
+	passive_primed_until = -1.0
 	collision_layer = LAYER_UNITS
 	reset_physics_interpolation()  # drawn position jumps to the spawn, no slide across the map
 	respawned.emit()
