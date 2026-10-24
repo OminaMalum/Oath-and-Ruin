@@ -1,0 +1,63 @@
+{
+  "champion": "lanternkeeper",
+  "units": "metres, +Y up, model faces -Z in Godot (+Y in Blender), origin on the ground",
+  "height_m": 1.8,
+  "height_tolerance": 0.15,
+  "hit_radius_m": 0.45,
+  "move_speed_mps": 6.1,
+  "sockets": {
+    "Muzzle": [
+      0.0,
+      1.08,
+      -0.55
+    ],
+    "Overhead": [
+      0.0,
+      2.1,
+      0.0
+    ]
+  },
+  "muzzle_tolerance_m": 0.35,
+  "loop_clips": [
+    "idle",
+    "run"
+  ],
+  "one_shot_clips": [
+    "death"
+  ],
+  "slot_clips": {
+    "attack": {
+      "ability": "censer_spark",
+      "release_s": 0.15,
+      "recovery_s": 0.25,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_1": {
+      "ability": "lantern_light",
+      "release_s": 0.3,
+      "recovery_s": 0.1,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_2": {
+      "ability": "ravens_mark",
+      "release_s": 0.25,
+      "recovery_s": 0.15,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_3": {
+      "ability": "dawnlight",
+      "release_s": 0.3,
+      "recovery_s": 0.2,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    }
+  },
+  "release_marker": "release",
+  "feet": [
+    "foot_l",
+    "foot_r"
+  ]
+}
