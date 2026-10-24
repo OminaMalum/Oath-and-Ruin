@@ -31,6 +31,10 @@ func setup(a: CombatAuthority, local_unit: Unit) -> void:
 	a.melee_swung.connect(_on_melee_swung)
 	a.summoned.connect(func(u: Unit, _c: Unit) -> void: u.add_child(SummonModel.new(u)))
 	a.unit_died.connect(_on_unit_died_sfx)
+	# Spell effects (graphics thread) layer over these visuals.
+	var spell_fx := SpellFx.new()
+	add_child(spell_fx)
+	spell_fx.setup(a, self)
 	a.unit_removed.connect(func(u: Unit) -> void:
 		var ch: Node3D = _chains.get(u)
 		if ch:
