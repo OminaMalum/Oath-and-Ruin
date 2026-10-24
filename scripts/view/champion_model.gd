@@ -33,6 +33,10 @@ const LOOKS := {
 	"Bone": ["", Color(0.84, 0.79, 0.66), 0.6, 0.0, 1.0],
 	"Fur": ["poly_wool_herringbone", Color(0.42, 0.36, 0.3), 1.0, 0.0, 4.0],
 	"Feather": ["", Color(0.22, 0.2, 0.18), 0.8, 0.0, 1.0],
+	# Chainbound: muted mauve tiefling skin, near black hair, dark horn.
+	"Tiefling": ["", Color(0.4, 0.3, 0.38), 0.6, 0.0, 1.0],
+	"Hair": ["", Color(0.07, 0.06, 0.08), 0.7, 0.0, 1.0],
+	"Horn": ["", Color(0.17, 0.14, 0.13), 0.45, 0.0, 1.0],
 	"Stone": ["castle_wall_slates", Color(0.7, 0.68, 0.66), 0.9, 0.0, 4.0],
 }
 const SETS := {

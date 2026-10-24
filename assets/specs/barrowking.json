@@ -53,6 +53,13 @@
       "recovery_s": 0.3,
       "min_speed": 0.8,
       "max_speed": 1.25
+    },
+    "ability_4": {
+      "ability": "barrow_hide",
+      "release_s": 0.1,
+      "recovery_s": 0.1,
+      "min_speed": 0.8,
+      "max_speed": 1.25
     }
   },
   "release_marker": "release",

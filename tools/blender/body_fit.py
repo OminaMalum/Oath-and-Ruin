@@ -2,7 +2,7 @@
 # (Uses Blender's Python API. This is a build tool, not part of the game.)
 """Fit the CC0 Blender Studio body to the shared champion skeleton.
 
-assets/source/hbm_body_male_stylized.obj is GEO-body_male_stylized from
+assets/source/hbm_body_{male,female}_stylized.obj are GEO-body_*_stylized from
 Blender Studio's Human Base Meshes v1.4.1 (CC0), turned to face +Y with its
 feet on the ground; nothing else changed. See ASSET_MANIFEST.csv.
 
@@ -11,7 +11,7 @@ moved with the bone it is nearest to: along the bone it is stretched to the
 champion bone's length, across it scaled by a girth, and the whole frame is
 turned onto the champion bone. Weights blend the three nearest bones so the
 surface stays smooth across joints. Arms, hands and the head are dropped
-(armour, sleeves and helms cover them); the torso and legs are kept and give
+(armour, sleeves and helms cover them; a build can keep the head); the torso and legs are kept and give
 armour shells real anatomy instead of lathed cylinders.
 """
 import os
@@ -22,7 +22,10 @@ from mathutils import Vector
 import champion_kit as ck
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OBJ = os.path.join(HERE, "..", "..", "assets", "source", "hbm_body_male_stylized.obj")
+SOURCE = os.path.join(HERE, "..", "..", "assets", "source")
+# The joints below were measured on the male body; the female body is scaled
+# to the same height first (its joints then land close to them).
+BODIES = {"male": ("hbm_body_male_stylized.obj", 1.0), "female": ("hbm_body_female_stylized.obj", 1.798 / 1.617)}
 
 # The body's own joints (metres, facing +Y), measured from the mesh.
 SRC = {
@@ -45,16 +48,17 @@ SRC = {
     "foot_l": ((-0.095, -0.045, 0.08), (-0.1, 0.12, 0.02)),
     "foot_r": ((0.095, -0.045, 0.08), (0.1, 0.12, 0.02)),
 }
-KEEP = ("hips", "spine", "chest", "neck", "thigh_l", "shin_l", "thigh_r", "shin_r")
+KEEP = ("hips", "spine", "chest", "neck", "head", "thigh_l", "shin_l", "thigh_r", "shin_r")
 
 
-def load():
+def load(body="male"):
     """Returns (verts, uvs, faces) with faces as [(vi, ti), ...]."""
     vs, ts, fs = [], [], []
-    with open(OBJ) as f:
+    name, scale = BODIES[body]
+    with open(os.path.join(SOURCE, name)) as f:
         for line in f:
             if line.startswith("v "):
-                vs.append(Vector(tuple(float(x) for x in line.split()[1:4])))
+                vs.append(Vector(tuple(float(x) for x in line.split()[1:4])) * scale)
             elif line.startswith("vt "):
                 ts.append(tuple(float(x) for x in line.split()[1:3]))
             elif line.startswith("f "):
@@ -71,11 +75,15 @@ def _nearest(p, names):
     return best
 
 
-def fit(rig, girth=None):
+def fit(rig, girth=None, body="male", points=()):
     """Returns (verts, uvs, faces, owner) for the kept torso and legs, moved onto
     the rig. girth: bone -> (x, y) scale across the bone (default 1)."""
     girth = girth or {}
-    vs, ts, fs = load()
+    vs, ts, fs = load(body)
+    n_body = len(vs)
+    # Extra points (in the body file's own coordinates) ride along and come
+    # back moved, in fitted[4].
+    vs = vs + [Vector(p) * BODIES[body][1] for p in points]
     bones = rig.data.bones
     owner = []
     xf = {}
@@ -108,13 +116,13 @@ def fit(rig, girth=None):
             acc += q * w
             tot += w
         out.append(acc / tot)
-    return out, ts, fs, owner
+    return out[:n_body], ts, fs, owner[:n_body], out[n_body:]
 
 
 def region(fitted, test):
     """Faces whose every corner passes test(index, owner, position). Returns a
     list of faces in the same [(vi, ti)] form."""
-    vs, ts, fs, owner = fitted
+    vs, ts, fs, owner = fitted[:4]
     keep = []
     for f in fs:
         if all(test(vi, owner[vi], vs[vi]) for vi, _ in f):
@@ -125,7 +133,7 @@ def region(fitted, test):
 def add_faces(kit, fitted, faces, mname, offset=0.0, uv_scale=1.0):
     """Adds faces to a champion_kit.Kit, each vertex pushed out along its normal
     by offset. Returns the new BMVerts on the boundary, as ordered loops."""
-    vs, ts, fs, owner = fitted
+    vs, ts, fs, owner = fitted[:4]
     used = sorted({vi for f in faces for vi, _ in f})
     # Vertex normals from the kept faces.
     nrm = {vi: Vector((0, 0, 0)) for vi in used}
@@ -199,7 +207,7 @@ def rim(kit, loop, radius, mname, seg=6, step=2):
 def surface_y(fitted, x, zz, owners, front=True, reach=0.03):
     """The body's surface in front of (or behind) the point (x, zz): the largest
     (or smallest) y among kept vertices of the given owners near that x and z."""
-    vs, _, _, owner = fitted
+    vs, _, _, owner = fitted[:4]
     ys = [p.y for i, p in enumerate(vs) if owner[i] in owners and abs(p.x - x) < reach and abs(p.z - zz) < reach]
     if not ys:
         return None

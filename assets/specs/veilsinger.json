@@ -53,6 +53,13 @@
       "recovery_s": 0.1,
       "min_speed": 0.8,
       "max_speed": 1.25
+    },
+    "ability_4": {
+      "ability": "discord",
+      "release_s": 0.25,
+      "recovery_s": 0.15,
+      "min_speed": 0.8,
+      "max_speed": 1.25
     }
   },
   "release_marker": "release",
