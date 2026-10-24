@@ -530,6 +530,51 @@ Soak (adventurer items, seeds 18 to 41): all 24 ended, sides 10/14, median
 10.4 min (7.2 to 16.0), 23.2 kills a match (was 18.7). Highest team kill share
 Gravebinder 54%, Thornwright 49%: under the 55% line.
 
+## Phase 6: four new champions and a three lane test map (added 2026-10-24)
+
+Each new champion is a prototype pick (menu grid), added one at a time with
+its own tests. Numbers live in `data/`; models are primitive placeholders.
+- Stillhand (look 9, 560 hp), Measured Breath: a cast readies the next basic hit
+  on a champion to shield him for 60 for 3 s (once every 6 s). Open Palm (basic),
+  Bellbreaker (interrupts a cast), Reed Step (dash), Still Water (a 2 s brace:
+  the next frontal hit is cut 60%), F/ult Empty the Courtyard (a delayed ring
+  that pushes foes 4.5 m out).
+- Brasswright (look 11, 480 hp), Calibration: basic hits on champions stack up
+  to 4; the next Breach Bolt deals 10% more per stack. Repeater (basic), Breach Bolt (pierces, 60% after
+  the first hit), Field Sentry (a placed turret for 12 s, one at a time),
+  Emergency Vent (cone slow and a short speed burst), ult Masterwork Battery
+  (overcharges the sentry where it stands for 10 s).
+- Banneret (look 8, 720 hp), Hold Formation: a basic hit with an allied
+  champion within 6 m gives 5% less damage taken, up to 3 stacks of 4 s. Soldier's Reach, Driving Thrust
+  (push), Rally Standard (a banner for 10 s: allies near it move 15% faster),
+  Ordered Retreat (shields her and the most hurt ally 110), ult Break Their Line (a
+  10 m charge that stops on the first champion and drives it back 4 m).
+- Rootwarden (look 13, 700 hp), Deep Roots: standing in his own grove shields
+  him for 60 for 3 s (once every 6 s). Thornstaff, Grasping Root (line root), First Grove (a
+  heal ward at his feet), Barkskin (shields him or the most hurt ally 130), ult Elder
+  Shape (8 s beast form: +400 health and a heavy paw basic).
+
+Summons are units of kind SUMMON with a stationary SummonController: they hit
+the champion fighting their owner first, never structures, and kill credit
+goes to the owner. Towers and minions treat them like minions. Snapshot
+version 9 carries the brace. Gravebinder's Willing Dead can now be built on
+the same path; it is the next step for her passive.
+
+Three lane test map (menu: Three Lane Test Map, or `--map=three`): a graybox
+with lanes at x -36, 0 and 36, broken lane walls with jungle gaps, mirrored
+jungle pillars, the camp in the west clearing, and a gated base per side. One
+tower per lane; the core opens once two of a team's towers fall. Waves run
+per lane. Bots take mid, west and east by slot and push their own lane; their
+rotations are basic. The one lane map is unchanged (soak seeds 18 to 21 match
+the Phase 5 results exactly).
+
+Soaks (adventurer items, mirror lineups, seeds 18 to 23): Brasswright,
+Banneret, Rootwarden all ended, median 9.3 min, Brasswright 61% team kill
+share (the only damage dealer in that line up, so the share skews; trimmed
+sentry 20 to 16 and calibration 12% to 10%). With Ruinscribe and
+Lanternkeeper: sides 3/3, median 12.6 min, Brasswright 47%. Stillhand with
+Lanternkeeper and Ruinscribe: all ended, Stillhand 35%.
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

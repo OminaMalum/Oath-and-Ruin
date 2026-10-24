@@ -36,9 +36,9 @@ func get_command(unit: Unit) -> UnitCommand:
 	if not _in_range(unit, current):
 		current = null
 		var best := INF
-		for want in [ChampionDef.Kind.MINION, ChampionDef.Kind.CHAMPION]:
+		for want in [[ChampionDef.Kind.MINION, ChampionDef.Kind.SUMMON], [ChampionDef.Kind.CHAMPION]]:
 			for u in authority.units:
-				if u.def.kind == want and _in_range(unit, u):
+				if u.def.kind in want and _in_range(unit, u):
 					var d := flat_distance(unit.global_position, u.global_position)
 					if d < best:
 						best = d

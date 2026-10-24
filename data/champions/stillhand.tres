@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="1_ch"]
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="2_ab"]
+[ext_resource type="Resource" path="res://data/abilities/open_palm.tres" id="3_b"]
+[ext_resource type="Resource" path="res://data/abilities/bellbreaker.tres" id="4_a"]
+[ext_resource type="Resource" path="res://data/abilities/reed_step.tres" id="5_a"]
+[ext_resource type="Resource" path="res://data/abilities/empty_the_courtyard.tres" id="6_a"]
+[ext_resource type="Resource" path="res://data/abilities/still_water.tres" id="7_a"]
+
+[resource]
+script = ExtResource("1_ch")
+id = &"stillhand"
+display_name = "Stillhand"
+role = "Melee disruptor"
+hero_name = "Tamsin Reed"
+title = "Keeper of the Quiet Bell"
+ancestry = "Human monk"
+lore = "Her monastery kept the bell that warned of broken oaths. When she finally rang it, the mountain split. She walks the lowlands now, listening for the next one."
+look = 9
+max_health = 560.0
+move_speed = 6.6
+radius = 0.4
+height = 1.72
+fountain_heal = 80.0
+basic_attack = ExtResource("3_b")
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("7_a")])
+passive = 19
+passive_name = "Measured Breath"
+passive_description = "Casting an ability readies the next basic hit on a champion: it shields you for 60, 3 s. Once every 6 s."
+passive_value = 60.0
+passive_range = 0.0
+primary_color = Color(0.52, 0.42, 0.28, 1)
+accent_color = Color(0.92, 0.86, 0.68, 1)
+item_build = Array[StringName]([&"ember_edge", &"wayfarer_greaves", &"oathbound_plate", &"ash_hourglass"])
+adventurer_build = Array[StringName]([&"trailwardens_token", &"duelists_measure", &"ironstride_boots", &"bastion_plate"])
+power = 0

@@ -29,6 +29,7 @@ func setup(a: CombatAuthority, local_unit: Unit) -> void:
 	a.area_detonated.connect(_on_area_detonated)
 	a.unit_damaged.connect(_on_unit_damaged)
 	a.melee_swung.connect(_on_melee_swung)
+	a.summoned.connect(func(u: Unit, _c: Unit) -> void: u.add_child(SummonModel.new(u)))
 	a.unit_died.connect(_on_unit_died_sfx)
 	# Spell effects (graphics thread) layer over these visuals.
 	var spell_fx := SpellFx.new()
@@ -408,6 +409,8 @@ func _process(delta: float) -> void:
 	_update_tells()
 	_update_chains()
 	_update_stun_marks()
+	_update_brace_marks()
+	_update_transforms(delta)
 	_update_preview()
 	for e in _effects:
 		e.t += delta
@@ -607,3 +610,31 @@ func _on_unit_died_sfx(target: Unit, _killer: Unit) -> void:
 			sfx("death_champion", target.global_position + Vector3(0, 1.0, 0), 1.0)
 		ChampionDef.Kind.MINION:
 			sfx("death_minion", target.global_position + Vector3(0, 0.6, 0), -4.0)
+
+
+var _brace_marks := {}  # Unit -> Node3D
+## Braced (Still Water): a pale teal ring at the feet until the hit lands.
+func _update_brace_marks() -> void:
+	for u in authority.units:
+		var m: Node3D = _brace_marks.get(u)
+		if u.alive and u.brace_timer > 0.0:
+			if m == null:
+				m = _ring(u.def.radius + 0.35, 0.08, Palette.glow(Palette.TEAL, 1.5))
+				add_child(m)
+				_brace_marks[u] = m
+			m.global_position = u.get_global_transform_interpolated().origin + Vector3(0, 0.06, 0)
+		elif m:
+			m.queue_free()
+			_brace_marks.erase(u)
+
+
+## Transformed (Elder Shape): the body grows by a third, easing in and out.
+func _update_transforms(delta: float) -> void:
+	for u in authority.units:
+		if u.def.kind != ChampionDef.Kind.CHAMPION:
+			continue
+		var want := 1.35 if u.transform_timer > 0.0 else 1.0
+		for c in u.get_children():
+			if c is UnitView and not is_equal_approx(c.scale.x, want):
+				c.scale = Vector3.ONE * move_toward(c.scale.x, want, delta * 2.0)
+

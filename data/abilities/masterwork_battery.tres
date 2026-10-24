@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/units/masterwork_sentry.tres" id="8_sm"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"masterwork_battery"
+display_name = "Masterwork Battery"
+description = "Ultimate. Overcharge your sentry where it stands into a Masterwork for 10 s: 480 health, a faster, harder shot (13 m). With no sentry out, one is placed up to 7 m away. Counterplay: it is still one turret; fight away from it or break it."
+delivery = 8
+is_ultimate = true
+cast_time = 0.3
+recovery = 0.2
+cooldown = 55.0
+move_mult_while_casting = 0.3
+range = 7.0
+summon_duration = 10.0
+summon_max = 1
+summon_group = &"sentry"
+summon_in_place = true
+summon = ExtResource("8_sm")

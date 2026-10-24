@@ -93,19 +93,24 @@ func _ready() -> void:
 			show_lore.call(id))
 		row.add_child(b)
 	# Prototype champions: playable, marked as unfinished, never drawn at random.
-	for c in [["Chainbound", "Prototype", &"chainbound"]]:
+	var protos := GridContainer.new()
+	protos.columns = 3
+	protos.add_theme_constant_override("h_separation", 12)
+	protos.add_theme_constant_override("v_separation", 8)
+	for d: ChampionDef in MatchController.PROTOTYPES:
 		var b := Button.new()
 		b.toggle_mode = true
 		b.button_group = group
-		b.text = "%s  (%s)" % [c[0], c[1]]
-		b.custom_minimum_size = Vector2(519, 52)
+		b.text = "%s\nNew" % d.display_name
+		b.custom_minimum_size = Vector2(165, 70)
 		b.add_theme_font_size_override("font_size", 22)
-		var id: StringName = c[2]
+		var id: StringName = d.id
 		b.button_pressed = Session.champion == id
 		b.pressed.connect(func() -> void:
 			Session.champion = id
 			show_lore.call(id))
-		left.add_child(b)
+		protos.add_child(b)
+	left.add_child(protos)
 	left.add_child(who)
 	left.add_child(story)
 	show_lore.call(Session.champion)
@@ -161,7 +166,7 @@ func _ready() -> void:
 		items_row.add_child(ib)
 	right.add_child(items_row)
 	var start: Button
-	for item in [["3v3 Bot Match", "match"], ["Training Court", "court"], ["Settings", "settings"], ["Quit", "quit"]]:
+	for item in [["3v3 Bot Match", "match"], ["Three Lane Test Map", "match3"], ["Training Court", "court"], ["Settings", "settings"], ["Quit", "quit"]]:
 		var b := Button.new()
 		b.text = item[0]
 		b.custom_minimum_size = Vector2(440, 64)

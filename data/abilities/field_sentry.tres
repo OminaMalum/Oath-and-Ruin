@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/units/field_sentry.tres" id="8_sm"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"field_sentry_cast"
+display_name = "Field Sentry"
+description = "Set down a sentry up to 7 m away for 12 s. It shoots the champion fighting you, or the nearest enemy, in 11 m. One at a time: a new one replaces it. It cannot hit structures. Counterplay: break it (300 health), or fight away from it."
+delivery = 8
+cast_time = 0.35
+recovery = 0.2
+cooldown = 14.0
+move_mult_while_casting = 0.3
+range = 7.0
+summon_duration = 12.0
+summon_max = 1
+summon_group = &"sentry"
+summon = ExtResource("8_sm")

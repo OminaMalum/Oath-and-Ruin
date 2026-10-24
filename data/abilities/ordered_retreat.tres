@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"ordered_retreat"
+display_name = "Ordered Retreat"
+description = "Shield yourself and the most hurt allied champion within 7 m for 110, 3 s. Counterplay: burst through it, or wait the 3 s."
+delivery = 7
+cast_time = 0.05
+recovery = 0.1
+cooldown = 14.0
+move_mult_while_casting = 1.0
+range = 0.0
+area_radius = 7.0
+shield_mode = 2
+shield_amount = 110.0
+shield_duration = 3.0

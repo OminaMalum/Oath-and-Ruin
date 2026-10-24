@@ -2,9 +2,9 @@ class_name ChampionDef
 extends Resource
 ## Base stats and kit for a champion (or any unit that uses the same rules).
 
-enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER, CLERIC, RANGER, WARLOCK, BARBARIAN, BARD, EVOKER }
+enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER, CLERIC, RANGER, WARLOCK, BARBARIAN, BARD, EVOKER, SENTRY, BANNER }
 ## What rules apply: who can be targeted by whom, who respawns, who moves.
-enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
+enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL, SUMMON }
 ## Passive rules, resolved by the CombatAuthority. INSCRIBE: every third basic
 ## attack hit on the same target deals passive_value more (0.5 = +50%).
 ## RESOLVE: below half health this unit takes passive_value less damage.
@@ -32,10 +32,18 @@ enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL }
 ## fury the next slot 1 cast heals the unit for passive_value of max health.
 ## REFRAIN: slot 1 then slot 2 (or 2 then 1) within REFRAIN_TIME empowers the
 ## second cast (see CombatAuthority.empowered).
+## MEASURED: an ability cast primes the next basic hit on a champion to
+## shield the caster for passive_value, once per MEASURED_COOLDOWN.
+## CALIBRATE: basic hits on champions build stacks (up to 4); the next slot 1
+## cast spends them for passive_value more damage each.
+## FORMATION: a basic hit with an allied champion within passive_range stacks
+## a guard (up to 3, FORMATION_TIME each) for passive_value less damage taken.
+## ROOTS: standing in its own ward shields the unit for passive_value, once
+## every ROOTS_EVERY.
 ## RESIDUAL: slot 4 or ultimate hits on champions store charges (once per cast,
 ## up to 2); the next slot 1 cast spends them for passive_value more damage each.
 enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE, BARROWBLOOD, ENCORE, STORMEYE,
-	MARGINALIA, STAND_BEHIND, QUARRY, MOMENTUM, SEAM, FLAME, FURY, REFRAIN, RESIDUAL }
+	MARGINALIA, STAND_BEHIND, QUARRY, MOMENTUM, SEAM, FLAME, FURY, REFRAIN, RESIDUAL, MEASURED, CALIBRATE, FORMATION, ROOTS }
 
 @export var id: StringName
 @export var display_name: String = ""
