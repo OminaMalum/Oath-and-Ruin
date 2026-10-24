@@ -162,3 +162,56 @@ static func environment(parent: Node) -> void:
 	sun.directional_shadow_blend_splits = true
 	sun.rotation_degrees = Vector3(-38, -38, 0)
 	parent.add_child(sun)
+	if "--ultra" in OS.get_cmdline_user_args():
+		_ultra(env, sun, parent)
+
+
+## Godot at its best, for comparing looks on a strong PC (start with -- --ultra):
+## global illumination (SDFGI) so sunlight bounces off the stone, light shafts
+## through volumetric fog, screen space reflections and indirect light, larger
+## sharper shadows and temporal anti aliasing. Too heavy for every PC, so it is
+## off unless asked for.
+static func _ultra(env: Environment, sun: DirectionalLight3D, parent: Node) -> void:
+	env.sdfgi_enabled = true
+	env.sdfgi_use_occlusion = true
+	env.sdfgi_bounce_feedback = 0.6
+	env.sdfgi_cascades = 6
+	env.sdfgi_min_cell_size = 0.15
+	env.sdfgi_energy = 1.0
+	env.ssil_enabled = true
+	env.ssil_radius = 4.0
+	env.ssil_intensity = 0.9
+	env.ssr_enabled = true
+	env.ssr_max_steps = 96
+	env.ambient_light_energy = 0.45
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_density = 0.012
+	env.volumetric_fog_albedo = Color(0.95, 0.85, 0.72)
+	env.volumetric_fog_anisotropy = 0.6
+	env.volumetric_fog_length = 90.0
+	env.volumetric_fog_detail_spread = 2.0
+	env.volumetric_fog_ambient_inject = 0.4
+	env.volumetric_fog_sky_affect = 0.2
+	env.fog_density = 0.2
+	env.glow_intensity = 0.7
+	env.glow_bloom = 0.06
+	env.sky.radiance_size = Sky.RADIANCE_SIZE_512
+	sun.light_volumetric_fog_energy = 2.5
+	sun.shadow_blur = 1.0
+	sun.directional_shadow_max_distance = 120.0
+	RenderingServer.directional_shadow_atlas_set_size(8192, true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
+	RenderingServer.positional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_HIGH)
+	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_ULTRA, true, 0.5, 2, 50.0, 300.0)
+	if parent.is_inside_tree():
+		_ultra_viewport(parent.get_viewport())
+	else:
+		parent.tree_entered.connect(func() -> void: _ultra_viewport(parent.get_viewport()), CONNECT_ONE_SHOT)
+
+
+static func _ultra_viewport(vp: Viewport) -> void:
+	vp.use_taa = true
+	vp.msaa_3d = Viewport.MSAA_4X
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+	vp.mesh_lod_threshold = 0.0
+	vp.positional_shadow_atlas_size = 8192
