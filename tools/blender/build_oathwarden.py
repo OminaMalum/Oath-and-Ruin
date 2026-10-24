@@ -4,9 +4,11 @@
 
   /opt/bpyenv/bin/python tools/blender/build_oathwarden.py OUT.blend
 
-A broad armoured knight: lathed breastplate and faulds over a mail skirt,
-layered pauldrons, a great helm with a team crest, a tower shield on the
-left forearm and a maul in the right hand. Original geometry written as code.
+A broad armoured knight: a breastplate, cuisses and greaves shaped on the
+CC0 Blender Studio body (tools/blender/body_fit.py) so the plate follows a
+real chest and real legs, faulds over a mail skirt, layered pauldrons, a
+great helm with a team crest, a tower shield on the left forearm and a maul
+in the right hand. Everything else is original geometry written as code.
 Then export with tools/blender/export_champion.py and check with
 tools/check_assets.gd.
 """
@@ -15,6 +17,7 @@ import math
 import bpy  # noqa: F401,I001  (bpy first: it makes mathutils importable)
 from mathutils import Vector
 
+import body_fit as bf
 import champion_kit as ck
 from champion_kit import TAU, Kit, base, pose
 
@@ -22,6 +25,9 @@ S = 1.04   # height scale against the shared skeleton
 W = 1.15   # shoulder and hip width
 
 NAMES = ck.BODY + ["shield", "maul"]
+# Across-bone scale of the fitted body: a deep chest and heavy legs.
+GIRTH = {"hips": (1.15, 1.1), "spine": (1.15, 1.1), "chest": (1.2, 1.12), "neck": (1.1, 1.1),
+         "thigh_l": (1.15, 1.15), "thigh_r": (1.15, 1.15), "shin_l": (1.1, 1.1), "shin_r": (1.1, 1.1)}
 
 
 def bones():
@@ -44,16 +50,23 @@ def build_model(rig, M):
     bn = rig.data.bones
     z = lambda v: v * S  # noqa: E731
 
-    # Breastplate over the torso, with a keel and a rolled top edge.
+    # The body under the armour, fitted to this rig: a broad chest, heavy legs.
+    fitted = bf.fit(rig, GIRTH)
+    torso = ("hips", "spine", "chest", "neck")
+
+    # Breastplate shaped on the body's chest and back, standing off it over a
+    # padded jack, with a rolled gold edge at the neck, arms and waist.
     k = Kit("Cuirass", M)
-    prof = [(0.19, 0.95), (0.198, 1.02), (0.205, 1.12), (0.238, 1.25), (0.25, 1.34), (0.232, 1.43), (0.17, 1.495), (0.11, 1.52)]
-    k.lathe([(r * S, z(h)) for r, h in prof], "Steel", seg=32, sx=1.2, sy=0.86, fold=plate_keel)
-    k.lathe([(0.115 * S, z(1.515)), (0.12 * S, z(1.535)), (0.105 * S, z(1.55))], "Trim", seg=24, sx=1.2, sy=0.9)
-    # A team plate on the chest with a gold seal on it.
-    c = Vector((0, 0.25 * 0.86 * S + 0.012, z(1.3)))
+    plate = bf.region(fitted, lambda i, o, p: o in torso and z(0.97) < p.z < z(1.53))
+    for loop in bf.add_faces(k, fitted, plate, "Steel", offset=0.04, uv_scale=3.0):
+        bf.rim(k, loop, 0.013, "Trim")
+    # A team plate on the chest with a gold seal on it, set on the plate's
+    # front at the breastbone.
+    front = max((p for p in fitted[0] if abs(p.x) < 0.03 and abs(p.z - z(1.3)) < 0.02), key=lambda p: p.y)
+    c = Vector((0, front.y + 0.05, z(1.3)))
     k.box(c, (0.17, 0.018, 0.2), "Team", rot=(-8, 0, 0))
     k.box(c + Vector((0, 0.011, 0.0)), (0.08, 0.006, 0.08), "Trim", rot=(-8, 0, 45))
-    k.finish(rig, ["chest", "spine", "hips"], subsurf=1)
+    k.finish(rig, ["chest", "spine", "hips"], solidify=0.012)
 
     # Faulds: three overlapping steel bands below the waist, each stepping out.
     k = Kit("Faulds", M)
@@ -132,18 +145,34 @@ def build_model(rig, M):
         k.finish(rig, "upper_arm_" + side)
         ck.hand(rig, M, side, "Iron", fist=True)
 
-    # Legs: mail, steel cuisses, knee cops, greaves and sabatons.
-    ck.limbs(rig, M, legs="Mail", boots="Steel", hands=None, leg_r=(0.098, 0.088, 0.072, 0.066), boot_scale=1.15, cuff="Steel")
+    # Legs: mail over the body's own legs, plate cuisses and greaves shaped on
+    # the thigh and calf with rolled edges, knee cops and sabatons.
     for side in ("l", "r"):
         hip = bn["thigh_" + side].head_local
         knee = bn["shin_" + side].head_local
+        ankle = bn["foot_" + side].head_local
+        legs = ("thigh_" + side, "shin_" + side)
+        k = Kit("Leg_" + side, M)
+        mail = bf.region(fitted, lambda i, o, p: o in legs and p.z > ankle.z - 0.02)
+        bf.add_faces(k, fitted, mail, "Mail", offset=0.008, uv_scale=3.0)
+        k.finish(rig, ["thigh_" + side, "shin_" + side])
         k = Kit("Cuisse_" + side, M)
-        k.tube([hip.lerp(knee, 0.3), hip.lerp(knee, 0.65), knee + Vector((0, 0.01, 0.02))], [0.1, 0.095, 0.085], "Steel", seg=12)
-        k.finish(rig, "thigh_" + side, subsurf=1)
+        top, bot = hip.z - 0.12, knee.z + 0.07
+        cuisse = bf.region(fitted, lambda i, o, p: o == "thigh_" + side and bot < p.z < top and p.y > knee.y - 0.06)
+        for loop in bf.add_faces(k, fitted, cuisse, "Steel", offset=0.03, uv_scale=3.0):
+            bf.rim(k, loop, 0.009, "Steel")
+        k.finish(rig, "thigh_" + side, solidify=0.008)
+        k = Kit("Greave_" + side, M)
+        top, bot = knee.z - 0.07, ankle.z + 0.07
+        greave = bf.region(fitted, lambda i, o, p: o == "shin_" + side and bot < p.z < top)
+        for loop in bf.add_faces(k, fitted, greave, "Steel", offset=0.026, uv_scale=3.0):
+            bf.rim(k, loop, 0.009, "Trim")
+        k.finish(rig, "shin_" + side, solidify=0.008)
         k = Kit("Knee_" + side, M)
-        k.sphere(knee + Vector((0, 0.05, 0)), 0.058, "Steel", scale=(1.0, 0.8, 1.1), u=14, v=8)
-        k.box(knee + Vector((0, 0.1, 0)), (0.03, 0.02, 0.03), "Trim", rot=(0, 45, 0))
+        k.sphere(knee + Vector((0, 0.07, 0)), 0.064, "Steel", scale=(1.0, 0.8, 1.1), u=14, v=8)
+        k.box(knee + Vector((0, 0.125, 0)), (0.03, 0.02, 0.03), "Trim", rot=(0, 45, 0))
         k.finish(rig, "shin_" + side)
+        ck.boot(rig, M, side, "Steel", 1.15)
 
     # Gorget and great helm: a tall rounded helm with a dark eye slit, glowing
     # eyes inside it, a gold brow band, a nose ridge and a team crest.

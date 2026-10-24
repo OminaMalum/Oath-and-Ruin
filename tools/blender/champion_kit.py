@@ -396,19 +396,22 @@ def limbs(rig, M, legs="Cloth", boots="Leather", hands="Skin", leg_r=(0.085, 0.0
         hip = b["thigh_" + side].head_local
         knee = b["shin_" + side].head_local
         ankle = b["foot_" + side].head_local
-        x = ankle.x
         k = Kit("Leg_" + side, M)
         k.tube([hip, hip.lerp(knee, 0.5), knee, knee.lerp(ankle, 0.5)], list(leg_r), legs, seg=10)
         k.tube([knee.lerp(ankle, 0.45), ankle + Vector((0, 0, 0.02))], [leg_r[2] * 1.1, leg_r[3] * 1.12], cuff, seg=10)
         k.finish(rig, ["thigh_" + side, "shin_" + side], subsurf=smooth)
-        f = Kit("Boot_" + side, M)
-        bs = boot_scale
-        f.tube([Vector((x, -0.05 * bs, 0.05)), Vector((x, 0.06 * bs, 0.045)), Vector((x, 0.15 * bs, 0.035))],
-               [0.05 * bs, 0.048 * bs, 0.038 * bs], boots, seg=10)
-        f.box(Vector((x, 0.04 * bs, 0.008)), (0.09 * bs, 0.24 * bs, 0.016), boots)
-        f.finish(rig, "foot_" + side, subsurf=smooth)
+        boot(rig, M, side, boots, boot_scale, smooth)
         if hands:
             hand(rig, M, side, hands)
+
+
+def boot(rig, M, side, mname="Leather", bs=1.0, smooth=1):
+    x = rig.data.bones["foot_" + side].head_local.x
+    f = Kit("Boot_" + side, M)
+    f.tube([Vector((x, -0.05 * bs, 0.05)), Vector((x, 0.06 * bs, 0.045)), Vector((x, 0.15 * bs, 0.035))],
+           [0.05 * bs, 0.048 * bs, 0.038 * bs], mname, seg=10)
+    f.box(Vector((x, 0.04 * bs, 0.008)), (0.09 * bs, 0.24 * bs, 0.016), mname)
+    f.finish(rig, "foot_" + side, subsurf=smooth)
 
 
 def hand(rig, M, side, mname="Skin", fist=False):
