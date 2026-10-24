@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_k4mru"]
+
+[resource]
+script = ExtResource("1_k4mru")
+id = &"long_vault"
+display_name = "Long Vault"
+description = "Upgrade: leap 10.5 m."
+delivery = 3
+damage = 36.0
+cast_time = 0.08
+recovery = 0.28
+cooldown = 7.0
+move_mult_while_casting = 1.0
+range = 10.5
+dash_distance = 10.5
+dash_duration = 0.28

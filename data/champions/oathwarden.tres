@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_0iy75"]
+[ext_resource type="Resource" path="res://data/abilities/warding_stand.tres" id="2_r0s6u"]
+[ext_resource type="Resource" path="res://data/abilities/cleave.tres" id="3_8um6y"]
+[ext_resource type="Resource" path="res://data/abilities/shield_slam.tres" id="3_r0s6u"]
+[ext_resource type="Resource" path="res://data/abilities/unbroken_oath.tres" id="5_ult"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_gn757"]
+[ext_resource type="Resource" path="res://data/abilities/shield_rush.tres" id="9_f"]
+
+[resource]
+script = ExtResource("4_gn757")
+id = &"oathwarden"
+display_name = "Oathwarden"
+role = "Frontline fighter"
+look = 8
+max_health = 820.0
+move_speed = 5.8
+radius = 0.5
+height = 1.95
+fountain_heal = 80.0
+basic_attack = ExtResource("3_8um6y")
+abilities = Array[ExtResource("1_0iy75")]([ExtResource("2_r0s6u"), ExtResource("3_r0s6u"), ExtResource("5_ult"), ExtResource("9_f")])
+passive = 2
+passive_name = "Resolve"
+passive_description = "Below half health the Oathwarden takes 15% less damage."
+passive_value = 0.15
+primary_color = Color(0.34, 0.36, 0.38, 1)
+accent_color = Color(0.95, 0.8, 0.45, 1)
+item_build = Array[StringName]([&"oathbound_plate", &"ash_hourglass", &"wayfarer_greaves", &"ember_edge"])

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"dawnlight"
+display_name = "Dawnlight"
+description = "Ultimate. After 0.6 s a 5 m burst of light: 200 health to every allied champion inside, 60 damage to enemies. Counterplay: kill before the light lands, or dive after it."
+delivery = 1
+is_ultimate = true
+damage = 60.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 60.0
+move_mult_while_casting = 0.3
+range = 12.0
+area_radius = 5.0
+area_delay = 0.6
+ally_heal = 200.0

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ysm63"]
+
+[resource]
+script = ExtResource("1_ysm63")
+id = &"unmaking_lance"
+display_name = "Unmaking Lance"
+description = "A thin lance of unmaking that flies 16 m and passes through every enemy on its line. Best on enemies lined up or held by the glyph. Counterplay: step off the line during the 0.45 s windup; it is narrow."
+damage = 70.0
+cast_time = 0.45
+recovery = 0.25
+cooldown = 9.0
+move_mult_while_casting = 0.3
+range = 16.0
+projectile_speed = 40.0
+projectile_radius = 0.22
+pierce = true

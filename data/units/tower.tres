@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_w76m8"]
+[ext_resource type="Resource" path="res://data/abilities/tower_shot.tres" id="2_ixgsu"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="2_ts3er"]
+
+[resource]
+script = ExtResource("2_ts3er")
+id = &"tower"
+display_name = "Warden Tower"
+role = "Structure"
+look = 4
+kind = 2
+max_health = 2600.0
+move_speed = 0.0
+radius = 1.6
+height = 7.0
+respawn_time = -1.0
+basic_attack = ExtResource("2_ixgsu")
+primary_color = Color(0.4, 0.38, 0.34, 1)
+accent_color = Color(1, 0.62, 0.2, 1)
