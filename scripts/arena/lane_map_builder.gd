@@ -24,11 +24,17 @@ var _drng := RandomNumberGenerator.new()  # dressing only, so the wall layout ne
 var _slate: StandardMaterial3D
 var _plinth: StandardMaterial3D
 var _wall_boxes: Array[AABB] = []
+## Wall kit (string courses, pilasters, merlons): decoration boxes gathered
+## into one mesh per material, so the extra masonry costs a few draw calls
+## for the whole map. Its own RNG, so neither the layout nor the dressing moves.
+var _kit := {}  # Material -> SurfaceTool
+var _krng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
 	_rng.seed = 21
 	_drng.seed = 77
+	_krng.seed = 5
 	_stone_mats = [Art.stone("wall"), Art.stone("wall", Color(0.82, 0.80, 0.78)), Art.stone("wall", Color(1.05, 0.97, 0.86))]
 	_slate = Art.stone("slate", Color(0.95, 0.92, 0.86))
 	_plinth = Art.stone("slate", Color(0.62, 0.60, 0.56))
@@ -50,6 +56,7 @@ func _ready() -> void:
 	_lane_dressing()
 	_art_section(1.0, 18.0, 36.0)   # Oath tower approach
 	_art_section(-1.0, 18.0, 36.0)  # Ruin tower approach, the same dressing mirrored
+	_kit_commit()
 	EnvDressing.new(self, _drng).build()
 
 
@@ -59,8 +66,9 @@ func _environment() -> void:
 
 ## Every wall block gets a slate cap with a small overhang and a darker plinth
 ## course at its foot, so the walls read as built masonry, not boxes.
-func _wall(size: Vector3, pos: Vector3, m: Material) -> StaticBody3D:
+func _wall(size: Vector3, pos: Vector3, m: Material, lane_side := 0.0, merlons := false) -> StaticBody3D:
 	var body := _static_box(size, pos, m)
+	_wall_kit(size, pos, lane_side, merlons)
 	# Where walls meet at corners their outer faces lie in one plane and,
 	# with different stone tints, z-fought. Each block's visible mesh (not
 	# its collision) is grown by its own few millimetres, so no two coincide.
@@ -79,6 +87,51 @@ func _wall(size: Vector3, pos: Vector3, m: Material) -> StaticBody3D:
 	var ph := _drng.randf_range(0.45, 0.62)
 	_deco(_box_mesh(Vector3(size.x, ph, size.z) + thick), _plinth, Vector3(pos.x, ph * 0.5 - 0.04, pos.z))
 	return body
+
+
+## Masonry detail on a wall block: a string course round it at about head
+## height, pilasters on the face toward the fighting (lane_side is the x
+## direction that face looks), and merlons along the top of outer walls.
+## All of it stands at least 4 cm off the wall faces, so nothing z-fights.
+func _wall_kit(size: Vector3, pos: Vector3, lane_side: float, merlons: bool) -> void:
+	var top := pos.y + size.y * 0.5
+	var band_y := minf(1.75, top - 0.7) + _krng.randf_range(-0.03, 0.03)
+	_kit_box(_plinth, Vector3(size.x + 0.1, 0.16, size.z + 0.1), Vector3(pos.x, band_y, pos.z))
+	if lane_side != 0.0:
+		var face := pos.x + lane_side * size.x * 0.5
+		var n := maxi(1, int(size.z / 2.6))
+		for i in n:
+			var pz := pos.z - size.z * 0.5 + size.z * (i + 0.5) / n
+			var ph := top - 0.25
+			_kit_box(_plinth, Vector3(0.24, ph, 0.5), Vector3(face + lane_side * 0.12, ph * 0.5, pz))
+			_kit_box(_slate, Vector3(0.34, 0.12, 0.62), Vector3(face + lane_side * 0.15, ph + 0.02, pz))
+	if merlons:
+		# Along the wall's long axis, on top of its slate cap.
+		var along := size.z
+		var count := int(along / 1.3)
+		for i in count:
+			var mz := pos.z - along * 0.5 + (i + 0.5) * along / count
+			var mh := _krng.randf_range(0.5, 0.65)
+			_kit_box(_stone_mats[i % 3], Vector3(size.x * 0.8, mh, 0.62), Vector3(pos.x, top + 0.24 + mh * 0.5, mz))
+
+
+func _kit_box(m: Material, size: Vector3, pos: Vector3) -> void:
+	if not _kit.has(m):
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		_kit[m] = st
+	var bm := _box_mesh(size)
+	(_kit[m] as SurfaceTool).append_from(bm, 0, Transform3D(Basis.IDENTITY, pos))
+
+
+func _kit_commit() -> void:
+	for m: Material in _kit:
+		var st: SurfaceTool = _kit[m]
+		var mi := MeshInstance3D.new()
+		mi.mesh = st.commit()
+		mi.material_override = m
+		add_child(mi)
+	_kit.clear()
 
 
 ## Picks the smallest growth (4 to 22 mm a side) that keeps every side face
@@ -125,7 +178,7 @@ func _lane_walls(side: float) -> void:
 				next = g
 		var h := _rng.randf_range(2.4, 3.6)
 		var x := side * (LANE_HALF + WALL_IN) * 0.5
-		_wall(Vector3(WALL_IN - LANE_HALF, h, next - z), Vector3(x, h * 0.5, (z + next) * 0.5), _stone_mats[_rng.randi() % 3])
+		_wall(Vector3(WALL_IN - LANE_HALF, h, next - z), Vector3(x, h * 0.5, (z + next) * 0.5), _stone_mats[_rng.randi() % 3], -side)
 		if _rng.randf() < 0.35:
 			pass  # was a moss blob on the wall top; the draw stays so the layout keeps its seed
 		z = next
@@ -151,7 +204,7 @@ func _outer_wall(side: float) -> void:
 				z = 5.0
 				continue
 		var h := _rng.randf_range(3.5, 5.0)
-		_wall(Vector3(2.0, h, next - z), Vector3(x, h * 0.5, (z + next) * 0.5), _stone_mats[_rng.randi() % 3])
+		_wall(Vector3(2.0, h, next - z), Vector3(x, h * 0.5, (z + next) * 0.5), _stone_mats[_rng.randi() % 3], -side, true)
 		z = next
 	# Close the flank ends against the bases.
 	for zs in [-1.0, 1.0]:
