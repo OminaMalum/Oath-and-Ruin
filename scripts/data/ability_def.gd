@@ -11,7 +11,7 @@ extends Resource
 ## raises a line across the aim at a ground point that stops enemy shots.
 ## GRAPPLE throws a chain at a marked wall within range and pulls the caster
 ## to a safe point in front of it (see Unit.grapple_endpoint).
-enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD, WALL, GRAPPLE }
+enum Delivery { PROJECTILE, GROUND_AREA, MELEE_ARC, DASH, WARD, WALL, GRAPPLE, SELF, SUMMON }
 
 @export var id: StringName
 @export var display_name: String = ""
@@ -53,6 +53,8 @@ enum Scaling { CHAMPION, WEAPON, SPELL, NONE }
 @export var homing: bool = false
 ## Piercing shots pass through every enemy on their line (each hit once).
 @export var pierce: bool = false
+## Piercing: damage multiplier for every enemy after the first.
+@export var pierce_falloff: float = 1.0
 
 @export_group("Ground area")
 @export var area_radius: float = 2.5
@@ -87,6 +89,11 @@ enum Scaling { CHAMPION, WEAPON, SPELL, NONE }
 ## Weaken: a champion hit deals this much less damage (0.3 = 30% less).
 @export var weaken_amount: float = 0.0
 @export var weaken_duration: float = 0.0
+## A hit on a champion stops the cast it is winding up.
+@export var interrupts: bool = false
+## Enemies hit are pushed this far away from the caster or the area centre
+## (walls stop them).
+@export var push_distance: float = 0.0
 
 @export_group("Melee arc")
 ## Full width of the cone in degrees (120 = 60 each side of the aim).
@@ -95,6 +102,8 @@ enum Scaling { CHAMPION, WEAPON, SPELL, NONE }
 @export_group("Dash")
 @export var dash_distance: float = 8.0
 @export var dash_duration: float = 0.22
+## The first enemy champion met ends the dash (push_distance knocks it back).
+@export var stop_on_champion: bool = false
 
 @export_group("Charges")
 ## Above 1 the ability holds this many uses; `cooldown` brings one back at a
@@ -125,6 +134,39 @@ enum Scaling { CHAMPION, WEAPON, SPELL, NONE }
 @export_group("Wall")
 ## Length of a WALL across the aim (ward_duration sets how long it stands).
 @export var wall_length: float = 7.0
+
+@export_group("Self")
+## SELF delivery: brace. The next champion hit from the front within
+## brace_duration deals brace_reduction less (0.6 = 60% less).
+@export var brace_reduction: float = 0.0
+@export var brace_duration: float = 0.0
+## Shields on release: SELF the caster, SELF_AND_ALLY the caster and the most
+## hurt allied champion within area_radius, MOST_HURT whichever of those needs
+## it most.
+enum ShieldMode { NONE, SELF, SELF_AND_ALLY, MOST_HURT }
+@export var shield_mode: ShieldMode = ShieldMode.NONE
+@export var shield_amount: float = 0.0
+@export var shield_duration: float = 3.0
+## The caster moves this much faster (any delivery), for self_quick_duration.
+@export var self_quick: float = 0.0
+@export var self_quick_duration: float = 0.0
+## Transform: for transform_duration the caster gains transform_health max
+## health (health keeps its share) and swings transform_basic instead.
+@export var transform_duration: float = 0.0
+@export var transform_health: float = 0.0
+@export var transform_basic: Resource
+
+@export_group("Summon")
+## The unit placed at the aim point (a ChampionDef of kind SUMMON).
+@export var summon: Resource
+@export var summon_duration: float = 10.0
+## Most of this summon one caster keeps; a new one replaces the oldest.
+@export var summon_max: int = 1
+## Replace an existing summon of the same group where it stands (an
+## upgrade, Masterwork Battery); with none out, place it at the aim.
+@export var summon_in_place: bool = false
+## Summons sharing a group count together against summon_max.
+@export var summon_group: StringName = &""
 
 @export_group("Upgrades")
 ## The two versions offered at UPGRADE_LEVEL (AbilityDef resources); picking

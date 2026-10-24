@@ -401,6 +401,19 @@ func _use_ability(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: floa
 	if a.delivery == AbilityDef.Delivery.WARD and a.ally_haste > 0.0:
 		# A song: sing as soon as a champion fight starts close by.
 		return champ and dist <= 12.0
+	if a.delivery == AbilityDef.Delivery.SELF and a.shield_amount > 0.0:
+		# Barkskin, Ordered Retreat: in a champion fight, when it or an ally is hurt.
+		return champ and dist <= 12.0 and (hp < 0.6 or _hurt_ally_within(unit, a.area_radius))
+	if a.delivery == AbilityDef.Delivery.SELF:
+		# A brace (Still Water): a champion in reach in front, swinging or casting.
+		return champ and dist <= maxf(target.def.basic_attack.range, 3.0) + 1.0 \
+				and (target.is_casting() or hp < 0.8)
+	if a.delivery == AbilityDef.Delivery.SUMMON:
+		# A sentry or banner: set it down as a champion fight starts.
+		return champ and dist <= a.range + 8.0
+	if a.interrupts:
+		# Bellbreaker: best on a champion winding up, else a plain hit in reach.
+		return champ and dist <= a.range + target.def.radius
 	if a.stun_duration > 0.0:
 		# A stun is for champions: when they are casting, fleeing, or about to die.
 		return champ and dist <= a.range + target.def.radius and (target.is_casting() \
@@ -442,7 +455,8 @@ func _use_ultimate(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: flo
 	var pair := _enemy_champions_within(unit, target.global_position, 5.0) >= 2
 	match a.delivery:
 		AbilityDef.Delivery.GROUND_AREA:
-			return dist <= a.range and (pair or t_hp < 0.6)
+			# Around itself (range 0, Empty the Courtyard) or thrown.
+			return dist <= (a.range if a.range > 0.0 else a.area_radius) and (pair or t_hp < 0.6)
 		AbilityDef.Delivery.WARD:
 			if a.ally_haste > 0.0:
 				return dist <= 10.0 and (pair or t_hp < 0.6 or hp < 0.6)
@@ -450,6 +464,11 @@ func _use_ultimate(unit: Unit, a: AbilityDef, target: Unit, dist: float, hp: flo
 		AbilityDef.Delivery.DASH:
 			return dist > unit.def.basic_attack.range + 0.5 and dist <= a.dash_distance + 1.0 \
 					and (pair or t_hp < 0.6) and _safe_from_tower(unit, target.global_position)
+		AbilityDef.Delivery.SELF:
+			# Elder Shape: in the thick of it, or to survive it.
+			return dist <= 6.0 and (pair or t_hp < 0.6 or hp < 0.5)
+		AbilityDef.Delivery.SUMMON:
+			return dist <= a.range + 8.0 and (pair or t_hp < 0.7)
 	return dist <= a.range and (pair or t_hp < 0.6)
 
 
@@ -564,10 +583,19 @@ func _numbers_edge(unit: Unit) -> bool:
 ## gone. With a numbers edge it walks level with the wave to press the push.
 func _push_position(unit: Unit, press: bool) -> Vector3:
 	var lane := match_info.lane_dir(unit.team)  # unit vector toward the enemy base
+	var lx := match_info.lane_x(unit)
+	var many := match_info.lanes.size() > 1
+	if many:
+		# Three lanes: leave the base through this lane's gate first.
+		var s := 1.0 if unit.team == 0 else -1.0
+		var gate_z := s * (match_info.base_z + 2.0)
+		if unit.global_position.z * s > match_info.base_z - 1.0 and absf(unit.global_position.x - lx) > 4.0:
+			return Vector3(lx, 0, gate_z)
 	var front: Unit = null
 	var best := -INF
 	for u in authority.units:
-		if u.alive and u.team == unit.team and u.def.kind == ChampionDef.Kind.MINION:
+		if u.alive and u.team == unit.team and u.def.kind == ChampionDef.Kind.MINION \
+				and (not many or absf(u.global_position.x - lx) < 10.0):
 			var progress := u.global_position.dot(lane)
 			if progress > best:
 				best = progress
@@ -576,10 +604,10 @@ func _push_position(unit: Unit, press: bool) -> Vector3:
 	# Spread bots across the lane. World x for both teams (not lane relative),
 	# so the formation is a mirror image across the lane like the map is:
 	# slot 0 stands on the camp side for both teams.
-	var side := Vector3(1, 0, 0) * (slot - 1.0) * 2.5
+	var side := Vector3(1, 0, 0) * (slot - 1.0) * 2.5 if not many else Vector3.ZERO
 	if front:
 		return front.global_position - lane * (1.0 if press else 5.0) + side
-	return match_info.hold_point(unit.team) + side
+	return match_info.hold_point(unit.team) + side + Vector3(lx, 0, 0)
 
 
 func _wave_tanks(unit: Unit, structure: Unit) -> bool:

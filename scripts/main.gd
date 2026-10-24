@@ -20,6 +20,7 @@ extends Node3D
 ##   --pause                            open the pause menu (screenshots)
 ##   --settings                         menu: open the settings panel (screenshots)
 ##   --lineup=A,B,C                     match: these three champions on both teams
+##   --map=three                        match: the rough three lane test map
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
 ##   --shop[=finished]                  open the shop panel (screenshots), on its second page
 ##   --scoreboard                       show the scoreboard (screenshots)
@@ -77,9 +78,11 @@ func _ready() -> void:
 			layer.add_child(menu)
 			menu.chosen.connect(_on_menu)
 			return
-	var map: Node3D = LaneMapBuilder.new() if mode == "match" else ArenaBuilder.new()
+	if mode == "match" and args.get("map", "") == "three":
+		mode = "match3"
+	var map: Node3D = LaneMapBuilder.new() if mode == "match" else (ThreeLaneBuilder.new() if mode == "match3" else ArenaBuilder.new())
 	add_child(map)
-	GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0 if mode == "match" else INF)
+	GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0 if mode == "match" else (ThreeLaneBuilder.BASE_Z + 1.0 if mode == "match3" else INF))
 	authority = CombatAuthority.new()
 	authority.name = "CombatAuthority"
 	add_child(authority)
@@ -90,8 +93,8 @@ func _ready() -> void:
 		_start_server()
 	elif args.has("connect"):
 		_start_client()
-	elif mode == "match":
-		_start_match()
+	elif mode == "match" or mode == "match3":
+		_start_match(mode == "match3")
 	else:
 		_start_offline()
 
@@ -104,9 +107,10 @@ func _on_menu(mode: String) -> void:
 	get_tree().reload_current_scene()
 
 
-func _start_match() -> void:
+func _start_match(three_lane := false) -> void:
 	match_ctl = MatchController.new()
 	match_ctl.name = "Match"
+	match_ctl.three_lane = three_lane
 	match_ctl.human_slot = not (args.has("spectate") or autoplay)
 	match_ctl.human_pick = Session.champion
 	# From the menu every match draws a new seed: a new lineup and new teammates.

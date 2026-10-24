@@ -21,3 +21,5 @@ Barrowking placeholder model,Oath & Ruin project (code-built primitives),n/a (or
 Veilsinger placeholder model,Oath & Ruin project (code-built primitives),n/a (original),2026-10-22,Project-owned,No,None,scripts/view/unit_view.gd,Placeholder: replace with original modeled and rigged champion
 Stormscald placeholder model,Oath & Ruin project (code-built primitives),n/a (original),2026-10-22,Project-owned,No,None,scripts/view/unit_view.gd,Placeholder: replace with original modeled and rigged champion
 Storm wall effect,Oath & Ruin project (code-built primitives),n/a (original),2026-10-22,Project-owned,No,None,scripts/view/world_view.gd,Placeholder
+Field Sentry and Rally Standard placeholder models,Oath & Ruin project (code-built primitives),n/a (original),2026-10-24,Project-owned,No,None,scripts/view/summon_model.gd,Placeholder: replace with original modeled sentry and banner
+Brace ring and beast-form scaling effects,Oath & Ruin project (code-built primitives),n/a (original),2026-10-24,Project-owned,No,None,scripts/view/world_view.gd,Placeholder

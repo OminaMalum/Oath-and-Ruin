@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/long_root.tres" id="4_up"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/deep_root.tres" id="5_up"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"grasping_root"
+display_name = "Grasping Root"
+description = "Roots crawl along a 10 m line from you. After 0.6 s they burst: 50 damage and a 1 s root to every enemy on it. Counterplay: the line shows first; step off it."
+delivery = 1
+damage = 50.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 11.0
+move_mult_while_casting = 0.4
+range = 10.0
+area_delay = 0.6
+line_width = 1.6
+root_duration = 1.0
+upgrades = Array[Resource]([ExtResource("4_up"), ExtResource("5_up")])

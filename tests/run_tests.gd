@@ -19,6 +19,10 @@ const BARROW := preload("res://data/champions/barrowking.tres")
 const VEIL := preload("res://data/champions/veilsinger.tres")
 const STORM := preload("res://data/champions/stormscald.tres")
 const CHAIN := preload("res://data/champions/chainbound.tres")
+const STILL := preload("res://data/champions/stillhand.tres")
+const BRASS := preload("res://data/champions/brasswright.tres")
+const BANNER := preload("res://data/champions/banneret.tres")
+const ROOT := preload("res://data/champions/rootwarden.tres")
 const DT := 1.0 / 60.0
 
 var failures: int = 0
@@ -58,6 +62,12 @@ func _run() -> void:
 		"test_grapple_redirect", "test_grapple_charges", "test_momentum", "test_weaken", "test_covenant_line",
 		"test_anchor_marking", "test_chainbound_snapshot", "test_chainbound_bot_match",
 		"test_items_weapon", "test_items_spell", "test_items_defence", "test_items_support", "test_item_catalog",
+		"test_stillhand_data", "test_bellbreaker", "test_still_water", "test_courtyard_push", "test_measured_breath",
+		"test_brace_snapshot", "test_stillhand_bot_match",
+		"test_phase6_data", "test_field_sentry", "test_sentry_replaced", "test_masterwork_in_place", "test_sentry_kill_credit",
+		"test_breach_falloff", "test_calibration", "test_emergency_vent", "test_rally_standard", "test_ordered_retreat",
+		"test_break_their_line", "test_hold_formation", "test_grasping_root", "test_elder_shape", "test_deep_roots",
+		"test_barkskin", "test_phase6_bot_match", "test_three_lane_match",
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract",
@@ -2396,3 +2406,409 @@ func test_item_catalog() -> void:
 		for id in def.adventurer_build:
 			check(ItemShop.index_of(id) > 0, "%s builds %s, which exists" % [def.id, id])
 	await ticks(1)
+
+
+# --- Phase 6: Stillhand ---------------------------------------------------------
+
+func test_stillhand_data() -> void:
+	await _kit_data([STILL])
+	check(STILL.get_slot(4).delivery == AbilityDef.Delivery.SELF, "Still Water is a self brace")
+	check(MatchController.PROTOTYPES.has(STILL) and not MatchController.ROSTER.has(STILL), "Stillhand is a pick, never drawn at random")
+
+
+func test_bellbreaker() -> void:
+	var me := spawn(STILL, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -2.5))
+	await ticks(2)
+	aim(foe, me.global_position)
+	cmd(foe).buttons = UnitCommand.ability_button(1)  # a slow wind up
+	await ticks(2)
+	cmd(foe).buttons = 0
+	check(foe.is_casting(), "the foe is winding up")
+	await _cast(me, 1, foe.global_position, STILL.get_slot(1).cast_time + 0.05)
+	check(not foe.is_casting(), "Bellbreaker stops the cast")
+	check(foe.health < SCRIBE.max_health, "and hits")
+	check(foe.cooldowns[1] <= 0.0 or foe.cast_slot != 1, "the lost cast is not spent")
+
+
+func test_still_water() -> void:
+	var me := spawn(STILL, 0, Vector3.ZERO)
+	var front := spawn(SCRIBE, 1, Vector3(0, 0, -3))
+	var back := spawn(SCRIBE, 1, Vector3(0, 0, 3))
+	await ticks(2)
+	var h := me.health
+	authority.apply_damage(front, me, 100.0, null)
+	var plain := h - me.health
+	var water := STILL.get_slot(4)
+	await _cast(me, 4, Vector3(0, 0, -5), water.cast_time + 0.05)
+	check(me.brace_timer > 0.0, "Still Water braces")
+	h = me.health
+	authority.apply_damage(back, me, 100.0, null)
+	check(is_equal_approx(h - me.health, plain), "a hit from behind is not softened")
+	h = me.health
+	authority.apply_damage(front, me, 100.0, null)
+	check(absf(h - me.health - plain * (1.0 - water.brace_reduction)) < 0.01, "the hit from the front deals %d%% less" % roundi(water.brace_reduction * 100.0))
+	h = me.health
+	authority.apply_damage(front, me, 100.0, null)
+	check(is_equal_approx(h - me.health, plain), "only that one hit")
+	me.cooldowns[4] = 0.0
+	await _cast(me, 4, Vector3(0, 0, -5), water.brace_duration + 0.2)
+	check(me.brace_timer <= 0.0, "an unused brace runs out")
+
+
+func test_courtyard_push() -> void:
+	add_wall(Vector3(0, 1.5, 4.0), Vector3(8, 3, 1))
+	var me := spawn(STILL, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -2))
+	var walled := spawn(SCRIBE, 1, Vector3(0, 0, 2))
+	var far := spawn(SCRIBE, 1, Vector3(0, 0, -9))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	var r := STILL.get_slot(3)
+	await _cast(me, 3, me.global_position, r.cast_time + r.area_delay + 0.5)
+	check(foe.health < SCRIBE.max_health and walled.health < SCRIBE.max_health, "the kick hits all around")
+	check(foe.global_position.z < -5.5, "an enemy is knocked away (%.1f m out)" % -foe.global_position.z)
+	check(walled.global_position.z < 3.5, "a wall stops the knockback (%.1f)" % walled.global_position.z)
+	check(far.health == SCRIBE.max_health, "out of reach is untouched")
+
+
+func test_measured_breath() -> void:
+	var me := spawn(STILL, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -2))
+	await ticks(2)
+	authority.apply_damage(me, foe, 10.0, STILL.basic_attack)
+	check(me.shield == 0.0, "a plain hit gives nothing")
+	await _cast(me, 2, Vector3(0, 0, -6), 0.4)
+	authority.apply_damage(me, foe, 10.0, STILL.basic_attack)
+	check(is_equal_approx(me.shield, STILL.passive_value), "after a cast the next hit shields her for %d" % roundi(STILL.passive_value))
+	me.shield = 0.0
+	me.cooldowns[2] = 0.0
+	await _cast(me, 2, Vector3(0, 0, 6), 0.4)
+	authority.apply_damage(me, foe, 10.0, STILL.basic_attack)
+	check(me.shield == 0.0, "not again within %d s" % roundi(CombatAuthority.MEASURED_COOLDOWN))
+
+
+func test_brace_snapshot() -> void:
+	var u := spawn(STILL, 0, Vector3(1, 0, 2))
+	await ticks(2)
+	u.apply_brace(0.6, 1.5)
+	var s: Array = SnapshotCodec.decode(SnapshotCodec.encode(1, 0, 1, SnapshotCodec.encode_units([u]))).units[u.net_id]
+	check(absf(s[SnapshotCodec.BRACE] - 0.6) < 0.005 and absf(s[SnapshotCodec.BRACE_TIMER] - 1.5) < 0.002, "a brace survives the wire")
+
+
+func test_stillhand_bot_match() -> void:
+	var mc := MatchController.new()
+	mc.human_slot = false
+	mc.lineup_ids = [&"stillhand", &"oathwarden", &"ruinscribe"]
+	mc.bot_seed = 5
+	var map := LaneMapBuilder.new()
+	world.add_child(map)
+	world.add_child(mc)
+	mc.setup(authority, world)
+	var used := {}
+	authority.self_cast.connect(func(_c: Unit, a: AbilityDef) -> void: used[a.id] = true)
+	authority.unit_damaged.connect(func(_t: Unit, _amt: float, src: Unit) -> void:
+		if src and is_instance_valid(src) and src.def == STILL and src.cast_slot >= 0:
+			used["cast"] = true)
+	mc.start()
+	await secs(150.0)
+	check(mc.champions.any(func(c: Unit) -> bool: return c.def == STILL), "Stillhand fields in a bot match")
+	check(used.has(&"still_water"), "bots brace with Still Water")
+	for c: Unit in mc.champions:
+		check(c.global_position.y > -1.0 and absf(c.global_position.x) < 30.0, "%s stays on the map" % c.def.id)
+	map.queue_free()
+
+
+# --- Phase 6: Brasswright, Banneret, Rootwarden ----------------------------------
+
+func _summons(of: Unit) -> Array[Unit]:
+	var out: Array[Unit] = []
+	for u in authority.units:
+		if u.alive and u.summoner == of:
+			out.append(u)
+	return out
+
+
+func test_phase6_data() -> void:
+	await _kit_data([BRASS, BANNER, ROOT])
+	for d: ChampionDef in [STILL, BRASS, BANNER, ROOT]:
+		check(MatchController.PROTOTYPES.has(d), "%s is a pick (never random yet)" % d.id)
+		check(not d.hero_name.is_empty() and not d.lore.is_empty(), "%s has lore" % d.id)
+	var sentry := BRASS.get_slot(2).summon as ChampionDef
+	check(sentry.kind == ChampionDef.Kind.SUMMON and sentry.respawn_time < 0.0 and sentry.move_speed == 0.0, "the sentry is a summon that stays put")
+
+
+func test_field_sentry() -> void:
+	var me := spawn(BRASS, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -12))
+	var tower := spawn(TOWER, 1, Vector3(6, 0, -8))
+	tower.controller = null
+	await ticks(2)
+	var cast := BRASS.get_slot(2)
+	await _cast(me, 2, Vector3(0, 0, -6), cast.cast_time + 0.05)
+	var mine := _summons(me)
+	check(mine.size() == 1, "Field Sentry stands")
+	if mine.is_empty():
+		return
+	var s: Unit = mine[0]
+	check(s.global_position.distance_to(Vector3(0, 0, -6)) < 0.6, "where it was aimed (%.1f, %.1f)" % [s.global_position.x, s.global_position.z])
+	await secs(2.0)
+	check(foe.health < SCRIBE.max_health, "it shoots the enemy champion in reach (%.0f)" % (SCRIBE.max_health - foe.health))
+	check(tower.health == TOWER.max_health, "never a structure")
+	s.life_timer = 0.1
+	await secs(0.2)
+	check(not s.alive, "it falls when its time runs out")
+	await secs(1.5)
+	check(not is_instance_valid(s) or not authority.units.has(s), "and is cleared away")
+
+
+func test_sentry_replaced() -> void:
+	var me := spawn(BRASS, 0, Vector3.ZERO)
+	await ticks(2)
+	var cast := BRASS.get_slot(2)
+	await _cast(me, 2, Vector3(0, 0, -5), cast.cast_time + cast.recovery + 0.05)
+	me.cooldowns[2] = 0.0
+	await _cast(me, 2, Vector3(4, 0, -4), cast.cast_time + 0.05)
+	var mine := _summons(me)
+	check(mine.size() == 1 and mine[0].global_position.x > 2.0, "a second sentry replaces the first (%d, x %.1f)" % [mine.size(), mine[0].global_position.x if mine.size() > 0 else -99.0])
+
+
+func test_masterwork_in_place() -> void:
+	add_wall(Vector3(0, 1.5, -8), Vector3(8, 3, 1))
+	var me := spawn(BRASS, 0, Vector3.ZERO)
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	var r := BRASS.get_slot(3)
+	await _cast(me, 3, Vector3(0, 0, -20), r.cast_time + r.recovery + 0.05)
+	var mine := _summons(me)
+	check(mine.size() == 1 and mine[0].global_position.z > -7.6, "with no sentry out, one is placed, on this side of a wall (%.1f)" % (mine[0].global_position.z if mine.size() > 0 else 0.0))
+	me.cooldowns[3] = 0.0
+	me.cooldowns[2] = 0.0
+	await _cast(me, 2, Vector3(4, 0, -3), BRASS.get_slot(2).cast_time + BRASS.get_slot(2).recovery + 0.05)
+	await _cast(me, 3, Vector3(-6, 0, -6), r.cast_time + 0.05)
+	mine = _summons(me)
+	check(mine.size() == 1 and mine[0].def == r.summon and mine[0].global_position.distance_to(Vector3(4, 0, -3)) < 0.6, "Masterwork Battery overcharges the sentry where it stands")
+
+
+func test_sentry_kill_credit() -> void:
+	var me := spawn(BRASS, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -10))
+	await ticks(2)
+	await _cast(me, 2, Vector3(0, 0, -5), BRASS.get_slot(2).cast_time + 0.05)
+	var killer := [null]
+	authority.unit_died.connect(func(t: Unit, k: Unit) -> void:
+		if t == foe:
+			killer[0] = k)
+	foe.health = 5.0
+	await secs(2.0)
+	check(not foe.alive and killer[0] == me, "a sentry kill counts for the Brasswright")
+
+
+func test_breach_falloff() -> void:
+	var me := spawn(BRASS, 0, Vector3.ZERO)
+	var first := spawn(DUMMY, 1, Vector3(0, 0, -5))
+	var second := spawn(DUMMY, 1, Vector3(0, 0, -9))
+	await ticks(2)
+	var q := BRASS.get_slot(1)
+	await _cast(me, 1, Vector3(0, 0, -15), q.cast_time + 0.5)
+	check(is_equal_approx(DUMMY.max_health - first.health, q.damage), "Breach Bolt: the first takes it all (%.0f)" % (DUMMY.max_health - first.health))
+	check(is_equal_approx(DUMMY.max_health - second.health, q.damage * q.pierce_falloff), "the next takes %d%% (%.0f)" % [roundi(q.pierce_falloff * 100.0), DUMMY.max_health - second.health])
+
+
+func test_calibration() -> void:
+	var me := spawn(BRASS, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -6))
+	await ticks(2)
+	for i in 6:
+		authority.apply_damage(me, foe, 1.0, BRASS.basic_attack)
+	check(is_equal_approx(me.passive_stacks, CombatAuthority.CALIBRATE_MAX), "Calibration: basic hits build up to %d" % roundi(CombatAuthority.CALIBRATE_MAX))
+	var q := BRASS.get_slot(1)
+	var h := foe.health
+	await _cast(me, 1, foe.global_position, q.cast_time + 0.4)
+	check(absf(h - foe.health - q.damage * (1.0 + 4.0 * BRASS.passive_value)) < 0.5, "Breach Bolt spends it: +%d%% (%.0f)" % [roundi(400.0 * BRASS.passive_value), h - foe.health])
+	check(me.passive_stacks == 0.0, "and it starts over")
+	me.cooldowns[1] = 0.0
+	h = foe.health
+	await _cast(me, 1, foe.global_position, q.cast_time + 0.4)
+	check(is_equal_approx(h - foe.health, q.damage), "a bolt with no calibration is plain")
+
+
+func test_emergency_vent() -> void:
+	var me := spawn(BRASS, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -2.5))
+	await ticks(2)
+	var vent := BRASS.get_slot(4)
+	await _cast(me, 4, foe.global_position, vent.cast_time + 0.05)
+	check(is_equal_approx(foe.slow_amount, vent.slow_amount), "Emergency Vent slows the chaser")
+	check(is_equal_approx(me.quick_amount, vent.self_quick), "and speeds you up")
+
+
+func test_rally_standard() -> void:
+	var me := spawn(BANNER, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(3, 0, -4))
+	var far := spawn(SCRIBE, 0, Vector3(20, 0, 0))
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	await _cast(me, 2, Vector3(0, 0, -4), BANNER.get_slot(2).cast_time + 0.1)
+	var mine := _summons(me)
+	check(mine.size() == 1, "Rally Standard stands")
+	await ticks(3)
+	var pole := mine[0].def
+	check(is_equal_approx(ally.quick_amount, pole.passive_value), "allies near it move %d%% faster" % roundi(pole.passive_value * 100.0))
+	check(far.quick_amount == 0.0, "not far away")
+	check(foe.quick_amount == 0.0, "never enemies")
+	authority.apply_damage(foe, mine[0], 9999.0, null)
+	check(not mine[0].alive, "enemies can break it")
+
+
+func test_ordered_retreat() -> void:
+	var me := spawn(BANNER, 0, Vector3.ZERO)
+	var hurt := spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	var fine := spawn(SCRIBE, 0, Vector3(-3, 0, 0))
+	await ticks(2)
+	hurt.health = 200.0
+	var f := BANNER.get_slot(4)
+	await _cast(me, 4, Vector3(0, 0, -5), f.cast_time + 0.05)
+	check(is_equal_approx(me.shield, f.shield_amount), "Ordered Retreat shields the Banneret")
+	check(is_equal_approx(hurt.shield, f.shield_amount) and fine.shield == 0.0, "and the most hurt ally near")
+
+
+func test_break_their_line() -> void:
+	var me := spawn(BANNER, 0, Vector3.ZERO)
+	var first := spawn(SCRIBE, 1, Vector3(0, 0, -5))
+	var behind := spawn(SCRIBE, 1, Vector3(0, 0, -8))
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	aim(me, Vector3(0, 0, -20))
+	var r := BANNER.get_slot(3)
+	await _cast(me, 3, Vector3(0, 0, -20), r.cast_time + r.dash_duration + 0.4)
+	check(first.health < SCRIBE.max_health, "the charge hits the first champion")
+	check(me.global_position.z > -5.5, "and stops there (%.1f)" % me.global_position.z)
+	check(first.global_position.z < -7.0, "driving it back (%.1f)" % first.global_position.z)
+	check(behind.health == SCRIBE.max_health or behind.health > SCRIBE.max_health - 1.0, "the one behind is not run through")
+
+
+func test_hold_formation() -> void:
+	var me := spawn(BANNER, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -2))
+	var hitter := spawn(SCRIBE, 1, Vector3(0, 0, -6))
+	await ticks(2)
+	authority.apply_damage(me, foe, 1.0, BANNER.basic_attack)
+	check(me.passive_stacks == 0.0, "alone, a hit builds nothing")
+	var h := me.health
+	authority.apply_damage(hitter, me, 100.0, null)
+	var plain := h - me.health
+	var ally := spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	await ticks(2)
+	for i in 4:
+		authority.apply_damage(me, foe, 1.0, BANNER.basic_attack)
+	check(is_equal_approx(me.passive_stacks, CombatAuthority.FORMATION_MAX), "Hold Formation: beside an ally, up to %d" % roundi(CombatAuthority.FORMATION_MAX))
+	h = me.health
+	authority.apply_damage(hitter, me, 100.0, null)
+	check(absf(h - me.health - plain * (1.0 - 3.0 * BANNER.passive_value)) < 0.05, "%d%% less damage taken" % roundi(300.0 * BANNER.passive_value))
+	await secs(CombatAuthority.FORMATION_TIME + 0.2)
+	check(me.passive_stacks == 0.0, "it fades when the line breaks")
+	ally.queue_free()
+
+
+func test_grasping_root() -> void:
+	var me := spawn(ROOT, 0, Vector3.ZERO)
+	var on := spawn(SCRIBE, 1, Vector3(0, 0, -7))
+	var off := spawn(SCRIBE, 1, Vector3(3, 0, -7))
+	await ticks(2)
+	var q := ROOT.get_slot(1)
+	await _cast(me, 1, Vector3(0, 0, -9), q.cast_time + q.area_delay + 0.1)
+	check(on.root_timer > 0.0 and on.health < SCRIBE.max_health, "Grasping Root roots an enemy on the line")
+	check(off.root_timer <= 0.0 and off.health == SCRIBE.max_health, "and not one beside it")
+
+
+func test_elder_shape() -> void:
+	var me := spawn(ROOT, 0, Vector3.ZERO)
+	await ticks(2)
+	_level_up(me, Unit.ULT_LEVEL)
+	me.health = me.max_health * 0.5
+	var base := me.max_health
+	var r := ROOT.get_slot(3)
+	await _cast(me, 3, Vector3(0, 0, -5), r.cast_time + 0.05)
+	check(is_equal_approx(me.max_health, base + r.transform_health), "Elder Shape: %d more max health" % roundi(r.transform_health))
+	check(absf(me.health / me.max_health - 0.5) < 0.01, "health keeps its share")
+	check(me.get_slot(0) == r.transform_basic and me.get_slot(1) != null, "the paw replaces the staff, Q stays")
+	await secs(r.transform_duration)
+	check(is_equal_approx(me.max_health, base) and me.get_slot(0) == ROOT.basic_attack, "it ends after %d s" % roundi(r.transform_duration))
+	check(absf(me.health / me.max_health - 0.5) < 0.02, "still the same share")
+
+
+func test_deep_roots() -> void:
+	var me := spawn(ROOT, 0, Vector3.ZERO)
+	await ticks(2)
+	check(me.shield == 0.0, "no grove, no bark")
+	await _cast(me, 2, me.global_position, ROOT.get_slot(2).cast_time + 0.2)
+	check(is_equal_approx(me.shield, ROOT.passive_value), "Deep Roots: in her grove she gains a %d shield" % roundi(ROOT.passive_value))
+
+
+func test_barkskin() -> void:
+	var me := spawn(ROOT, 0, Vector3.ZERO)
+	var ally := spawn(SCRIBE, 0, Vector3(4, 0, 0))
+	await ticks(2)
+	var f := ROOT.get_slot(4)
+	ally.health = 150.0
+	await _cast(me, 4, Vector3(0, 0, -5), f.cast_time + f.recovery + 0.05)
+	check(is_equal_approx(ally.shield, f.shield_amount) and me.shield == 0.0, "Barkskin goes to the most hurt ally")
+	me.cooldowns[4] = 0.0
+	ally.health = ally.max_health
+	ally.shield = 0.0
+	me.health = 200.0
+	await _cast(me, 4, Vector3(0, 0, -5), f.cast_time + 0.05)
+	check(is_equal_approx(me.shield, f.shield_amount), "or to her, when she is the one hurt (%.0f, ally %.0f, cd %.1f)" % [me.shield, ally.shield, me.cooldowns[4]])
+
+
+func test_phase6_bot_match() -> void:
+	var mc := MatchController.new()
+	mc.human_slot = false
+	mc.lineup_ids = [&"brasswright", &"banneret", &"rootwarden"]
+	mc.bot_seed = 7
+	var map := LaneMapBuilder.new()
+	world.add_child(map)
+	world.add_child(mc)
+	mc.setup(authority, world)
+	var seen := {}
+	authority.summoned.connect(func(u: Unit, _c: Unit) -> void: seen[u.def.id] = true)
+	authority.self_cast.connect(func(_c: Unit, a: AbilityDef) -> void: seen[a.id] = true)
+	mc.start()
+	await secs(180.0)
+	check(seen.has(&"field_sentry"), "bots set down sentries")
+	check(seen.has(&"rally_banner"), "bots plant the standard")
+	check(seen.has(&"barkskin") or seen.has(&"ordered_retreat"), "bots shield")
+	for c: Unit in mc.champions:
+		check(c.global_position.y > -1.0 and absf(c.global_position.x) < 30.0, "%s stays on the map" % c.def.id)
+	var stray := authority.units.filter(func(u: Unit) -> bool: return u.def.kind == ChampionDef.Kind.SUMMON and u.alive and u.life_timer > 20.0)
+	check(stray.is_empty(), "no summon outlives its time")
+	map.queue_free()
+
+
+func test_three_lane_match() -> void:
+	var mc := MatchController.new()
+	mc.human_slot = false
+	mc.three_lane = true
+	mc.lineup_ids = [&"ruinscribe", &"oathwarden", &"thornwright"]
+	mc.bot_seed = 3
+	var map := ThreeLaneBuilder.new()
+	world.add_child(map)
+	world.add_child(mc)
+	mc.setup(authority, world)
+	mc.start()
+	check(mc.lane_towers[0].size() == 3 and mc.lane_towers[1].size() == 3, "a tower in every lane for both teams")
+	check(mc.cores[0].is_protected(), "the core starts protected")
+	await secs(45.0)
+	for lx: float in ThreeLaneBuilder.LANES:
+		var n := authority.units.filter(func(u: Unit) -> bool: return u.alive and u.def.kind == ChampionDef.Kind.MINION and absf(u.global_position.x - lx) < 8.0).size()
+		check(n >= 4, "minions march in the lane at x %d (%d)" % [roundi(lx), n])
+	for c: Unit in mc.champions:
+		var lx := mc.info.lane_x(c)
+		check(absf(c.global_position.x - lx) < 9.0 and absf(c.global_position.z) < ThreeLaneBuilder.BASE_Z, "%s plays its lane (x %.0f, z %.0f, lane %d)" % [c.name, c.global_position.x, c.global_position.z, roundi(lx)])
+	mc.lane_towers[0][0].set_dead(null)
+	check(mc.cores[0].is_protected(), "one tower down: the core still holds")
+	mc.lane_towers[0][1].set_dead(null)
+	check(not mc.cores[0].is_protected(), "two down: the core is open")
+	map.queue_free()
+

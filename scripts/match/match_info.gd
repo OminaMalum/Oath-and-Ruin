@@ -7,6 +7,12 @@ var fountains: Array[Vector3] = []
 var hold_points: Array[Vector3] = []
 var lane_dirs: Array[Vector3] = []
 var slots := {}  # Unit -> slot index within its team
+## Lane centres (world x). One lane: [0]. Three lanes: slot 0 mid, 1 west, 2 east.
+var lanes: Array[float] = [0.0]
+## Where a team's base opens onto the lanes (z, own side, positive).
+var base_z: float = 46.0
+## The walk to the neutral camp, per team (four points, the last at the camp).
+var routes: Array[PackedVector3Array] = []
 ## For the objective's public state (announced to everyone).
 var match_ctl: MatchController
 
@@ -17,6 +23,8 @@ func objective_open() -> bool:
 
 
 func objective_route(team: int) -> PackedVector3Array:
+	if not routes.is_empty():
+		return routes[team]
 	var s := 1.0 if team == 0 else -1.0
 	return PackedVector3Array([Vector3(-4, 0, s * 9.0), Vector3(-15, 0, s * 9.0), Vector3(-15, 0, 0), Vector3(-24, 0, 0)])
 
@@ -35,3 +43,10 @@ func lane_dir(team: int) -> Vector3:
 
 func slot_of(u: Unit) -> int:
 	return slots.get(u, 0)
+
+
+## The lane a champion plays (world x of its centre).
+func lane_x(u: Unit) -> float:
+	if lanes.size() < 3:
+		return lanes[0]
+	return lanes[[1, 0, 2][slot_of(u) % 3]]

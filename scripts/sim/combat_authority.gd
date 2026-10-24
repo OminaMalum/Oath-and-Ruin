@@ -23,6 +23,10 @@ signal melee_swung(caster: Unit, a: AbilityDef)
 signal dash_started(caster: Unit, a: AbilityDef)
 ## A grapple launched (the unit holds grapple_anchor while it travels).
 signal grapple_started(caster: Unit, a: AbilityDef)
+## A SELF ability went off (Still Water's brace).
+signal self_cast(caster: Unit, a: AbilityDef)
+## A summon was placed (a sentry, a banner).
+signal summoned(u: Unit, caster: Unit)
 
 ## Tests turn this off and call step() themselves.
 @export var auto_step: bool = true
@@ -35,6 +39,9 @@ var tick: int = 0
 ## Seconds of simulated time since start.
 var time: float = 0.0
 var _next_unit_id: int = 1
+## Makes a summoned unit: func(def, team, pos, yaw) -> Unit. The match sets
+## it (names, views); without one the authority adds a bare Unit beside itself.
+var spawner: Callable
 
 
 class SimProjectile:
@@ -117,13 +124,14 @@ func step(dt: float) -> void:
 			if u.respawn_timer <= 0.0:
 				u.respawn()
 				unit_respawned.emit(u)
-		elif u.def.kind == ChampionDef.Kind.MINION:
+		elif u.def.kind == ChampionDef.Kind.MINION or u.def.kind == ChampionDef.Kind.SUMMON:
 			u.corpse_timer -= dt
 			if u.corpse_timer <= 0.0:
 				remove_unit(u)
 	_step_projectiles(dt)
 	_step_areas(dt)
 	_step_passives(dt)
+	_step_summons(dt)
 	_step_item_effects(dt)
 
 
@@ -133,6 +141,8 @@ func are_enemies(a: Unit, b: Unit) -> bool:
 
 func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: Unit = null) -> void:
 	var q := a == caster.get_slot(1)
+	if caster.def.passive == ChampionDef.Passive.MEASURED and a != caster.def.basic_attack:
+		caster.passive_primed_until = time + PRIMED_TIME
 	if caster.def.passive == ChampionDef.Passive.STAND_BEHIND and (q or a == caster.get_slot(2)):
 		caster.passive_primed_until = time + PRIMED_TIME
 	if caster.def.passive == ChampionDef.Passive.REFRAIN and (q or a == caster.get_slot(2)):
@@ -152,6 +162,11 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 	if q and caster.def.passive == ChampionDef.Passive.FURY and caster.passive_stacks >= FURY_MAX:
 		caster.passive_stacks = 0.0
 		heal(caster, caster.max_health * caster.def.passive_value, caster)  # once, however many it hits
+	if a.self_quick > 0.0:
+		caster.apply_quick(a.self_quick, a.self_quick_duration)
+	if caster.def.passive == ChampionDef.Passive.CALIBRATE and q:
+		caster.passive_marks["calib"] = floorf(caster.passive_stacks)  # this cast's bonus
+		caster.passive_stacks = 0.0
 	match a.delivery:
 		AbilityDef.Delivery.PROJECTILE:
 			var p := SimProjectile.new()
@@ -196,7 +211,17 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 					continue
 				if a.arc_degrees < 360.0 and to.length() > u.def.radius and absf(fwd.signed_angle_to(to, Vector3.UP)) > half:
 					continue
-				apply_damage(caster, u, a.damage, a)
+				if apply_damage(caster, u, a.damage, a) and a.push_distance > 0.0:
+					_push(u, caster.global_position, a.push_distance)
+		AbilityDef.Delivery.SELF:
+			if a.brace_duration > 0.0:
+				caster.apply_brace(a.brace_reduction, a.brace_duration)
+			_self_shields(caster, a)
+			if a.transform_duration > 0.0:
+				caster.start_transform(a)
+			self_cast.emit(caster, a)
+		AbilityDef.Delivery.SUMMON:
+			_summon(caster, a, target)
 		AbilityDef.Delivery.DASH:
 			caster.start_dash(a, target)
 			dash_started.emit(caster, a)
@@ -255,6 +280,12 @@ func dash_contact(u: Unit, from: Vector3) -> void:
 		if _segment_circle_t(from, u.global_position, e.global_position, e.def.radius + u.def.radius) >= 0.0:
 			u.dash_hit.append(e)
 			apply_damage(u, e, a.damage, a)
+			if a.stop_on_champion and e.def.kind == ChampionDef.Kind.CHAMPION:
+				# Break Their Line: the charge ends on the first champion and drives it back.
+				if a.push_distance > 0.0 and e.alive:
+					e.displace(e.global_position + Vector3(u.dash_velocity.x, 0.0, u.dash_velocity.z).normalized() * a.push_distance)
+				u.dash_timer = 0.0
+				return
 
 
 ## Damage multiplier for a champion standing in an allied ward (strongest wins).
@@ -320,6 +351,13 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef, proc
 		amount *= 1.0 - source.weaken_amount
 	if target.mark_timer > 0.0:
 		amount *= 1.0 + target.mark_amount
+	if target.brace_timer > 0.0 and proc_kind < 0 and source.def.kind == ChampionDef.Kind.CHAMPION and _in_front(target, source):
+		amount *= 1.0 - target.brace_amount  # Still Water: the one braced hit
+		target.brace_timer = 0.0
+		target.brace_amount = 0.0
+		damage_blocked.emit(target, source)
+	if target.def.passive == ChampionDef.Passive.FORMATION and target.passive_stacks > 0.0:
+		amount *= 1.0 - target.def.passive_value * target.passive_stacks
 	if target.shield > 0.0:
 		var soaked := minf(target.shield, amount)
 		target.shield -= soaked
@@ -351,6 +389,8 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef, proc
 		target.apply_mark(a.mark_amount, a.mark_duration)
 	if a != null and a.weaken_duration > 0.0 and _markable(target):
 		target.apply_weaken(a.weaken_amount, a.weaken_duration)
+	if a != null and a.interrupts and target.def.kind == ChampionDef.Kind.CHAMPION and target.is_casting():
+		target.interrupt_cast()
 	if a != null and (a.taunt_duration > 0.0 or a.charm_duration > 0.0) and _compellable(target):
 		if a.taunt_duration > 0.0:
 			target.apply_compel(Unit.Compel.TAUNT, source, a.taunt_duration)
@@ -363,9 +403,11 @@ func apply_damage(source: Unit, target: Unit, amount: float, a: AbilityDef, proc
 		_hit_passives(source, target, a)
 		_item_passives(source, target, a)
 	if target.alive and target.health <= 0.0:
-		target.set_dead(source)
-		unit_died.emit(target, source)
-		_on_kill(source, target)
+		# A summon's kill belongs to whoever placed it.
+		var credit := source.summoner if source.summoner and is_instance_valid(source.summoner) else source
+		target.set_dead(credit)
+		unit_died.emit(target, credit)
+		_on_kill(credit, target)
 	return true
 
 
@@ -415,6 +457,8 @@ func passive_damage_factor(source: Unit, target: Unit, a: AbilityDef) -> float:
 			f *= 1.0 + source.def.passive_value
 			source.passive_marks[ready_key] = time + SEAM_COOLDOWN
 			source.passive_marks.erase(prime_key)
+	if source.def.passive == ChampionDef.Passive.CALIBRATE and a != null and a == source.get_slot(1):
+		f *= 1.0 + source.def.passive_value * float(source.passive_marks.get("calib", 0.0))
 	if source.def.passive == ChampionDef.Passive.TITHE and target.def.kind != ChampionDef.Kind.STRUCTURE and target.is_impaired():
 		f *= 1.0 + source.def.passive_value
 	return f
@@ -442,6 +486,13 @@ func _step_passives(dt: float) -> void:
 			ChampionDef.Passive.REFRAIN:
 				if src.refrain_slot >= 0 and time - src.refrain_at > REFRAIN_TIME:
 					src.refrain_slot = -1  # the song lapsed
+			ChampionDef.Passive.FORMATION:
+				if src.passive_stacks > 0.0 and time > src.passive_primed_until:
+					src.passive_stacks = 0.0  # the line broke up
+			ChampionDef.Passive.ROOTS:
+				if time >= src.passive_ready_at and _in_own_ward(src):
+					src.passive_ready_at = time + ROOTS_EVERY
+					give_shield(src, src, src.def.passive_value, ROOTS_SHIELD_TIME)
 			ChampionDef.Passive.FURY:
 				if time - src.champion_fight_at > FIGHT_TIME * 0.75:
 					src.passive_stacks = maxf(src.passive_stacks - FURY_FADE * dt, 0.0)
@@ -548,7 +599,7 @@ func _step_projectiles(dt: float) -> void:
 				continue
 			if a.pierce:
 				p.hit.append(u)  # passes through: everyone on the line this tick is struck
-				apply_damage(p.source, u, a.damage, a)
+				apply_damage(p.source, u, a.damage * (1.0 if p.hit.size() == 1 else a.pierce_falloff), a)
 			elif t < best_t:
 				best_t = t
 				best = u
@@ -687,6 +738,8 @@ func _burst(ar: SimArea) -> void:
 			dmg *= 1.0 + ar.source.def.passive_value
 		dmg *= ar.power
 		var hurt := apply_damage(ar.source, u, dmg, a) if src_ok and dmg > 0.0 else true
+		if a.push_distance > 0.0 and hurt:
+			_push(u, ar.center, a.push_distance)
 		if a.pull_distance > 0.0 and u.alive and hurt and u.def.kind != ChampionDef.Kind.STRUCTURE:
 			var to := ar.center - u.global_position
 			to.y = 0.0
@@ -880,6 +933,12 @@ const MARK_TIME := 4.0      # MARGINALIA and QUARRY marks last this long
 const PASSIVE_SHIELD_TIME := 3.0
 const PRIMED_TIME := 6.0    # STAND_BEHIND: a cast primes the next hit this long
 const STAND_COOLDOWN := 8.0
+const MEASURED_COOLDOWN := 6.0
+const CALIBRATE_MAX := 4.0
+const FORMATION_MAX := 3.0
+const FORMATION_TIME := 4.0
+const ROOTS_EVERY := 6.0
+const ROOTS_SHIELD_TIME := 3.0
 const MOMENTUM_TIME := 3.0   # MOMENTUM: the primed hit waits this long
 
 
@@ -912,6 +971,22 @@ func _hit_passives(source: Unit, target: Unit, a: AbilityDef) -> void:
 					source.passive_marks.erase(target.net_id)
 					source.apply_shield(source.def.passive_value, PASSIVE_SHIELD_TIME)
 					unit_shielded.emit(source, source.shield)
+		ChampionDef.Passive.CALIBRATE:
+			if a == source.get_slot(0):
+				source.passive_stacks = minf(source.passive_stacks + 1.0, CALIBRATE_MAX)
+		ChampionDef.Passive.FORMATION:
+			if a == source.get_slot(0):
+				for u in units:
+					if u != source and u.alive and u.team == source.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+							and _flat(u.global_position, source.global_position) <= source.def.passive_range:
+						source.passive_stacks = minf(source.passive_stacks + 1.0, FORMATION_MAX)
+						source.passive_primed_until = time + FORMATION_TIME
+						break
+		ChampionDef.Passive.MEASURED:
+			if a == source.def.basic_attack and time <= source.passive_primed_until and time >= source.passive_ready_at:
+				source.passive_primed_until = -1.0
+				source.passive_ready_at = time + MEASURED_COOLDOWN
+				give_shield(source, source, source.def.passive_value, PASSIVE_SHIELD_TIME)
 		ChampionDef.Passive.STAND_BEHIND:
 			if a == source.def.basic_attack and time <= source.passive_primed_until and time >= source.passive_ready_at:
 				var best: Unit = null
@@ -930,3 +1005,119 @@ func _hit_passives(source: Unit, target: Unit, a: AbilityDef) -> void:
 ## a little less, so a hurt ally beside it wins a tie.
 static func _shield_need(u: Unit) -> float:
 	return 1.0 - u.health / u.max_health - (0.05 if u.def.passive == ChampionDef.Passive.STAND_BEHIND else 0.0)
+
+
+## Pushes `u` straight away from `from` (walls stop it). Structures stay put.
+func _push(u: Unit, from: Vector3, dist: float) -> void:
+	if not u.alive or u.def.kind == ChampionDef.Kind.STRUCTURE:
+		return
+	var d := Vector3(u.global_position.x - from.x, 0.0, u.global_position.z - from.z)
+	d = d.normalized() if d.length() > 0.05 else u.forward() * -1.0
+	u.displace(u.global_position + d * dist)
+
+
+## Is `other` in front of `u` (within about 70 degrees of where it faces)?
+static func _in_front(u: Unit, other: Unit) -> bool:
+	var to := Vector3(other.global_position.x - u.global_position.x, 0.0, other.global_position.z - u.global_position.z)
+	return to.length() < 0.05 or u.forward().dot(to.normalized()) >= 0.35
+
+
+## Is the unit standing in one of its own wards (ROOTS: First Grove)?
+func _in_own_ward(u: Unit) -> bool:
+	for ar in areas:
+		if ar.alive and ar.source == u and ar.ability.delivery == AbilityDef.Delivery.WARD \
+				and in_area(ar, u.global_position, u.def.radius):
+			return true
+	return false
+
+
+## SELF shields: the caster, an ally, or whichever of them needs it most.
+func _self_shields(caster: Unit, a: AbilityDef) -> void:
+	if a.shield_mode == AbilityDef.ShieldMode.NONE or a.shield_amount <= 0.0:
+		return
+	var ally: Unit = null
+	for u in units:
+		if u != caster and u.alive and u.team == caster.team and u.def.kind == ChampionDef.Kind.CHAMPION \
+				and _flat(u.global_position, caster.global_position) <= a.area_radius + u.def.radius \
+				and (ally == null or _shield_need(u) > _shield_need(ally)):
+			ally = u
+	match a.shield_mode:
+		AbilityDef.ShieldMode.SELF:
+			give_shield(caster, caster, a.shield_amount, a.shield_duration)
+		AbilityDef.ShieldMode.SELF_AND_ALLY:
+			give_shield(caster, caster, a.shield_amount, a.shield_duration)
+			if ally:
+				give_shield(caster, ally, a.shield_amount, a.shield_duration)
+		AbilityDef.ShieldMode.MOST_HURT:
+			var pick := ally if ally and _shield_need(ally) > _shield_need(caster) else caster
+			give_shield(caster, pick, a.shield_amount, a.shield_duration)
+
+
+## Places a summon. Past summon_max for its group, the oldest goes. In place:
+## an existing one of the group is swapped where it stands.
+func _summon(caster: Unit, a: AbilityDef, target: Vector3) -> void:
+	var def := a.summon as ChampionDef
+	if def == null:
+		return
+	var group := a.summon_group if a.summon_group != &"" else StringName(def.id)
+	var mine: Array[Unit] = []
+	for u in units:
+		if u.alive and u.summoner == caster and u.summon_group == group:
+			mine.append(u)
+	var at := Vector3(target.x, 0.0, target.z)
+	if a.summon_in_place and not mine.is_empty():
+		var old: Unit = mine[mine.size() - 1]
+		at = Vector3(old.global_position.x, 0.0, old.global_position.z)
+		expire_summon(old)
+		mine.erase(old)
+	else:
+		at = _clear_of_walls(caster, at, def.radius + 0.2)
+	while mine.size() >= maxi(a.summon_max, 1):
+		expire_summon(mine.pop_front())
+	var yaw := caster.aim_yaw
+	var u: Unit = spawner.call(def, caster.team, at, yaw) if spawner.is_valid() else _spawn_bare(def, caster.team, at, yaw)
+	u.summoner = caster
+	u.summon_group = group
+	u.life_timer = a.summon_duration
+	u.aim_yaw = yaw
+	u.controller = SummonController.new(self)
+	summoned.emit(u, caster)
+
+
+func _spawn_bare(def: ChampionDef, team: int, pos: Vector3, yaw: float) -> Unit:
+	var u := Unit.new()
+	u.def = def
+	u.team = team
+	u.position = pos
+	u.rotation.y = yaw
+	get_parent().add_child(u)
+	register_unit(u)
+	return u
+
+
+## A summon's time ran out (or a newer one replaced it): it falls, no credit.
+func expire_summon(u: Unit) -> void:
+	if u.alive:
+		u.set_dead(null)
+		unit_died.emit(u, null)
+
+
+func _step_summons(dt: float) -> void:
+	for u in units:
+		if u.alive and u.life_timer >= 0.0:
+			u.life_timer -= dt
+			if u.life_timer <= 0.0 or u.summoner == null or not is_instance_valid(u.summoner):
+				expire_summon(u)
+
+
+## A summon set down behind a wall lands on the near side of it instead.
+func _clear_of_walls(caster: Unit, at: Vector3, margin: float) -> Vector3:
+	var from := caster.global_position + Vector3(0, 0.6, 0)
+	var to := Vector3(at.x, from.y, at.z)
+	var q := PhysicsRayQueryParameters3D.create(from, to, Unit.LAYER_WORLD)
+	var hit := caster.get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return at
+	var back := (from - to).normalized() * margin
+	return Vector3(hit.position.x + back.x, 0.0, hit.position.z + back.z)
+

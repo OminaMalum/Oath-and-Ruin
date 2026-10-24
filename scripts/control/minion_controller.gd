@@ -19,7 +19,7 @@ func _init(a: CombatAuthority, lane_path: PackedVector3Array) -> void:
 
 func _priority(u: Unit) -> int:
 	match u.def.kind:
-		ChampionDef.Kind.MINION:
+		ChampionDef.Kind.MINION, ChampionDef.Kind.SUMMON:
 			return 0
 		ChampionDef.Kind.STRUCTURE:
 			return 1

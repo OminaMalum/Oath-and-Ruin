@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"long_thrust"
+display_name = "Long Thrust"
+description = "Upgrade: reaches 6.5 m."
+delivery = 2
+damage = 60.0
+cast_time = 0.25
+recovery = 0.2
+cooldown = 8.0
+move_mult_while_casting = 0.4
+range = 6.5
+arc_degrees = 20.0
+slow_amount = 0.35
+slow_duration = 1.2
+scaling = 1

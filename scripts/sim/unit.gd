@@ -169,6 +169,16 @@ var last_champion_hit_at: float = -100.0
 ## Weakened: this unit's damage is cut by weaken_amount (strongest wins).
 var weaken_amount: float = 0.0
 var weaken_timer: float = 0.0
+## Braced: the next champion hit from the front deals brace_amount less.
+var brace_amount: float = 0.0
+var brace_timer: float = 0.0
+## Summons: who placed it, how long it has left, and its group.
+var summoner: Unit = null
+var life_timer: float = -1.0
+var summon_group: StringName = &""
+## Transformed (Elder Shape): extra max health while the timer runs.
+var transform_timer: float = 0.0
+var transform_bonus: float = 0.0
 ## Grapple in flight: the wall point the chain holds, and where travel began
 ## (kept across a redirect, so MOMENTUM measures the whole route).
 var grapple_anchor: Vector3 = Vector3.ZERO
@@ -180,6 +190,8 @@ var grapple_problem: String = ""
 var cast_target_unit: Unit
 ## While any of these is alive this unit cannot be damaged (a core behind its tower).
 var protectors: Array[Unit] = []
+## Protected while at least this many protectors stand (three lanes: 2 of 3).
+var protect_min: int = 1
 ## Seconds a dead unit that never respawns stays before removal (minions).
 var corpse_timer: float = 1.0
 ## Last unit that damaged this one and when (authority time), for tower aggro.
@@ -319,7 +331,7 @@ func recompute_stats(set_max_health: bool = true) -> void:
 	speed_mult = 1.0 + spd
 	if set_max_health:
 		var frac := health / max_health if max_health > 0.0 else 1.0
-		max_health = def.max_health * (1.0 + HEALTH_PER_LEVEL * (level - 1)) + hp
+		max_health = def.max_health * (1.0 + HEALTH_PER_LEVEL * (level - 1)) + hp + transform_bonus
 		if alive:
 			health = max_health * frac
 
@@ -671,6 +683,14 @@ func _step_status(dt: float) -> void:
 		weaken_timer -= dt
 		if weaken_timer <= 0.0:
 			weaken_amount = 0.0
+	if brace_timer > 0.0:
+		brace_timer -= dt
+		if brace_timer <= 0.0:
+			brace_amount = 0.0
+	if transform_timer > 0.0:
+		transform_timer -= dt
+		if transform_timer <= 0.0:
+			end_transform()
 	if heal_cut_timer > 0.0:
 		heal_cut_timer -= dt
 		if heal_cut_timer <= 0.0:
@@ -797,7 +817,7 @@ func clamp_target(a: AbilityDef, point: Vector3) -> Vector3:
 		flat = flat.limit_length(a.range)
 	elif a.delivery == AbilityDef.Delivery.WARD:
 		return Vector3(from.x, from.y, from.z)
-	elif a.delivery == AbilityDef.Delivery.WALL:
+	elif a.delivery == AbilityDef.Delivery.WALL or a.delivery == AbilityDef.Delivery.SUMMON:
 		flat = flat.limit_length(a.range)
 	elif a.delivery == AbilityDef.Delivery.GRAPPLE:
 		return grapple_endpoint(a, point)
@@ -1004,10 +1024,11 @@ func interrupt_cast() -> void:
 
 
 func is_protected() -> bool:
+	var up := 0
 	for p in protectors:
 		if is_instance_valid(p) and p.alive:
-			return true
-	return false
+			up += 1
+	return up >= protect_min and up > 0
 
 
 ## Stun: interrupts any cast (and dash), longest stun wins.
@@ -1035,6 +1056,29 @@ func apply_heal_cut(amount: float, duration: float) -> void:
 	if duration > 0.0 and (amount >= heal_cut or heal_cut_timer <= 0.0):
 		heal_cut = amount
 		heal_cut_timer = maxf(heal_cut_timer, duration)
+
+
+## Takes another shape: more max health (the share of health stays) and a
+## heavier basic attack until the timer runs out.
+func start_transform(a: AbilityDef) -> void:
+	transform_timer = a.transform_duration
+	transform_bonus = a.transform_health
+	if a.transform_basic is AbilityDef:
+		slot_overrides[0] = a.transform_basic
+	recompute_stats()
+
+
+func end_transform() -> void:
+	transform_timer = 0.0
+	transform_bonus = 0.0
+	slot_overrides.erase(0)
+	recompute_stats()
+
+
+func apply_brace(amount: float, duration: float) -> void:
+	if alive and duration > 0.0:
+		brace_amount = amount
+		brace_timer = duration
 
 
 func apply_weaken(amount: float, duration: float) -> void:
@@ -1121,6 +1165,10 @@ func set_dead(killer: Unit) -> void:
 	quick_timer = 0.0
 	weaken_amount = 0.0
 	weaken_timer = 0.0
+	brace_amount = 0.0
+	brace_timer = 0.0
+	if transform_timer > 0.0:
+		end_transform()
 	heal_cut = 0.0
 	heal_cut_timer = 0.0
 	burn_source = null

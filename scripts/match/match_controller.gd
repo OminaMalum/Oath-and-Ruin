@@ -24,7 +24,9 @@ const STORM := preload("res://data/champions/stormscald.tres")
 const ROSTER: Array[ChampionDef] = [SCRIBE, WARDEN, RUNNER, LANTERN, THORN, GRAVE, BARROW, VEIL, STORM]
 ## Champions still being proved out: pickable (menu, --lineup) but never drawn
 ## at random, so seeded bot matches stay comparable with earlier builds.
-const PROTOTYPES: Array[ChampionDef] = [preload("res://data/champions/chainbound.tres")]
+const PROTOTYPES: Array[ChampionDef] = [preload("res://data/champions/chainbound.tres"),
+	preload("res://data/champions/stillhand.tres"), preload("res://data/champions/brasswright.tres"),
+	preload("res://data/champions/banneret.tres"), preload("res://data/champions/rootwarden.tres")]
 const TOWER := preload("res://data/units/tower.tres")
 const CORE := preload("res://data/units/core.tres")
 const MELEE := preload("res://data/units/minion_melee.tres")
@@ -85,7 +87,11 @@ var _lineup: Array[ChampionDef] = []
 var champions: Array[Unit] = []
 var structures: Array[Unit] = []
 var cores: Array[Unit] = [null, null]
-var towers: Array[Unit] = [null, null]
+var towers: Array[Unit] = [null, null]  # the mid (or only) lane's tower
+## Every lane's tower per team, in MatchInfo.lanes order.
+var lane_towers: Array = [[], []]
+## The rough three lane test map (ThreeLaneBuilder) instead of the lane map.
+var three_lane: bool = false
 var over: bool = false
 var winner: int = -1
 
@@ -112,10 +118,16 @@ func setup(a: CombatAuthority, parent: Node3D) -> void:
 	info.match_ctl = self
 	for team in 2:
 		var s := 1.0 if team == 0 else -1.0
-		info.fountains.append(Vector3(0, 0, s * LaneMapBuilder.FOUNTAIN_Z))
-		info.hold_points.append(Vector3(0, 0, s * (LaneMapBuilder.TOWER_Z + 6.0)))
+		info.fountains.append(Vector3(0, 0, s * _fountain_z()))
+		info.hold_points.append(Vector3(0, 0, s * (_tower_z() + 6.0)))
 		info.lane_dirs.append(Vector3(0, 0, -s))
+		if three_lane:
+			info.routes.append(PackedVector3Array([Vector3(-3, 0, s * 12.0), Vector3(-10, 0, s * 12.0), Vector3(-13, 0, s * 5.0), Vector3(-14, 0, 0)]))
+	if three_lane:
+		info.lanes = ThreeLaneBuilder.LANES.duplicate()
+		info.base_z = ThreeLaneBuilder.BASE_Z
 	_reset_stats()
+	a.spawner = _spawn
 	a.unit_damaged.connect(_on_damaged)
 	a.unit_healed.connect(func(_t: Unit, amount: float, src: Unit) -> void:
 		if not over and is_instance_valid(src) and stats.champions.has(src.name):
@@ -133,13 +145,19 @@ func start() -> void:
 	for team in 2:
 		var s := 1.0 if team == 0 else -1.0
 		var face := 0.0 if team == 0 else PI
-		var tower := _spawn(TOWER, team, Vector3(0, 0, s * LaneMapBuilder.TOWER_Z), face)
-		tower.controller = TowerController.new(authority)
-		var core := _spawn(CORE, team, Vector3(0, 0, s * LaneMapBuilder.CORE_Z), face)
-		core.protectors = [tower]
-		towers[team] = tower
+		for lx in info.lanes:
+			var tower := _spawn(TOWER, team, Vector3(lx, 0, s * _tower_z()), face)
+			tower.controller = TowerController.new(authority)
+			lane_towers[team].append(tower)
+			structures.append(tower)
+			if lx == 0.0:
+				towers[team] = tower
+		var core := _spawn(CORE, team, Vector3(0, 0, s * _core_z()), face)
+		core.protectors.assign(lane_towers[team])
+		# Three lanes: the core opens once two of the three towers are down.
+		core.protect_min = 2 if info.lanes.size() == 3 else 1
 		cores[team] = core
-		structures.append_array([tower, core])
+		structures.append(core)
 		var roster := team_roster(team)
 		for slot in 3:
 			var p := info.fountain(team) + Vector3((slot - 1) * 3.0, 0, -s * 2.0)
@@ -273,7 +291,19 @@ func _spacing_sample(dt: float) -> void:
 
 
 func objective_position() -> Vector3:
-	return LaneMapBuilder.CAMP
+	return ThreeLaneBuilder.CAMP if three_lane else LaneMapBuilder.CAMP
+
+
+func _tower_z() -> float:
+	return ThreeLaneBuilder.TOWER_Z if three_lane else LaneMapBuilder.TOWER_Z
+
+
+func _core_z() -> float:
+	return ThreeLaneBuilder.CORE_Z if three_lane else LaneMapBuilder.CORE_Z
+
+
+func _fountain_z() -> float:
+	return ThreeLaneBuilder.FOUNTAIN_Z if three_lane else LaneMapBuilder.FOUNTAIN_Z
 
 
 ## Sleeping -> warning -> awake (fight it) -> capture circle -> reward.
@@ -339,7 +369,7 @@ func _captured(team: int) -> void:
 	announce.emit("%s claimed the Shrinebearer. It marches on the lane" % Palette.TEAM_NAMES[team], team)
 	var s := 1.0 if team == 0 else -1.0
 	var start := Vector3(-3.0, 0, s * 6.0)
-	var path := PackedVector3Array([start, Vector3(0, 0, 0), Vector3(0, 0, -s * LaneMapBuilder.CORE_Z)])
+	var path := PackedVector3Array([start, Vector3(0, 0, 0), Vector3(0, 0, -s * _core_z())])
 	siege = _spawn(BEAST_TAME, team, start, 0.0 if team == 0 else PI)
 	var sc := MinionController.new(authority, path)
 	sc.structures_only = true
@@ -372,26 +402,32 @@ func _spawn_wave() -> void:
 		if not cores[team].alive:
 			continue
 		var s := 1.0 if team == 0 else -1.0
-		var path := PackedVector3Array([Vector3(0, 0, s * 46.0), Vector3(0, 0, 0), Vector3(0, 0, -s * LaneMapBuilder.CORE_Z)])
-		var defs := [MELEE, MELEE, MELEE, CASTER, CASTER]
-		if authority.time >= TIDE_EXTRA_MELEE:
-			defs.push_front(MELEE)
-		# Breach: once the enemy tower is down, every wave brings a Breaker.
-		var breach: bool = towers[1 - team] != null and not towers[1 - team].alive
-		for i in defs.size():
-			var melee: int = defs.size() - 2
-			var row := 0 if i < melee else 1
-			var col := (i - (melee - 1) * 0.5) if row == 0 else (i - melee) * 2.0 - 1.0
-			var p := Vector3(col * 1.4, 0, s * (49.0 + row * 2.0))
-			var m := _spawn(defs[i], team, p, 0.0 if team == 0 else PI)
-			m.controller = MinionController.new(authority, path)
-			m.structure_bonus = tide_bonus()
-		if breach:
-			var b := _spawn(BREAKER, team, Vector3(0, 0, s * 47.0), 0.0 if team == 0 else PI)
-			var bc := MinionController.new(authority, path)
-			bc.structures_only = true
-			b.controller = bc
-			b.structure_bonus = tide_bonus()
+		for li in info.lanes.size():
+			var lx: float = info.lanes[li]
+			var gate := (ThreeLaneBuilder.BASE_Z + 2.0) if three_lane else 46.0
+			var path := PackedVector3Array([Vector3(lx, 0, s * gate), Vector3(lx, 0, 0), Vector3(lx, 0, -s * gate), Vector3(0, 0, -s * _core_z())]) \
+					if three_lane else PackedVector3Array([Vector3(0, 0, s * 46.0), Vector3(0, 0, 0), Vector3(0, 0, -s * _core_z())])
+			var defs := [MELEE, MELEE, MELEE, CASTER, CASTER]
+			if authority.time >= TIDE_EXTRA_MELEE:
+				defs.push_front(MELEE)
+			# Breach: once the enemy tower in this lane is down, every wave brings a Breaker.
+			var et: Unit = lane_towers[1 - team][li]
+			var breach: bool = et != null and not et.alive
+			var z0 := (gate + 3.0) if three_lane else 49.0
+			for i in defs.size():
+				var melee: int = defs.size() - 2
+				var row := 0 if i < melee else 1
+				var col := (i - (melee - 1) * 0.5) if row == 0 else (i - melee) * 2.0 - 1.0
+				var p := Vector3(lx + col * 1.4, 0, s * (z0 + row * 2.0))
+				var m := _spawn(defs[i], team, p, 0.0 if team == 0 else PI)
+				m.controller = MinionController.new(authority, path)
+				m.structure_bonus = tide_bonus()
+			if breach:
+				var b := _spawn(BREAKER, team, Vector3(lx, 0, s * (z0 - 2.0)), 0.0 if team == 0 else PI)
+				var bc := MinionController.new(authority, path)
+				bc.structures_only = true
+				b.controller = bc
+				b.structure_bonus = tide_bonus()
 
 
 func _on_damaged(target: Unit, amount: float, source: Unit) -> void:

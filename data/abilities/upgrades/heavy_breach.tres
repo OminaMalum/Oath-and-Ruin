@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"heavy_breach"
+display_name = "Heavy Breach"
+description = "Upgrade: 100 damage, and 80% beyond the first."
+delivery = 0
+damage = 100.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 9.0
+move_mult_while_casting = 0.4
+range = 16.0
+projectile_speed = 42.0
+projectile_radius = 0.3
+pierce = true
+pierce_falloff = 0.8
+scaling = 1

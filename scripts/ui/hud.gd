@@ -309,6 +309,8 @@ func _draw() -> void:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Rooted: you can attack but not move", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.mark_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Marked: you take more damage", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
+	elif player.brace_timer > 0.0:
+		_text(Vector2(hb.position.x, hb.position.y - 10), "Braced: the next hit from the front is softened", FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.weaken_timer > 0.0:
 		_text(Vector2(hb.position.x, hb.position.y - 10), "Weakened: you deal less damage", FONT_SIZE, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, hb.size.x)
 	elif player.slow_timer > 0.0:

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"deep_bell"
+display_name = "Deep Bell"
+description = "Upgrade: 75 damage and a 30% slow for 1 s, 9 s cooldown."
+delivery = 2
+damage = 75.0
+cast_time = 0.2
+recovery = 0.2
+cooldown = 9.0
+move_mult_while_casting = 0.5
+range = 3.2
+arc_degrees = 40.0
+interrupts = true
+slow_amount = 0.3
+slow_duration = 1.0

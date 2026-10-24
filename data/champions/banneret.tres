@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="1_ch"]
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="2_ab"]
+[ext_resource type="Resource" path="res://data/abilities/soldiers_reach.tres" id="3_b"]
+[ext_resource type="Resource" path="res://data/abilities/driving_thrust.tres" id="4_a"]
+[ext_resource type="Resource" path="res://data/abilities/rally_standard.tres" id="5_a"]
+[ext_resource type="Resource" path="res://data/abilities/break_their_line.tres" id="6_a"]
+[ext_resource type="Resource" path="res://data/abilities/ordered_retreat.tres" id="7_a"]
+
+[resource]
+script = ExtResource("1_ch")
+id = &"banneret"
+display_name = "Banneret"
+role = "Formation bruiser"
+hero_name = "Dain Arclow"
+title = "The Unsworn"
+ancestry = "Human fighter"
+lore = "He refused an order that would have spent his soldiers to renew an oath engine. The survivors still argue whether he is a traitor or their only honest officer."
+look = 8
+max_health = 720.0
+move_speed = 5.9
+radius = 0.5
+height = 1.9
+fountain_heal = 80.0
+basic_attack = ExtResource("3_b")
+abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("7_a")])
+passive = 21
+passive_name = "Hold Formation"
+passive_description = "A basic hit with an allied champion within 6 m builds a guard: 5% less damage taken per stack, up to 3. Each lasts 4 s."
+passive_value = 0.05
+passive_range = 6.0
+primary_color = Color(0.38, 0.36, 0.34, 1)
+accent_color = Color(0.85, 0.7, 0.4, 1)
+item_build = Array[StringName]([&"oathbound_plate", &"wayfarer_greaves", &"ember_edge", &"ash_hourglass"])
+adventurer_build = Array[StringName]([&"trailwardens_token", &"ashen_brand", &"ironstride_boots", &"oathkeepers_harness"])
+power = 0
