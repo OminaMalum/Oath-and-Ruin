@@ -1,5 +1,6 @@
 shader_type spatial;
-// Stylised leaf mass for ForestTree: mottled clumps from noise, darker
+render_mode cull_disabled;
+// Stylised leaf crown for ForestTree (one mesh of clumps, normals bent to the crown): mottled clumps from noise, darker
 // underneath, light leaking through at the edges, and a slow sway.
 
 uniform vec3 deep : source_color = vec3(0.7, 0.35, 0.1);
@@ -8,21 +9,21 @@ uniform float glow = 0.0;
 uniform sampler2D clumps : hint_default_white, filter_linear_mipmap, repeat_enable;
 
 varying vec3 wpos;
-varying vec3 lpos;
+varying vec3 wnorm;
 
 void vertex() {
-	lpos = VERTEX;
+	wnorm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float t = TIME * 0.9 + wpos.x * 0.15 + wpos.z * 0.11;
 	VERTEX += NORMAL * (sin(t) * 0.04 + sin(t * 2.3 + wpos.y) * 0.025);
-	VERTEX.x += sin(t * 0.7) * 0.05 * max(VERTEX.y, 0.0);
+	VERTEX.x += sin(t * 0.7) * 0.012 * max(VERTEX.y, 0.0);
 }
 
 void fragment() {
 	vec2 uv = wpos.xz * 0.18 + vec2(wpos.y * 0.21, -wpos.y * 0.17);
 	float c = texture(clumps, uv).r;
 	float c2 = texture(clumps, uv * 2.7 + 0.3).r;
-	float up = clamp(dot(normalize(lpos), vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5, 0.0, 1.0);
+	float up = clamp(dot(wnorm, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5, 0.0, 1.0);
 	// Cellular distance: 0 at a clump centre. Invert so clump centres catch light.
 	float k = clamp(1.0 - (c * 0.7 + c2 * 0.3) * 1.3, 0.0, 1.0);
 	vec3 col = mix(deep * 0.55, deep, smoothstep(0.15, 0.55, k));
