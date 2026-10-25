@@ -257,6 +257,7 @@ func _build_imported(path: String) -> void:
 		_gather = _gather_motes(unit.def.accent_color)
 		_muzzle.add_child(_gather)
 	_anim.play("idle")
+	ClothSim.attach(_model, champ)
 	unit.cast_started.connect(func(slot: int, a: AbilityDef, _t: Vector3) -> void:
 		if slot < 0 or slot >= AssetContract.SLOT_CLIPS.size():
 			return

@@ -101,7 +101,7 @@ def build_model(rig, M):
     k.lathe([(0.17, z(0.93)), (0.175, z(0.96)), (0.172, z(1.0))], "Team", seg=28, sx=1.14, sy=0.92)
     knot = Vector((-0.1, 0.152, z(0.965)))
     k.sphere(knot, 0.03, "Team", scale=(1.0, 0.7, 1.0), u=10, v=6)
-    s0, s1 = bn["sash"].head_local, bn["sash"].tail_local
+    s0, s1 = bn["sash"].head_local, bn["sash_1"].tail_local
     for dx, ln in ((-0.015, 1.0), (0.02, 0.8)):
         k.tube([s0 + Vector((dx, 0.01, -0.02)), s0.lerp(s1, 0.5 * ln) + Vector((dx * 1.5, 0.012, 0)), s0.lerp(s1, ln) + Vector((dx * 2, 0.01, 0))],
                [0.022, 0.024, 0.026], "Team", seg=6, flat=0.25)
