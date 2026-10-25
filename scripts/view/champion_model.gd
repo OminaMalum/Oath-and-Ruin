@@ -37,6 +37,8 @@ const LOOKS := {
 	"Tiefling": ["", Color(0.4, 0.3, 0.38), 0.6, 0.0, 1.0],
 	"Hair": ["", Color(0.07, 0.06, 0.08), 0.7, 0.0, 1.0],
 	"HairCopper": ["", Color(0.36, 0.14, 0.06), 0.7, 0.0, 1.0],
+	"Firbolg": ["", Color(0.46, 0.5, 0.56), 0.6, 0.0, 1.0],
+	"Moss": ["poly_wool_herringbone", Color(0.34, 0.33, 0.15), 1.0, 0.0, 3.0],
 	"Horn": ["", Color(0.17, 0.14, 0.13), 0.45, 0.0, 1.0],
 	"Stone": ["castle_wall_slates", Color(0.7, 0.68, 0.66), 0.9, 0.0, 4.0],
 }
