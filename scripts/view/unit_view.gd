@@ -44,6 +44,9 @@ var _muzzle: Node3D
 var _focus_light: OmniLight3D
 var _release := {}           # clip -> release seconds (from the exporter's timing file)
 var _cast_clip := ""
+var _layers: ModelAnimator  # layered clips: casts on the upper body while running
+var _react: BodyReact       # torso lean, stop rock and hit flinch on top of the clips
+var _last_yaw := 0.0
 var _run_pos := 0.0
 var _gather: CPUParticles3D  # motes drawn into the casting hand during a windup
 
@@ -109,6 +112,10 @@ func _build_placeholder() -> void:
 func _connect_signals() -> void:
 	unit.damaged.connect(func(_a: float, _s: Unit) -> void:
 		_flash = 1.0
+		if _react and _s != null and is_instance_valid(_s):
+			var d := _s.global_position - unit.global_position
+			var right := Vector3(cos(unit.aim_yaw), 0.0, -sin(unit.aim_yaw))
+			_react.hit(Vector2(d.dot(right), d.dot(unit.forward())), 1.0 if unit.def.kind == ChampionDef.Kind.CHAMPION else 0.6)
 		if visible and unit.def.kind != ChampionDef.Kind.STRUCTURE:
 			Fx.hit(self, global_position + Vector3(0, unit.def.height * 0.6, 0), unit.def.kind == ChampionDef.Kind.CHAMPION))
 	unit.cast_released.connect(func(_slot: int, _a: AbilityDef, _t: Vector3) -> void: _recoil = 1.0)
@@ -127,9 +134,9 @@ func _connect_signals() -> void:
 			visible = true
 			_body.rotation = Vector3.ZERO
 			_body.position = Vector3.ZERO
-			if _anim:
+			if _layers:
 				_cast_clip = ""
-				_anim.play("idle", 0.0))
+				_layers.revive())
 
 
 func _part(mesh: Mesh, m: StandardMaterial3D, pos: Vector3, rot_deg := Vector3.ZERO) -> MeshInstance3D:
@@ -256,7 +263,8 @@ func _build_imported(path: String) -> void:
 	if _muzzle and champ:
 		_gather = _gather_motes(unit.def.accent_color)
 		_muzzle.add_child(_gather)
-	_anim.play("idle")
+	_layers = ModelAnimator.new(_anim)
+	_react = BodyReact.attach(_model)
 	ClothSim.attach(_model, champ)
 	unit.cast_started.connect(func(slot: int, a: AbilityDef, _t: Vector3) -> void:
 		if slot < 0 or slot >= AssetContract.SLOT_CLIPS.size():
@@ -266,8 +274,7 @@ func _build_imported(path: String) -> void:
 			return
 		var rel := float(_release.get(clip, a.cast_time))
 		# The release frame lands exactly on the sim's release.
-		_anim.play(clip, 0.06, AssetContract.windup_speed(rel, a.cast_time))
-		_anim.seek(0.0, true)
+		_layers.cast(clip, AssetContract.windup_speed(rel, a.cast_time))
 		_cast_clip = clip)
 
 
@@ -306,39 +313,43 @@ func _pose_model(delta: float) -> void:
 	_anim_t += delta
 	if _death_t >= 0.0:
 		_death_t += delta
-		if _anim.current_animation != "death":
-			_anim.play("death", 0.08, 1.0)
+		_layers.die()
+		_layers.update(delta, 0.0, 1.0, false)
 		if _death_t > 1.7:
 			visible = false
 		return
 	var k := 1.0 - exp(-10.0 * delta)
-	if not _cast_clip.is_empty():
-		var playing := _anim.current_animation == _cast_clip and _anim.is_playing()
-		if playing or unit.cast_phase != Unit.CastPhase.NONE:
-			_model.rotation.y = lerp_angle(_model.rotation.y, 0.0, k)
-			return
+	var casting := not _cast_clip.is_empty() and (_layers.casting() or unit.cast_phase != Unit.CastPhase.NONE)
+	if not casting:
 		_cast_clip = ""
+		_layers.end_cast()
 	var v := Vector3(unit.velocity.x, 0.0, unit.velocity.z)
 	var top := maxf(unit.def.move_speed, 0.1)
+	if _react:
+		var turn := angle_difference(_last_yaw, unit.aim_yaw) / maxf(delta, 0.001)
+		var r := Vector3(cos(unit.aim_yaw), 0.0, -sin(unit.aim_yaw))
+		_react.drive(Vector2(v.dot(r), v.dot(unit.forward())) / top, turn)
+	_last_yaw = unit.aim_yaw
+	var moving := 0.0
+	var rate := 1.0
+	var want := 0.0
 	if v.length() > top * 0.12:
 		var fwd := unit.forward()
 		var right := Vector3(cos(unit.aim_yaw), 0.0, -sin(unit.aim_yaw))
 		var ang := atan2(v.dot(right), v.dot(fwd))
 		var back := absf(ang) > 2.0
-		var rate := clampf(v.length() / top, 0.5, 1.5)
-		_anim.play("run", 0.15, -rate if back else rate)  # same clip: keeps going, new rate
-		# Strafing: the body turns toward the way it runs (up to 50 degrees),
+		moving = 1.0
+		rate = clampf(v.length() / top, 0.5, 1.5) * (-1.0 if back else 1.0)
+		# Strafing: the body turns toward the way it runs (up to 50 degrees,
+		# less while casting so the attack still faces the aim);
 		# backpedalling plays the cycle in reverse facing forward.
-		var want := 0.0 if back else -clampf(ang, -0.87, 0.87)
-		_model.rotation.y = lerp_angle(_model.rotation.y, want, k)
-		var pos := _anim.current_animation_position / maxf(_anim.current_animation_length, 0.01)
+		want = 0.0 if back else -clampf(ang, -0.87, 0.87) * (0.35 if casting else 1.0)
+		var pos := _layers.run_phase
 		if unit.def.kind == ChampionDef.Kind.CHAMPION and (floori((pos - 0.05) * 2.0) != floori((_run_pos - 0.05) * 2.0)):
 			_footstep()
 		_run_pos = pos
-	else:
-		if _anim.current_animation != "idle":
-			_anim.play("idle", 0.2, 1.0)
-		_model.rotation.y = lerp_angle(_model.rotation.y, 0.0, k)
+	_model.rotation.y = lerp_angle(_model.rotation.y, want, k)
+	_layers.update(delta, moving, rate, casting)
 
 
 ## Team ring on the ground under a champion, readable from the camera.

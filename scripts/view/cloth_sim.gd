@@ -12,7 +12,7 @@ extends Node
 ## Stiffness is low enough to trail on a sprint, high enough that cloth
 ## never flaps across the silhouette in a fight.
 const CHAINS := {
-	"cape": [1.4, 0.22, 1.3, 0.06, 0.62],
+	"cape": [1.8, 0.22, 1.3, 0.06, 0.62],
 	"skirt_f": [2.6, 0.3, 0.8, 0.05, 0.5],
 	"skirt_b": [2.2, 0.3, 0.8, 0.05, 0.51],
 	"sash": [0.9, 0.4, 0.8, 0.03, 0.45],
