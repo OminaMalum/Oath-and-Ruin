@@ -18,12 +18,26 @@ const VIEWS := {
 	"champ_1": [], "champ_2": [], "champ_3": [], "champ_4": [], "champ_5": [], "champ_6": [],
 }
 
+## The same review set on the three lane map (--mode=match3).
+const VIEWS3 := {
+	"t3_tower_mid": [Vector3(9.5, 7.5, 48.0), Vector3(0, 3.0, 36.0)],
+	"t3_lane_mid": [Vector3(0, 11.0, 18.0), Vector3(0, 0.0, -2.0)],
+	"t3_lane_east": [Vector3(36.0, 11.0, 22.0), Vector3(36.0, 0.0, 0.0)],
+	"t3_jungle": [Vector3(18.0, 9.0, 30.0), Vector3(18.0, 0.5, 14.0)],
+	"t3_camp": [Vector3(-8.0, 9.0, 10.0), Vector3(-18.0, 0.5, 0.0)],
+	"t3_base": [Vector3(0, 16.0, 40.0), Vector3(0, 1.0, 66.0)],
+	"t3_lane_low": [Vector3(4.0, 2.4, 7.0), Vector3(0, 0.8, -1.0)],
+	"t3_overview": [Vector3(60.0, 70.0, 70.0), Vector3(0, 0, 10.0)],
+	"champ_1": [], "champ_2": [], "champ_3": [],
+}
+
 var _main: Node
 var _cam: Camera3D
 var _dir := ""
 var _queue: Array = []
 var _wait := 0
 var _started := false
+var _views: Dictionary = VIEWS
 
 
 func _initialize() -> void:
@@ -34,7 +48,11 @@ func _initialize() -> void:
 		elif a.begins_with("--only="):
 			only = a.get_slice("=", 1)
 	DirAccess.make_dir_recursive_absolute(_dir)
-	for k: String in VIEWS:
+	var views := VIEWS
+	if "--mode=match3" in OS.get_cmdline_user_args():
+		views = VIEWS3
+	_views = views
+	for k: String in views:
 		if only.is_empty() or k in only.split(","):
 			_queue.append(k)
 	_main = load("res://scenes/main.tscn").instantiate()
@@ -96,7 +114,7 @@ func _next() -> void:
 		_cam.make_current()
 		_wait = 4
 		return
-	var v: Array = VIEWS[k]
+	var v: Array = _views[k]
 	_cam.global_position = v[0]
 	_cam.look_at(v[1])
 	_cam.make_current()
