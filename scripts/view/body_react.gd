@@ -51,6 +51,16 @@ func hit(from_dir: Vector2, strength := 1.0) -> void:
 	_vel += Vector2(d.y, -d.x) * HIT * clampf(strength, 0.3, 1.5)
 
 
+## A cast's windup draws the torso back a little ...
+func anticipate() -> void:
+	_vel.x += 0.9
+
+
+## ... and the release throws it into the strike, settling after.
+func strike() -> void:
+	_vel.x -= 2.2
+
+
 func _process_modification_with_delta(delta: float) -> void:
 	var sk := get_skeleton()
 	if sk == null:

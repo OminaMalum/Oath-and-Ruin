@@ -118,7 +118,10 @@ func _connect_signals() -> void:
 			_react.hit(Vector2(d.dot(right), d.dot(unit.forward())), 1.0 if unit.def.kind == ChampionDef.Kind.CHAMPION else 0.6)
 		if visible and unit.def.kind != ChampionDef.Kind.STRUCTURE:
 			Fx.hit(self, global_position + Vector3(0, unit.def.height * 0.6, 0), unit.def.kind == ChampionDef.Kind.CHAMPION))
-	unit.cast_released.connect(func(_slot: int, _a: AbilityDef, _t: Vector3) -> void: _recoil = 1.0)
+	unit.cast_released.connect(func(_slot: int, _a: AbilityDef, _t: Vector3) -> void:
+		_recoil = 1.0
+		if _react:
+			_react.strike())
 	if unit.def.kind == ChampionDef.Kind.STRUCTURE:
 		unit.died.connect(func(_k: Unit) -> void:
 			Fx.collapse(self, global_position, Palette.team_color(unit.team), 7.0 if unit.def.look == ChampionDef.Look.TOWER else 3.6)
@@ -275,6 +278,8 @@ func _build_imported(path: String) -> void:
 		var rel := float(_release.get(clip, a.cast_time))
 		# The release frame lands exactly on the sim's release.
 		_layers.cast(clip, AssetContract.windup_speed(rel, a.cast_time))
+		if _react:
+			_react.anticipate()
 		_cast_clip = clip)
 
 
