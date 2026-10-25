@@ -4,7 +4,8 @@ extends UnitController
 ## Q: for a ground-target ability, hold to preview where it lands and release
 ## to cast; for any other ability (dash, ward) Q casts on press.
 ## Right mouse: cast the ability immediately (no preview).
-## T: recall to the fountain (stand still; moving or casting cancels it).
+## T (or a click on the HUD recall button): recall to the fountain (stand
+## still; moving or casting cancels it).
 ## B: open or close the shop panel; while it is open, 1 to 4 buy an item.
 ## With the adventurer catalog the shop frees the mouse: click an item to buy
 ## it, right click an owned one to sell it, 1 buys the suggested next step.
@@ -17,6 +18,8 @@ static var shop_open: bool = false
 ## Clicks on the shop panel (the HUD sets them), sent with the next command.
 static var pending_buy: int = 0
 static var pending_sell: int = 0
+## A click on the HUD recall button, sent with the next command.
+static var pending_recall: bool = false
 
 
 ## Opens or closes the shop. The adventurer shop needs the mouse pointer.
@@ -40,6 +43,9 @@ func get_command(unit: Unit) -> UnitCommand:
 	c.sell_item = pending_sell
 	pending_buy = 0
 	pending_sell = 0
+	if pending_recall:
+		c.buttons |= UnitCommand.BTN_RECALL
+		pending_recall = false
 	if shop_open and ItemShop.adventurer() and Input.is_action_just_pressed("buy_1"):
 		c.buy_item = ItemShop.next_step(unit)
 	if not rig.mouse_captured():
