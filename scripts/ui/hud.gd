@@ -22,7 +22,14 @@ var _hits_taken: Array[Dictionary] = []  # {from: Vector3, t}
 var _font: Font
 ## Adventurer shop hit boxes from the last draw: {rect, buy|sell, index}.
 var _shop_hits: Array[Dictionary] = []
-var _shop_hover: ItemDef
+## Item under the mouse (shop, own items or the HUD item row) and where.
+var _tip_item: ItemDef
+var _mouse := Vector2.ZERO
+## HUD hit boxes outside the shop: item row tiles and the recall button.
+var _hud_hits: Array[Dictionary] = []
+## Screenshots: hold the Alt panel open, or show the card of own item N.
+var force_details: bool = false
+var force_tip: int = 0
 ## Adventurer shop page: 0 parts (starters, boots, components), 1 finished.
 var shop_tab: int = 0
 
@@ -189,7 +196,7 @@ func _draw() -> void:
 	# Own health, bottom centre, on one translucent panel with the ability slots.
 	var following := rig.follow_unit_yaw
 	var hb := Rect2(Vector2(c.x - 220, vs.y - 128), Vector2(440, 26))
-	draw_rect(Rect2(Vector2(c.x - 470, vs.y - 140), Vector2(940, 128)), Color(0.06, 0.05, 0.04, 0.55))
+	draw_rect(Rect2(Vector2(c.x - 470, vs.y - 140), Vector2(1000 if player.shop_point.is_finite() else 940, 128)), Color(0.06, 0.05, 0.04, 0.55))
 	_bar(hb, player.health / player.max_health, Palette.SELF_HEALTH)
 	if player.shield > 0.0:
 		# The shield sits after the health, pale gold, as far as the bar goes.
@@ -297,6 +304,11 @@ func _draw() -> void:
 		_text(Vector2(rr.position.x, rr.position.y - 10), "Recalling home  %.1f" % player.recall_timer, FONT_SIZE, Palette.TEAL, HORIZONTAL_ALIGNMENT_CENTER, rr.size.x)
 		draw_rect(rr.grow(2), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(rr.position, Vector2(rr.size.x * f, rr.size.y)), Palette.TEAL)
+	_hud_hits.clear()
+	if player.shop_point.is_finite():
+		_draw_recall_button(Rect2(Vector2(x0 + n * (slot_w + 12), vs.y - 92), Vector2(110, 70)))
+		if not player.upgrade_pending:
+			_draw_item_row(Rect2(Vector2(c.x - 540, vs.y - 182), Vector2(470, 38)))  # clear of the objective marker at the centre
 	if _notice_t > 0.0:
 		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if player.is_stunned():
@@ -336,8 +348,8 @@ func _draw() -> void:
 		var fl := "Following %s (%s)" % [player.def.display_name, Palette.TEAM_NAMES[player.team]]
 		if not player.alive:
 			fl += ", respawning in %d s" % ceili(maxf(player.respawn_timer, 0.0))
-		draw_rect(Rect2(Vector2(16, vs.y - 182), Vector2(420, 30)), Color(0.06, 0.05, 0.04, 0.7))
-		_text(Vector2(24, vs.y - 160), fl, SMALL, Color(0.92, 0.9, 0.84), HORIZONTAL_ALIGNMENT_LEFT)
+		draw_rect(Rect2(Vector2(16, vs.y - 262), Vector2(_font.get_string_size(fl, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL).x + 24, 30)), Color(0.06, 0.05, 0.04, 0.7))
+		_text(Vector2(24, vs.y - 240), fl, SMALL, Color(0.92, 0.9, 0.84), HORIZONTAL_ALIGNMENT_LEFT)
 
 	if not status.is_empty():
 		_text(Vector2(0, vs.y * 0.22), status, 30, Palette.AMBER, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
@@ -358,6 +370,7 @@ func _draw() -> void:
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			"B  shop at your fountain or while dead, then 1 to 4 to buy" if player.shop_point.is_finite() else "",
 			"T  recall home (stand still %d s)     Tab (hold)  scoreboard" % roundi(Unit.ECONOMY.recall_time) if player.shop_point.is_finite() else "",
+			"Alt (hold)  item details     Mouse over an item in the shop  its details" if player.shop_point.is_finite() else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  menu",
 			("%s: %s" % [player.def.passive_name, player.def.passive_description]) if not player.def.passive_name.is_empty() else "",
@@ -366,6 +379,12 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2(16, 16), Vector2(720, 14 + lines.size() * 30)), Color(0.06, 0.05, 0.04, 0.75))
 		for i in lines.size():
 			_text(Vector2(24, 40 + i * 30), lines[i], FONT_SIZE, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_LEFT)
+	if (force_details or Input.is_action_pressed("item_details")) and not shop and player.shop_point.is_finite():
+		_draw_item_details(vs, c)
+	if force_tip > 0 and force_tip <= player.items.size():
+		_draw_tooltip(player.items[force_tip - 1], Vector2(c.x - 300, vs.y - 170), vs)
+	elif _tip_item and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
+		_draw_tooltip(_tip_item, _mouse, vs)
 	# Frame rate: hidden in movie writer captures, where it would only measure
 	# how fast frames were written offline, not how the game runs.
 	if not OS.has_feature("movie"):
@@ -518,8 +537,7 @@ func _draw_adventurer_shop(vs: Vector2, c: Vector2) -> void:
 			_shop_hits.append({"rect": r, "sell": s + 1, "item": it})
 		else:
 			_text(r.position + Vector2(0, 31), "empty", SMALL, Color(0.5, 0.48, 0.45), HORIZONTAL_ALIGNMENT_CENTER, sw)
-	if _shop_hover:
-		_text(Vector2(x0, panel.end.y - 14.0), "%s:  %s" % [_shop_hover.display_name, _shop_hover.description], 20, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_LEFT, w - 32)
+	_text(Vector2(x0, panel.end.y - 14.0), "Mouse over an item for its details", SMALL, Color(0.72, 0.70, 0.66), HORIZONTAL_ALIGNMENT_LEFT, w - 32)
 
 
 ## Which shop column an adventurer item sits in.
@@ -573,15 +591,23 @@ func _price_text(index: int, plan: Dictionary) -> String:
 
 
 func _input(event: InputEvent) -> void:
-	if not (HumanController.shop_open and ItemShop.adventurer()) or player == null:
+	if player == null:
 		return
 	if event is InputEventMouseMotion:
-		_shop_hover = null
-		for h in _shop_hits:
+		_mouse = event.position
+		_tip_item = null
+		for h in _hud_hits + _shop_hits:
 			if (h.rect as Rect2).has_point(event.position) and h.has("item"):
-				_shop_hover = h.item
+				_tip_item = h.item
 		return
-	if not (event is InputEventMouseButton and event.pressed):
+	if not (event is InputEventMouseButton and event.pressed) or Input.mouse_mode != Input.MOUSE_MODE_VISIBLE:
+		return
+	for h in _hud_hits:
+		if h.has("recall") and event.button_index == MOUSE_BUTTON_LEFT and (h.rect as Rect2).has_point(event.position):
+			HumanController.pending_recall = true
+			get_viewport().set_input_as_handled()
+			return
+	if not (HumanController.shop_open and ItemShop.adventurer()):
 		return
 	for h in _shop_hits:
 		if not (h.rect as Rect2).has_point(event.position):
@@ -613,3 +639,186 @@ static func passive_readout(u: Unit) -> String:
 				var other := u.get_slot(3 - u.refrain_slot)
 				return "Refrain: %s next" % other.display_name if other else ""
 	return ""
+
+
+## Recall, right of the ability bar: key T, a teal edge when it can start,
+## filling while it runs. Clickable while the mouse pointer is free.
+func _draw_recall_button(r: Rect2) -> void:
+	var home := player.can_shop()
+	var running := player.recall_timer > 0.0
+	var free := player.alive and not home and not player.is_stunned() and not player.is_casting()
+	draw_rect(r.grow(2), Palette.BRASS if running else (Palette.TEAL if free else Color(0.08, 0.07, 0.06, 0.9)))
+	draw_rect(r, Color(0.16, 0.14, 0.12, 0.96))
+	if running:
+		var f := 1.0 - player.recall_timer / Unit.ECONOMY.recall_time
+		draw_rect(Rect2(r.position, Vector2(r.size.x * f, r.size.y)), Color(Palette.TEAL, 0.35))
+	elif not free:
+		draw_rect(r, Color(0.3, 0.3, 0.3, 0.5))
+	_text(r.position + Vector2(0, 24), "Recall", SMALL, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+	var label := "%.1f" % player.recall_timer if running else ("Home" if home and player.alive else "T")
+	_text(r.position + Vector2(0, 58), label, 26 if running else FONT_SIZE, Palette.TEAL if free or running else Color(0.6, 0.6, 0.6), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+	_hud_hits.append({"rect": r, "recall": true})
+
+
+## Own items in a row above the health bar: short names, a stripe in the
+## shop column's colour. Hold Alt for the full details.
+func _draw_item_row(area: Rect2) -> void:
+	var slots: int = Unit.ECONOMY.slots
+	if slots <= 0:
+		return
+	var gap := 8.0
+	var tw := (area.size.x - gap * (slots - 1)) / slots
+	for s in slots:
+		var r := Rect2(area.position + Vector2(s * (tw + gap), 0), Vector2(tw, area.size.y))
+		draw_rect(r, Color(0.06, 0.05, 0.04, 0.7))
+		if s >= player.items.size():
+			continue
+		var it: ItemDef = player.items[s]
+		draw_rect(Rect2(r.position, Vector2(4, r.size.y)), _group_color(it))
+		var nm := it.short_name if not it.short_name.is_empty() else it.display_name
+		var size := SMALL
+		while size > 14 and _font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > tw - 12:
+			size -= 1
+		_text(r.position + Vector2(4, 26), nm, size, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_CENTER, tw - 4)
+		_hud_hits.append({"rect": r, "item": it})
+	if not player.items.is_empty():
+		_text(area.position + Vector2(0, -8), "Alt  item details", SMALL, Color(0.80, 0.77, 0.70), HORIZONTAL_ALIGNMENT_LEFT, area.size.x)
+
+
+static func _group_color(it: ItemDef) -> Color:
+	match shop_group(it):
+		"weapon":
+			return Palette.AMBER
+		"spell":
+			return Palette.TEAL
+		"defence":
+			return Color(0.75, 0.72, 0.66)
+		"utility":
+			return Palette.GOLD
+	return Color(0.55, 0.52, 0.48)
+
+
+## Held Alt: every own item, two columns of three, stats on one line and
+## the passive below, in big type.
+func _draw_item_details(vs: Vector2, c: Vector2) -> void:
+	var w := minf(vs.x - 40.0, 1240.0)
+	var items := player.items
+	var x := c.x - w * 0.5
+	var y := 64.0
+	var col_w := (w - 48.0) * 0.5
+	var lh := _font.get_height(20)
+	var heights: Array[float] = []
+	for it: ItemDef in items:
+		heights.append(40.0 + _text_lines(_item_body(it, true), col_w - 24, 20) * lh + 14.0)
+	var col_h := [0.0, 0.0]
+	for k in heights.size():
+		col_h[mini(k / 3, 1)] += heights[k]
+	var panel := Rect2(Vector2(x, y), Vector2(w, 56.0 + maxf(maxf(col_h[0], col_h[1]), 40.0)))
+	draw_rect(panel.grow(2), Palette.BRASS)
+	draw_rect(panel, Color(0.10, 0.09, 0.08, 0.94))
+	_text(Vector2(x + 16, y + 34), "Your items", 26, Palette.GOLD, HORIZONTAL_ALIGNMENT_LEFT, w - 32)
+	if items.is_empty():
+		_text(Vector2(x + 16, y + 76), "No items yet. Press B at your fountain to shop.", 20, Color(0.85, 0.82, 0.75), HORIZONTAL_ALIGNMENT_LEFT, w - 32)
+		return
+	var cy := [y + 52.0, y + 52.0]
+	for k in items.size():
+		var col := mini(k / 3, 1)
+		var it: ItemDef = items[k]
+		var bx := x + 16.0 + col * (col_w + 16.0)
+		draw_rect(Rect2(Vector2(bx, cy[col] + 6), Vector2(4, heights[k] - 16)), _group_color(it))
+		_text(Vector2(bx + 14, cy[col] + 30), it.display_name, 24, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_LEFT, col_w - 20)
+		draw_multiline_string(_font, Vector2(bx + 14, cy[col] + 40 + _font.get_ascent(20)), _item_body(it, true), HORIZONTAL_ALIGNMENT_LEFT, col_w - 24, 20, -1, Color(0.88, 0.86, 0.80))
+		cy[col] += heights[k]
+
+
+## Stats, recipe and the passive, one fact per line. Compact (the Alt
+## panel): stats share one line and the recipe is left out.
+func _item_body(it: ItemDef, compact := false) -> String:
+	var lines := item_stat_lines(it)
+	if compact and lines.size() > 1:
+		lines = PackedStringArray(["    ".join(lines)])
+	if it.kind == ItemDef.Kind.STARTER:
+		lines.insert(0, "Starter item")
+	if not it.recipe.is_empty() and not compact:
+		var parts: PackedStringArray = []
+		for r in it.recipe:
+			parts.append((r as ItemDef).display_name)
+		lines.append("Built from " + " + ".join(parts))
+	var extra := item_passive_text(it)
+	if not extra.is_empty():
+		lines.append("Passive: " + extra)
+	elif lines.is_empty():
+		lines.append(it.description)
+	return "\n".join(lines)
+
+
+## The part of the description after its stats sentence (the passive), or
+## empty when the item has no passive. Descriptions lead with the stats.
+static func item_passive_text(it: ItemDef) -> String:
+	if it.passive == ItemDef.Passive.NONE:
+		return ""
+	var at := it.description.find(". ")
+	return it.description.substr(at + 2) if at >= 0 else it.description
+
+
+## Lines `text` takes when wrapped to `width` (word wrap, rounded up a little).
+func _text_lines(text: String, width: float, size: int) -> int:
+	var n := 0
+	for line in text.split("\n"):
+		var words := line.split(" ")
+		var cur := ""
+		var count := 1
+		for wd in words:
+			var test := wd if cur.is_empty() else cur + " " + wd
+			if _font.get_string_size(test, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > width and not cur.is_empty():
+				count += 1
+				cur = wd
+			else:
+				cur = test
+		n += count
+	return n
+
+
+## "+30 weapon power", "+15% attack speed" ... for every bonus the item has.
+static func item_stat_lines(it: ItemDef) -> PackedStringArray:
+	var out: PackedStringArray = []
+	if it.weapon_power > 0.0:
+		out.append("+%d weapon power" % roundi(it.weapon_power))
+	if it.spell_power > 0.0:
+		out.append("+%d spell power" % roundi(it.spell_power))
+	if it.health > 0.0:
+		out.append("+%d health" % roundi(it.health))
+	if it.armor > 0.0:
+		out.append("+%d armor" % roundi(it.armor))
+	if it.magic_resist > 0.0:
+		out.append("+%d magic resist" % roundi(it.magic_resist))
+	if it.attack_speed > 0.0:
+		out.append("+%d%% attack speed" % roundi(it.attack_speed * 100.0))
+	if it.haste > 0.0:
+		out.append("+%d haste" % roundi(it.haste))
+	if it.damage > 0.0:
+		out.append("+%d%% damage" % roundi(it.damage * 100.0))
+	if it.cooldown > 0.0:
+		out.append("%d%% shorter cooldowns" % roundi(it.cooldown * 100.0))
+	if it.move_speed > 0.0:
+		out.append("+%d%% move speed" % roundi(it.move_speed * 100.0))
+	return out
+
+
+## The hover card: name, price, then the item body. Sits beside the pointer
+## and stays on screen.
+func _draw_tooltip(it: ItemDef, at: Vector2, vs: Vector2) -> void:
+	var w := 420.0
+	var body := _item_body(it)
+	var bh := _text_lines(body, w - 32, 20) * _font.get_height(20)
+	var size := Vector2(w, 78.0 + bh)
+	var pos := at + Vector2(24, 24)
+	if pos.x + size.x > vs.x - 8.0:
+		pos.x = at.x - 24.0 - size.x
+	pos.y = clampf(pos.y, 8.0, vs.y - size.y - 8.0)
+	var r := Rect2(pos, size)
+	draw_rect(r.grow(2), Palette.BRASS)
+	draw_rect(r, Color(0.08, 0.07, 0.06, 0.97))
+	_text(r.position + Vector2(16, 32), it.display_name, 24, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_LEFT, w - 140)
+	_text(r.position + Vector2(0, 32), "%d gold" % it.cost, 20, Palette.GOLD, HORIZONTAL_ALIGNMENT_RIGHT, w - 16)
+	draw_multiline_string(_font, r.position + Vector2(16, 64), body, HORIZONTAL_ALIGNMENT_LEFT, w - 32, 20, -1, Color(0.88, 0.86, 0.80))

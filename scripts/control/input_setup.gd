@@ -15,6 +15,7 @@ const KEYS := {
 	"shop": [KEY_B],
 	"recall": [KEY_T],
 	"scoreboard": [KEY_TAB],
+	"item_details": [KEY_ALT],
 	"buy_1": [KEY_1],
 	"buy_2": [KEY_2],
 	"buy_3": [KEY_3],

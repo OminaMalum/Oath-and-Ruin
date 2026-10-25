@@ -23,6 +23,8 @@ extends Node3D
 ##   --map=three                        match: the rough three lane test map
 ##   --shot=PATH [--shot-frames=N]      save a screenshot and quit
 ##   --shop[=finished]                  open the shop panel (screenshots), on its second page
+##   --details                          hold the Alt item details panel open (screenshots)
+##   --tip=N                            show the hover card of own item N (screenshots)
 ##   --scoreboard                       show the scoreboard (screenshots)
 ##   --warp=S                           run without drawing until S seconds (needs --fixed-fps 60)
 ##   --follow=N                         spectate: follow champion N (0-2 Oath, 3-5 Ruin)
@@ -281,6 +283,8 @@ func _setup_presentation(local_unit: Unit) -> void:
 	hud.setup(authority, local_unit, rig, bot if net == null and match_ctl == null else null)
 	if args.get("shop", "") == "finished":
 		hud.shop_tab = 1  # screenshots of the second shop page
+	hud.force_details = args.has("details")
+	hud.force_tip = int(args.get("tip", "0"))
 	if DisplayServer.get_name() != "headless" and not rig.follow_unit_yaw:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var top := CanvasLayer.new()

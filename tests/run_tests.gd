@@ -70,7 +70,7 @@ func _run() -> void:
 		"test_barkskin", "test_phase6_bot_match", "test_three_lane_match",
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
-		"test_net_command_queue", "test_asset_contract",
+		"test_net_command_queue", "test_asset_contract", "test_item_cards",
 	]
 	for t: String in tests:
 		_make_world()
@@ -1923,6 +1923,24 @@ func test_net_command_queue() -> void:
 ## Fixtures are Blender 5.2 exports of the template rig (tools/blender/
 ## make_fixtures.sh): one that follows the contract and four with the usual
 ## mistakes. Each mistake must be caught with a message that says what to fix.
+## Item cards (hover and Alt): every adventurer item shows its stats, and
+## an item with a passive shows the passive part of its text, not the stats.
+func test_item_cards() -> void:
+	var eco: EconomyDef = load("res://data/economy_adventurer.tres")
+	var bare := 0
+	for it: ItemDef in eco.items:
+		var stats := Hud.item_stat_lines(it)
+		var extra := Hud.item_passive_text(it)
+		if stats.is_empty() and extra.is_empty():
+			bare += 1
+		if it.passive != ItemDef.Passive.NONE:
+			check(not extra.is_empty() and not extra.begins_with("+"), "%s card shows its passive" % it.id)
+	check(bare == 0, "every item card has stats or a passive (%d bare)" % bare)
+	var duel: ItemDef = load("res://data/items/adventurer/duelists_measure.tres")
+	check(Hud.item_stat_lines(duel) == PackedStringArray(["+18 weapon power", "+15% attack speed"]), "Duelist's Measure lists its two stats")
+	check(InputMap.has_action("item_details"), "Alt is bound to item details")
+
+
 func test_asset_contract() -> void:
 	var dir := ProjectSettings.globalize_path("res://tests/fixtures/assets/")
 	var cases := {
