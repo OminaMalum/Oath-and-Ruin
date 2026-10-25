@@ -308,7 +308,7 @@ func _draw() -> void:
 	if player.shop_point.is_finite():
 		_draw_recall_button(Rect2(Vector2(x0 + n * (slot_w + 12), vs.y - 92), Vector2(110, 70)))
 		if not player.upgrade_pending:
-			_draw_item_row(Rect2(Vector2(c.x - 470, vs.y - 182), Vector2(480, 38)))
+			_draw_item_row(Rect2(Vector2(c.x - 540, vs.y - 182), Vector2(470, 38)))  # clear of the objective marker at the centre
 	if _notice_t > 0.0:
 		_text(Vector2(0, vs.y - 140), _notice, FONT_SIZE, Color(1.0, 0.85, 0.55, clampf(_notice_t * 2.0, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if player.is_stunned():
