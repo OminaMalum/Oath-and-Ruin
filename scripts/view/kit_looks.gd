@@ -11,7 +11,7 @@ extends RefCounted
 const BOLT := {
 	&"longbow": "arrow", &"charged_shot": "arrow",
 	&"spark_bolt": "spark",
-	&"binding_chains": "chain",
+	&"binding_chains": "chain", &"debt_collector": "chain",
 	&"ember_knife": "knife",
 	&"grave_bolt": "wisp",
 	&"lute_note": "note", &"lure": "note",
@@ -24,7 +24,10 @@ const AREA := {
 	&"bramble": "thorns", &"thornstorm": "thorns",
 	&"grasping_earth": "rocks",
 	&"grave_roar": "smoke", &"grave_pact": "smoke",
+	&"covenant_severed": "severed",
 }
+## Ability id -> what a melee swing adds to the crescent.
+const MELEE := {&"pactlash": "lash", &"break_the_seal": "seal"}
 
 static var rng := RandomNumberGenerator.new()
 static var _mats := {}
@@ -36,6 +39,10 @@ static func bolt_look(a: AbilityDef) -> String:
 
 static func area_look(a: AbilityDef) -> String:
 	return AREA.get(a.id, "")
+
+
+static func melee_look(a: AbilityDef) -> String:
+	return MELEE.get(a.id, "")
 
 
 # ------------------------------------------------------------------ materials
@@ -192,47 +199,62 @@ static func _spark(host: Node3D, col: Color, fx: Node3D) -> Dictionary:
 
 static func _chain(host: Node3D, col: Color, fx: Node3D) -> Dictionary:
 	hide_plain(host)
-	var iron := lit(Color(0.36, 0.36, 0.4), 0.45, 0.8, col, 0.5)
+	var iron := chain_iron(col)
 	# The hook at the head.
 	host.add_child(_mesh(_cyl(0.0, 0.09, 0.26, 6), iron, Vector3(0, 0, -0.1), Vector3(-90, 0, 0)))
 	host.add_child(_mesh(_sphere(0.16), SpellFx._add_mat(col, 1.4)))
-	var links := Node3D.new()
-	fx.add_child(links)
+	return {"links": chain_links(fx, col, 120), "trail": null}
+
+
+static func chain_iron(col: Color) -> StandardMaterial3D:
+	return lit(Color(0.36, 0.36, 0.4), 0.45, 0.8, col, 0.5)
+
+
+## A chain of up to `count` links drawn as one multimesh (one draw call);
+## lay_chain places them.
+static func chain_links(fx: Node3D, col: Color, count: int, size := 1.0) -> MultiMeshInstance3D:
 	var torus := TorusMesh.new()
-	torus.inner_radius = 0.035
-	torus.outer_radius = 0.07
+	torus.inner_radius = 0.035 * size
+	torus.outer_radius = 0.07 * size
 	torus.rings = 8
 	torus.ring_segments = 4
-	for i in 70:
-		var l := _mesh(torus, iron)
-		l.visible = false
-		links.add_child(l)
-	return {"links": links, "trail": null}
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = torus
+	mm.instance_count = count
+	mm.visible_instance_count = 0
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = mm
+	mi.material_override = chain_iron(col)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.top_level = true
+	fx.add_child(mi)
+	mi.global_transform = Transform3D.IDENTITY
+	mi.set_meta("step", 0.12 * size)
+	return mi
 
 
-## Called each frame for chain bolts: lay the links from the caster to the head.
-static func lay_chain(links: Node3D, from: Vector3, to: Vector3) -> void:
+## Lays the links from `from` to `to`. sag < 0 picks a thrown chain's sag.
+static func lay_chain(links: MultiMeshInstance3D, from: Vector3, to: Vector3, sag := -1.0) -> void:
+	var mm := links.multimesh
 	var d := to - from
 	var len := d.length()
 	if len < 0.05:
+		mm.visible_instance_count = 0
 		return
-	var step := 0.12
-	var n := mini(int(len / step), links.get_child_count())
+	var step: float = links.get_meta("step", 0.12)
+	var n := mini(int(len / step), mm.instance_count)
 	var dir := d / len
 	var up := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.95 else Vector3.FORWARD
-	for i in links.get_child_count():
-		var l := links.get_child(i) as Node3D
-		l.visible = i < n
-		if i >= n:
-			continue
-		var p := from + dir * (len * (float(i) + 0.5) / float(n))
-		# A slight sag in the middle, as a thrown chain would have.
+	var b0 := Basis.looking_at(dir, up)
+	var b1 := b0 * Basis(Vector3.FORWARD, PI * 0.5)
+	var s := minf(len * 0.03, 0.35) if sag < 0.0 else sag
+	for i in n:
 		var f := (float(i) + 0.5) / float(n)
-		p.y -= sin(f * PI) * minf(len * 0.03, 0.35)
-		l.global_position = p
-		l.look_at(p + dir, up)
-		if i % 2 == 1:
-			l.rotate_object_local(Vector3.FORWARD, PI * 0.5)
+		# A slight sag in the middle, as a thrown chain would have.
+		var p := from + d * f - Vector3(0, sin(f * PI) * s, 0)
+		mm.set_instance_transform(i, Transform3D(b1 if i % 2 == 1 else b0, p))
+	mm.visible_instance_count = n
 
 
 static func _knife(host: Node3D, col: Color, fx: Node3D) -> Dictionary:
@@ -544,3 +566,164 @@ static func swoosh(range_m: float, arc_deg: float, col: Color, height: float) ->
 	m.albedo_color = Color(2.2, 2.2, 2.2, 1.0)
 	var mi := _mesh(am, m)
 	return mi
+
+
+# ------------------------------------------------------------------ Chainbound
+
+## Lays links along a polyline, evenly spaced by the chain's step.
+static func lay_path(links: MultiMeshInstance3D, pts: Array[Vector3]) -> void:
+	var mm := links.multimesh
+	var step: float = links.get_meta("step", 0.12)
+	var n := 0
+	var carry := 0.0
+	for s in pts.size() - 1:
+		var a := pts[s]
+		var d := pts[s + 1] - a
+		var len := d.length()
+		if len < 0.001:
+			continue
+		var dir := d / len
+		var up := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.95 else Vector3.FORWARD
+		var b0 := Basis.looking_at(dir, up)
+		var b1 := b0 * Basis(Vector3.FORWARD, PI * 0.5)
+		var t := carry
+		while t < len and n < mm.instance_count:
+			mm.set_instance_transform(n, Transform3D(b1 if n % 2 == 1 else b0, a + dir * t))
+			n += 1
+			t += step
+		carry = t - len
+	mm.visible_instance_count = n
+
+
+## Pactlash: the oath chain cracks round like a whip, its tip trailing the
+## swing. Returns {"node", "tick"} for SpellFx's "tick" fade.
+static func lash(fx: Node3D, at: Vector3, yaw: float, range_m: float, arc_deg: float, height: float, col: Color) -> Dictionary:
+	var links := chain_links(fx, col, 40, 1.25)
+	var tip := _mesh(_sphere(0.1), SpellFx._add_mat(col.lightened(0.3), 2.0))
+	links.add_child(tip)
+	var half := deg_to_rad(arc_deg) * 0.5
+	var rot := Basis(Vector3.UP, yaw)
+	var tick := func(k: float, _dt: float) -> void:
+		var swing := 1.0 - pow(1.0 - minf(k / 0.55, 1.0), 2.0)
+		var reach := range_m * 0.95 * (1.0 - clampf((k - 0.7) / 0.3, 0.0, 1.0))
+		var pts: Array[Vector3] = []
+		for i in 9:
+			var f := float(i) / 8.0
+			# The tip lags the hand, so the chain bows back along the swing.
+			var ang := -half + half * 2.0 * swing - f * f * 0.6 * (1.0 - swing * 0.6)
+			var r := lerpf(0.35, maxf(reach, 0.36), f)
+			pts.append(at + rot * Vector3(sin(ang) * r, height + 0.12 * (1.0 - f), -cos(ang) * r))
+		lay_path(links, pts)
+		tip.global_position = pts[-1]
+		tip.visible = reach > 0.4
+	tick.call(0.0, 0.0)
+	return {"node": links, "tick": tick}
+
+
+## Break the Seal: a gilt seal appears in front of her and is torn in two,
+## the halves spinning apart.
+static func seal(fx: Node3D, at: Vector3, yaw: float, col: Color) -> Dictionary:
+	var holder := Node3D.new()
+	fx.add_child(holder)
+	holder.global_position = at
+	holder.rotation.y = yaw
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.72, 0.58, 0.3)
+	m.metallic = 0.85
+	m.roughness = 0.35
+	m.emission_enabled = true
+	m.emission = col
+	m.emission_energy_multiplier = 0.9
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var halves: Array[Node3D] = []
+	for side in [-1.0, 1.0]:
+		var piv := Node3D.new()
+		holder.add_child(piv)
+		var h := MeshInstance3D.new()
+		h.mesh = _half_ring(0.5, 0.12, 0.07, side)
+		h.material_override = m
+		h.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		piv.add_child(h)
+		halves.append(piv)
+	var core := _mesh(_sphere(0.16), SpellFx._add_mat(col.lightened(0.4), 2.2))
+	holder.add_child(core)
+	var tick := func(k: float, _dt: float) -> void:
+		var grow := minf(k / 0.2, 1.0)
+		var split := clampf((k - 0.22) / 0.78, 0.0, 1.0)
+		var e := 1.0 - (1.0 - split) * (1.0 - split)
+		for i in 2:
+			var sd := -1.0 if i == 0 else 1.0
+			halves[i].position = Vector3(sd * e * 1.3, -e * e * 0.5, 0)
+			halves[i].rotation = Vector3(0, 0, -sd * e * 2.4)
+			halves[i].scale = Vector3.ONE * lerpf(0.5, 1.0, grow) * (1.0 - clampf((k - 0.75) / 0.25, 0.0, 1.0))
+		core.scale = Vector3.ONE * maxf(0.01, (1.0 - split) * grow)
+	tick.call(0.0, 0.0)
+	return {"node": holder, "tick": tick}
+
+
+## Half of a thick ring in the XY plane (side -1 left, 1 right), facing -Z.
+static func _half_ring(r: float, w: float, depth: float, side: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var seg := 14
+	var ri := r - w
+	for i in seg:
+		# A small gap at the top and bottom: the crack it broke along.
+		var a0 := lerpf(0.12, PI - 0.12, float(i) / seg)
+		var a1 := lerpf(0.12, PI - 0.12, float(i + 1) / seg)
+		var o0 := Vector3(sin(a0) * side, cos(a0), 0)
+		var o1 := Vector3(sin(a1) * side, cos(a1), 0)
+		var z := Vector3(0, 0, depth * 0.5)
+		for face: Array in [
+			[o0 * ri - z, o0 * r - z, o1 * r - z, o1 * ri - z, Vector3(0, 0, -1)],
+			[o0 * ri + z, o1 * ri + z, o1 * r + z, o0 * r + z, Vector3(0, 0, 1)],
+			[o0 * r - z, o0 * r + z, o1 * r + z, o1 * r - z, (o0 + o1).normalized()],
+			[o0 * ri - z, o1 * ri - z, o1 * ri + z, o0 * ri + z, -(o0 + o1).normalized()],
+		]:
+			for idx in [0, 1, 2, 0, 2, 3]:
+				st.set_normal(face[4])
+				st.add_vertex(face[idx])
+	return st.commit()
+
+
+## Covenant Severed: chains tear up out of the floor along the line, each
+## snapped off at the top. One multimesh for every link.
+static func chain_stalks(fx: Node3D, from: Vector3, to: Vector3, width: float, col: Color) -> Node3D:
+	var holder := Node3D.new()
+	fx.add_child(holder)
+	holder.global_position = from
+	var along := to - from
+	var side := along.cross(Vector3.UP).normalized()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.045
+	torus.outer_radius = 0.09
+	torus.rings = 8
+	torus.ring_segments = 4
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = torus
+	var stalks := 11
+	var per := 16
+	mm.instance_count = stalks * per
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = mm
+	mi.material_override = chain_iron(col)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	holder.add_child(mi)
+	var glow := SpellFx._add_mat(col.lightened(0.3), 1.8)
+	var n := 0
+	for s in stalks:
+		var f := (float(s) + rng.randf_range(0.2, 0.8)) / stalks
+		var base := along * f + side * rng.randf_range(-0.4, 0.4) * width
+		var lean := (side * rng.randf_range(-0.35, 0.35) + along.normalized() * rng.randf_range(-0.15, 0.15) + Vector3.UP).normalized()
+		var count := rng.randi_range(9, per)
+		var b0 := Basis.looking_at(lean, Vector3.FORWARD if absf(lean.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT)
+		var b1 := b0 * Basis(Vector3.FORWARD, PI * 0.5)
+		for i in count:
+			mm.set_instance_transform(n, Transform3D(b1 if i % 2 == 1 else b0, base + lean * (0.1 + i * 0.15)))
+			n += 1
+		# The broken end glows where the link gave.
+		holder.add_child(_mesh(_sphere(0.09), glow, base + lean * (0.1 + count * 0.15)))
+	mm.visible_instance_count = n
+	holder.scale = Vector3(1, 0.01, 1)
+	return holder

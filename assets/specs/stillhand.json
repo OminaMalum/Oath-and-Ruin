@@ -1,0 +1,70 @@
+{
+  "champion": "stillhand",
+  "units": "metres, +Y up, model faces -Z in Godot (+Y in Blender), origin on the ground",
+  "height_m": 1.72,
+  "height_tolerance": 0.15,
+  "hit_radius_m": 0.4,
+  "move_speed_mps": 6.6,
+  "sockets": {
+    "Muzzle": [
+      0.0,
+      1.032,
+      -0.5
+    ],
+    "Overhead": [
+      0.0,
+      2.02,
+      0.0
+    ]
+  },
+  "muzzle_tolerance_m": 0.35,
+  "loop_clips": [
+    "idle",
+    "run"
+  ],
+  "one_shot_clips": [
+    "death"
+  ],
+  "slot_clips": {
+    "attack": {
+      "ability": "open_palm",
+      "release_s": 0.14,
+      "recovery_s": 0.16,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_1": {
+      "ability": "bellbreaker",
+      "release_s": 0.2,
+      "recovery_s": 0.2,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_2": {
+      "ability": "reed_step",
+      "release_s": 0.05,
+      "recovery_s": 0.15,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_3": {
+      "ability": "empty_the_courtyard",
+      "release_s": 0.3,
+      "recovery_s": 0.25,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_4": {
+      "ability": "still_water",
+      "release_s": 0.05,
+      "recovery_s": 0.1,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    }
+  },
+  "release_marker": "release",
+  "feet": [
+    "foot_l",
+    "foot_r"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "fps": 60.0,
+  "release": {
+    "ability_1": 0.2,
+    "ability_2": 0.05,
+    "ability_3": 0.3,
+    "ability_4": 0.05,
+    "attack": 0.1333
+  },
+  "source": "sh.blend"
+}

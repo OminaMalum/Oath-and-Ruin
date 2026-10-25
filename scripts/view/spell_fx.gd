@@ -16,6 +16,7 @@ var _wv: WorldView
 var _bolts := {}     # SimProjectile -> {trail, glyph, big}
 var _circles := {}   # SimArea -> {node, mat, sigil, sigil_mat, motes}
 var _fading: Array[Dictionary] = []  # {node, mat, t, life, kind, grow}
+var _grapples := {}  # Unit -> chain links held while it grapples
 static var _streaks: NoiseTexture2D
 static var _dot_mats := {}
 ## Glow budget for busy fights: 1 with a few effects alive, down to 0.5 as
@@ -38,6 +39,7 @@ func setup(a: CombatAuthority, wv: WorldView) -> void:
 	a.area_detonated.connect(_on_area_detonated)
 	a.melee_swung.connect(_on_melee_swung)
 	a.dash_started.connect(_on_dash_started)
+	a.grapple_started.connect(_on_grapple_started)
 
 
 static func _is_champion(u: Unit) -> bool:
@@ -153,6 +155,13 @@ func _on_area_spawned(ar: CombatAuthority.SimArea) -> void:
 		return
 	var col := ar.source.def.accent_color
 	var r := ar.ability.area_radius
+	if KitLooks.area_look(ar.ability) == "severed":
+		var ends := _line_ends(ar, 0.14)
+		var lay := KitLooks.chain_links(self, col, 140, 1.15)
+		KitLooks.lay_chain(lay, ends[0], ends[1], 0.0)
+		_circles[ar] = {"lay": lay, "n": lay.multimesh.visible_instance_count}
+		lay.multimesh.visible_instance_count = 0
+		return
 	var n := Node3D.new()
 	add_child(n)
 	n.global_position = ar.center + Vector3(0, Palette.DECAL_LIFT + 0.07, 0)
@@ -223,6 +232,9 @@ func _on_area_detonated(ar: CombatAuthority.SimArea) -> void:
 	_circles.erase(ar)
 	if e.is_empty():
 		return
+	if e.has("lay"):
+		_severed(ar, e)
+		return
 	var n: Node3D = e.node
 	(e.motes as CPUParticles3D).emitting = false
 	_fading.append({"node": n, "mat": e.mat, "t": 0.0, "life": 0.5, "kind": "circle", "grow": 0.15})
@@ -264,15 +276,16 @@ func _process(delta: float) -> void:
 		if b.get("tick"):
 			(b.tick as Callable).call(delta)
 		if b.has("links") and is_instance_valid(p.source):
-			var from := p.source.global_position + Vector3(0, p.source.def.height * 0.6, 0)
-			for child in p.source.get_children():
-				if child is UnitView:
-					from = (child as UnitView).launch_point()
-					break
-			KitLooks.lay_chain(b.links, from, host.global_position)
+			KitLooks.lay_chain(b.links, _hand(p.source), host.global_position)
+	_update_grapples()
 	for ar: CombatAuthority.SimArea in _circles:
 		var e: Dictionary = _circles[ar]
 		var k := 1.0 - clampf(ar.timer / maxf(ar.ability.area_delay, 0.01), 0.0, 1.0)
+		if e.has("lay"):
+			# The contract chain snakes out along the line before it bursts.
+			var mm := (e.lay as MultiMeshInstance3D).multimesh
+			mm.visible_instance_count = int(float(e.n) * minf(k * 2.5, 1.0))
+			continue
 		e.spin += delta * (0.6 + k * 2.0)
 		var m: ShaderMaterial = e.mat
 		m.set_shader_parameter("progress", clampf(k * 1.6, 0.0, 1.0))
@@ -339,6 +352,19 @@ func _on_melee_swung(caster: Unit, a: AbilityDef) -> void:
 	_fading.append({"node": mi, "mat": mi.material_override, "t": 0.0, "life": life, "kind": "swoosh", "grow": caster.aim_yaw})
 	_sparks(caster.global_position + Vector3(0, caster.def.height * 0.5, 0) + Vector3(-sin(caster.aim_yaw), 0, -cos(caster.aim_yaw)) * a.range * 0.7,
 			col, 8 if a.is_ultimate else 5, 0.35, 3.0)
+	var base := caster.def.accent_color
+	match KitLooks.melee_look(a):
+		"lash":
+			var d := KitLooks.lash(self, caster.global_position, caster.aim_yaw, a.range, a.arc_degrees, caster.def.height * 0.55, base)
+			_fading.append({"node": d.node, "mat": null, "t": 0.0, "life": 0.32, "kind": "tick", "tick": d.tick, "grow": 0.0,
+					"at": caster.global_position + Vector3(0, 1.0, 0)})
+		"seal":
+			var fwd := Vector3(-sin(caster.aim_yaw), 0, -cos(caster.aim_yaw))
+			var at := caster.global_position + fwd * 1.1 + Vector3(0, caster.def.height * 0.55, 0)
+			var d := KitLooks.seal(self, at, caster.aim_yaw, base)
+			_fading.append({"node": d.node, "mat": null, "t": 0.0, "life": 0.6, "kind": "tick", "tick": d.tick, "grow": 0.0, "at": at})
+			_flash(at, base, 2.4, 0.25)
+			_sparks(at, base.lightened(0.3), 14, 0.5, 4.0)
 
 
 func _on_dash_started(caster: Unit, a: AbilityDef) -> void:
@@ -349,6 +375,56 @@ func _on_dash_started(caster: Unit, a: AbilityDef) -> void:
 	t.global_position = caster.global_position + Vector3(0, caster.def.height * 0.5, 0)
 	var life := a.dash_duration + 0.5
 	_fading.append({"node": t, "mat": null, "t": 0.0, "life": life, "kind": "follow", "unit": caster, "grow": 0.0})
+
+
+## The point a champion's chains and bolts leave from.
+func _hand(u: Unit) -> Vector3:
+	for child in u.get_children():
+		if child is UnitView:
+			return (child as UnitView).launch_point()
+	return u.global_position + Vector3(0, u.def.height * 0.6, 0)
+
+
+## Both ends of a line area (from the caster's side), lifted by y.
+static func _line_ends(ar: CombatAuthority.SimArea, y: float) -> Array[Vector3]:
+	var half := ar.dir * (ar.ability.range * 0.5)
+	return [ar.center - half + Vector3(0, y, 0), ar.center + half + Vector3(0, y, 0)]
+
+
+## Chain Traverse: an iron chain from her to the wall it hooked, held while
+## the pull lasts. WorldView draws the thin glow line it wraps.
+func _on_grapple_started(caster: Unit, _a: AbilityDef) -> void:
+	if not _is_champion(caster):
+		return
+	if _grapples.has(caster):
+		(_grapples[caster] as Node).queue_free()
+	_grapples[caster] = KitLooks.chain_links(self, caster.def.accent_color, 110)
+	_sparks(caster.grapple_anchor, caster.def.accent_color.lightened(0.3), 10, 0.4, 3.5)
+	_flash(caster.grapple_anchor, caster.def.accent_color, 1.6, 0.2)
+
+
+func _update_grapples() -> void:
+	for u in _grapples.keys():
+		var links: MultiMeshInstance3D = _grapples[u]
+		if is_instance_valid(u) and (u as Unit).alive and (u as Unit).is_grappling():
+			var unit: Unit = u
+			var from := unit.get_global_transform_interpolated().origin + Vector3(0, unit.def.height * 0.6, 0)
+			KitLooks.lay_chain(links, from, unit.grapple_anchor, 0.04)
+		else:
+			links.queue_free()
+			_grapples.erase(u)
+
+
+func _severed(ar: CombatAuthority.SimArea, e: Dictionary) -> void:
+	(e.lay as Node).queue_free()
+	var col := ar.source.def.accent_color if is_instance_valid(ar.source) else Color(0.78, 0.68, 0.95)
+	var ends := _line_ends(ar, 0.0)
+	var h := KitLooks.chain_stalks(self, ends[0], ends[1], ar.ability.line_width, col)
+	_fading.append({"node": h, "mat": null, "t": 0.0, "life": 1.2, "kind": "spikes", "grow": 0.0, "at": ar.center})
+	_flash(ar.center + Vector3(0, 1.0, 0), col, 5.0, 0.35)
+	for i in 3:
+		_sparks(ends[0].lerp(ends[1], (float(i) + 0.5) / 3.0) + Vector3(0, 0.4, 0), col, 16, 0.7, 5.5, 35.0)
+	_shockwave(ar.center + Vector3(0, Palette.DECAL_LIFT + 0.1, 0), col.darkened(0.2), ar.ability.line_width, 0.35, Vector3.UP)
 
 
 # ------------------------------------------------------------------ pieces

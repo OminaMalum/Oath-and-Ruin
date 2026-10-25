@@ -62,14 +62,26 @@ func _process(_delta: float) -> bool:
 		return false
 	for f: Dictionary in _fx._fading:
 		var want := {"pillar": 0.06, "tick": 0.05, "spikes": 0.25, "swoosh": 0.03}
-		if want.has(f.kind) and f.t > want[f.kind] and not _seen.has(f.node) and not _seen.has("k_" + f.kind) \
+		if want.has(f.kind) and f.t > want[f.kind] and not _seen.has(f.node) and int(_seen.get("k_" + f.kind, 0)) < 3 \
 				and is_instance_valid(f.node):
 			_seen[f.node] = true
-			_seen["k_" + f.kind] = true
-			_aim((f.node as Node3D).global_position, 12.0 if f.kind == "tick" else 7.0)
+			_seen["k_" + f.kind] = int(_seen.get("k_" + f.kind, 0)) + 1
+			var at: Vector3 = f.get("at", (f.node as Node3D).global_position)
+			_aim(at, 12.0 if f.kind == "tick" and not f.has("at") else 7.0)
 			_label = "go_" + f.kind
 			_pending = 1
 			return false
+	for u in _fx._grapples:
+		if _seen.has("grapple") or not is_instance_valid(u):
+			continue
+		var mm := (_fx._grapples[u] as MultiMeshInstance3D).multimesh
+		if mm.visible_instance_count < 25:
+			continue
+		_seen["grapple"] = true
+		_aim(((u as Unit).global_position + (u as Unit).grapple_anchor) * 0.5, 8.0)
+		_label = "grapple"
+		_pending = 1
+		return false
 	# Prefer circles (they last), then bolts; one shot per spell.
 	for ar: CombatAuthority.SimArea in _fx._circles:
 		if _seen.has(ar) or _seen.has(ar.ability.id):

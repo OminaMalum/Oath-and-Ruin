@@ -1,0 +1,11 @@
+{
+  "fps": 30.0,
+  "release": {
+    "ability_1": 0.3,
+    "ability_2": 0.3333,
+    "ability_3": 0.3,
+    "ability_4": 0.1,
+    "attack": 0.1333
+  },
+  "source": "bw.blend"
+}

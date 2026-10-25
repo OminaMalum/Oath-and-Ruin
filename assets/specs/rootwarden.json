@@ -1,0 +1,70 @@
+{
+  "champion": "rootwarden",
+  "units": "metres, +Y up, model faces -Z in Godot (+Y in Blender), origin on the ground",
+  "height_m": 2.0,
+  "height_tolerance": 0.15,
+  "hit_radius_m": 0.5,
+  "move_speed_mps": 5.8,
+  "sockets": {
+    "Muzzle": [
+      0.0,
+      1.2,
+      -0.6
+    ],
+    "Overhead": [
+      0.0,
+      2.3,
+      0.0
+    ]
+  },
+  "muzzle_tolerance_m": 0.35,
+  "loop_clips": [
+    "idle",
+    "run"
+  ],
+  "one_shot_clips": [
+    "death"
+  ],
+  "slot_clips": {
+    "attack": {
+      "ability": "thornstaff",
+      "release_s": 0.2,
+      "recovery_s": 0.25,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_1": {
+      "ability": "grasping_root",
+      "release_s": 0.3,
+      "recovery_s": 0.2,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_2": {
+      "ability": "first_grove",
+      "release_s": 0.3,
+      "recovery_s": 0.1,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_3": {
+      "ability": "elder_shape",
+      "release_s": 0.4,
+      "recovery_s": 0.2,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_4": {
+      "ability": "barkskin",
+      "release_s": 0.05,
+      "recovery_s": 0.1,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    }
+  },
+  "release_marker": "release",
+  "feet": [
+    "foot_l",
+    "foot_r"
+  ]
+}
