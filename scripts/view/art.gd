@@ -86,6 +86,27 @@ static func ground() -> ShaderMaterial:
 	return m
 
 
+## The same floor laid out for the three lane map: three cobbled lanes,
+## plazas round the six towers, the camp clearing and both bases.
+static func ground_three() -> ShaderMaterial:
+	if _cache.has("ground3"):
+		return _cache["ground3"]
+	var m: ShaderMaterial = ground().duplicate()
+	m.set_shader_parameter("lane_half", ThreeLaneBuilder.LANE_HALF - 0.4)
+	m.set_shader_parameter("lane_step", absf(ThreeLaneBuilder.LANES[0]))
+	m.set_shader_parameter("base_z", ThreeLaneBuilder.BASE_Z)
+	m.set_shader_parameter("tower_z", ThreeLaneBuilder.TOWER_Z)
+	m.set_shader_parameter("core_z", ThreeLaneBuilder.CORE_Z)
+	m.set_shader_parameter("camp_x", ThreeLaneBuilder.CAMP.x)
+	var e := ThreeLaneBuilder.LANE_HALF + 0.75
+	m.set_shader_parameter("wall_lines", Vector4(e, absf(ThreeLaneBuilder.LANES[0]) - e, ThreeLaneBuilder.OUTER, 999.0))
+	m.set_shader_parameter("base_x", ThreeLaneBuilder.OUTER)
+	m.set_shader_parameter("base_end", ThreeLaneBuilder.END_Z)
+	m.set_shader_parameter("out_x", ThreeLaneBuilder.OUTER + 1.0)
+	_cache["ground3"] = m
+	return m
+
+
 ## A mesh from one node of a Poly Haven glTF (sets hold several rocks or
 ## plants side by side; each node is one usable piece).
 static func mesh(model: String, part := "") -> Mesh:

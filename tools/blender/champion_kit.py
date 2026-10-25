@@ -64,7 +64,27 @@ def humanoid_bones(s=1.0, w=1.0, extra=None):
     return b
 
 
+## Cloth bones split into links so the game's cloth springs (ClothSim) can
+## bend them: cape -> cape_1 -> cape_2. Clips still key only the first link
+## (same pivot, so every clip plays as before); the rest follow and swing.
+SPLIT = {"cape": 3, "skirt_f": 2, "skirt_b": 2, "braid": 2, "sash": 2}
+
+
+def split_cloth(bones):
+    out = dict(bones)
+    for name, n in SPLIT.items():
+        if name not in out:
+            continue
+        h, t, parent = out[name]
+        h, t = Vector(h), Vector(t)
+        parts = [name] + ["%s_%d" % (name, i) for i in range(1, n)]
+        for i, pn in enumerate(parts):
+            out[pn] = (tuple(h.lerp(t, i / n)), tuple(h.lerp(t, (i + 1) / n)), parent if i == 0 else parts[i - 1])
+    return out
+
+
 def make_rig(bones):
+    bones = split_cloth(bones)
     arm = bpy.data.armatures.new("Rig")
     rig = bpy.data.objects.new("Rig", arm)
     bpy.context.scene.collection.objects.link(rig)
@@ -270,6 +290,12 @@ def seg_dist(p, a, b):
 
 def skin(obj, rig, weights):
     """weights: a bone name (rigid) or a list of bones blended by distance."""
+    bones = rig.data.bones
+    if isinstance(weights, str) and weights in SPLIT and weights + "_1" in bones:
+        weights = [weights]
+    if not isinstance(weights, str):
+        weights = [x for b in weights for x in ([b] + ["%s_%d" % (b, i) for i in range(1, SPLIT[b])]
+                                                if b in SPLIT and b + "_1" in bones else [b])]
     if isinstance(weights, str):
         vg = obj.vertex_groups.new(name=weights)
         vg.add(list(range(len(obj.data.vertices))), 1.0, "REPLACE")

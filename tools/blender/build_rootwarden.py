@@ -77,7 +77,7 @@ def build_model(rig, M):
     k.lathe([(0.088, top - 0.06), (0.092, top - 0.045), (0.088, top - 0.03)], "Wood", seg=20, sx=1.05, sy=1.15, center=(0, hy - 0.01))
     k.finish(rig, ["head", "neck"], subsurf=1)
     k = Kit("Braid", M)
-    b0, b1 = bn["braid"].head_local, bn["braid"].tail_local
+    b0, b1 = bn["braid"].head_local, bn["braid_1"].tail_local
     for j in range(7):
         c = b0.lerp(b1, j / 6)
         k.sphere(c, 0.032 - j * 0.002, "Hair", scale=(1.0, 0.9, 1.25), u=10, v=6)

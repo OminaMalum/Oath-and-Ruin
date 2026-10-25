@@ -31,6 +31,14 @@ uniform float tower_z = 32.0;
 uniform float tower_r = 5.0;
 uniform float core_z = 56.0;
 uniform float camp_x = -28.0;
+// Three lane map: lane_step is the spacing of the side lanes (0 = one lane),
+// wall_lines the x of the wall feet that get darker earth, base_x and
+// base_end the base plaza half width and far end, out_x the outer wall.
+uniform float lane_step = 0.0;
+uniform vec4 wall_lines = vec4(7.0, 11.0, 19.0, 999.0);
+uniform float base_x = 20.0;
+uniform float base_end = 80.0;
+uniform float out_x = 21.0;
 
 varying vec3 wpos;
 
@@ -54,13 +62,15 @@ void fragment() {
 	float n2 = texture(mask_noise, p * 0.083 + vec2(0.37, 0.11)).r;
 	float ax = abs(p.x);
 	float az = abs(p.y);
+	// Distance across to the nearest lane centre.
+	float lx = lane_step > 0.0 ? min(ax, abs(ax - lane_step)) : ax;
 
 	// Layer weights before the height blend.
-	float lane = 1.0 - smoothstep(lane_half - 0.8, lane_half + 0.4, ax + (n2 - 0.5) * 2.6);
+	float lane = 1.0 - smoothstep(lane_half - 0.8, lane_half + 0.4, lx + (n2 - 0.5) * 2.6);
 	lane *= 1.0 - smoothstep(base_z - 1.0, base_z + 1.0, az);
-	float tower_d = length(vec2(p.x, az - tower_z));
+	float tower_d = length(vec2(lx, az - tower_z));
 	float plaza = 1.0 - smoothstep(tower_r - 0.8, tower_r + 0.8, tower_d + (n2 - 0.5) * 2.0);
-	float in_base = (1.0 - smoothstep(20.0, 21.5, ax)) * (1.0 - smoothstep(80.0, 81.5, az));
+	float in_base = (1.0 - smoothstep(base_x, base_x + 1.5, ax)) * (1.0 - smoothstep(base_end, base_end + 1.5, az));
 	plaza = max(plaza, smoothstep(base_z - 1.5, base_z + 0.5, az + (n2 - 0.5) * 2.0) * in_base);
 	float camp = 1.0 - smoothstep(4.0, 7.0, length(vec2(p.x - camp_x, p.y)) + (n2 - 0.5) * 2.0);
 	plaza = max(plaza, camp * 0.85);
@@ -99,12 +109,12 @@ void fragment() {
 	// Large scale tint so repeats do not line up, and darker earth at the
 	// wall feet (lane walls at 7 m, flank walls at 11 m and 19 m).
 	col *= mix(0.86, 1.08, texture(mask_noise, p * 0.006).r);
-	float wall_d = min(min(abs(ax - 7.0), abs(ax - 11.0)), abs(ax - 19.0));
+	float wall_d = min(min(abs(ax - wall_lines.x), abs(ax - wall_lines.y)), min(abs(ax - wall_lines.z), abs(ax - wall_lines.w)));
 	col *= mix(0.72, 1.0, smoothstep(0.0, 1.6, wall_d));
 
 	// Outside the walls: the valley floor, darker and greener so it reads as
 	// forest ground at a distance, not sand.
-	float outside = max(smoothstep(21.0, 24.0, ax), smoothstep(81.0, 84.0, az));
+	float outside = max(smoothstep(out_x, out_x + 3.0, ax), smoothstep(base_end + 1.0, base_end + 4.0, az));
 	col = mix(col, col * vec3(0.62, 0.7, 0.5), outside);
 	// Mid lane: an old ward circle of runes set into the cobbles, faintly lit.
 	// Flat in the floor shader, so it adds no geometry to the fighting space.
