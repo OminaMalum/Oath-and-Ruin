@@ -486,24 +486,39 @@ def run_clip(rig, speed, upper, cycle=0.6, stance=0.2, hips_drop=0.09, lift=0.26
     for the upper body, t in 0..1."""
     stride = speed * cycle * stance
     feet0 = rest_feet(rig)
+    fb = rig.data.bones["foot_l"]
+    foot_len = (fb.tail_local - fb.head_local).length
     act, end = clip(rig, "run", cycle)
     for f in range(0, end + 1, step):
         t = f / end
         feet = {}
+        roll = {}
         for side, ph in (("l", 0.0), ("r", 0.5)):
             x, y0, z0 = feet0[side]
             u = (t + ph) % 1.0
             if u < stance:
                 y, z = stride * 0.5 - stride * (u / stance), z0
+                # Heel strike rolls flat, then the heel peels up to push off.
+                k = u / stance
+                a = 14 * max(0.0, 1 - k / 0.35) ** 2 - 22 * max(0.0, (k - 0.55) / 0.45) ** 2
             else:
                 w = (u - stance) / (1 - stance)
                 y = -stride * 0.5 + stride * (0.5 - 0.5 * math.cos(math.pi * w))
                 y -= kick * math.sin(math.pi * w)
                 z = z0 + lift * math.sin(math.pi * w) ** 1.5
+                # Toe trails after push off, the foot levels, the toe lifts
+                # for the next heel strike.
+                a = -30 * max(0.0, 1 - w / 0.35) + 14 * max(0.0, (w - 0.7) / 0.3)
+            if a < 0:
+                z += foot_len * 0.55 * math.sin(math.radians(-a))  # heel up: the ankle rises over the toe
+            roll["foot_" + side] = (a, 0, 0)
             feet[side] = (x, y + 0.08, z)
         s = math.sin(t * TAU)
         c2 = math.cos(t * TAU * 2)
         rots, locs = upper(t, s, c2)
+        rots = dict(rots)
+        for k_, v_ in roll.items():
+            rots.setdefault(k_, v_)
         locs = dict(locs)
         locs.setdefault("hips", (0, 0.06, -hips_drop + 0.035 * c2))
         pose(rig, f, rots, locs, feet)
