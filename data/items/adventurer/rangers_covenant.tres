@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/tempered_edge.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/quickstring.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"rangers_covenant"
+display_name = "Ranger's Covenant"
+short_name = "Ranger"
+description = "+14 weapon power, attacks 20% faster. Basic hits on a champion make you walk 10% faster for 1.5 s"
+cost = 960
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+weapon_power = 14.0
+attack_speed = 0.2
+passive = 6
+passive_value = 0.1

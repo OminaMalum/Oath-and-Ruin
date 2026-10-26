@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/long_song.tres" id="4_up"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/fierce_song.tres" id="5_up"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"war_song"
+display_name = "War Song"
+description = "Sing a 5 m circle for 5 s: allied champions inside attack 35% faster. Counterplay: fight outside the circle, or stun the singer first."
+delivery = 4
+cast_time = 0.3
+recovery = 0.1
+cooldown = 14.0
+move_mult_while_casting = 0.0
+range = 0.0
+area_radius = 5.0
+ward_duration = 5.0
+ward_reduction = 0.0
+ally_haste = 0.35
+upgrades = Array[Resource]([ExtResource("4_up"), ExtResource("5_up")])

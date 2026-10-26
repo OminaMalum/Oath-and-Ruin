@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"barrow_hide"
+display_name = "Barrow Hide"
+description = "Harden your hide for 3 s: you and allied champions within 2.5 m take 35% less damage. Counterplay: back off and wait it out."
+delivery = 4
+cast_time = 0.1
+recovery = 0.1
+cooldown = 15.0
+move_mult_while_casting = 0.0
+range = 0.0
+area_radius = 2.5
+ward_duration = 3.0
+ward_reduction = 0.35

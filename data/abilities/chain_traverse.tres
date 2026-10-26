@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_cb"]
+
+[resource]
+script = ExtResource("1_cb")
+id = &"chain_traverse"
+display_name = "Chain Traverse"
+description = "Throw the chain at a wall within 12 m and pull yourself to it. Two charges, each back after 8 s. Cast again while flying to hook another wall and change course. Only marked walls hold; a root or stun stops the pull. Counterplay: root or stun her in flight, or wait for both charges to be spent."
+delivery = 6
+scaling = 3
+cast_time = 0.1
+recovery = 0.0
+cooldown = 8.0
+move_mult_while_casting = 1.0
+range = 12.0
+area_radius = 0.6
+max_charges = 2
+charge_lock = 0.3
+grapple_speed = 24.0
+grapple_min_travel = 4.0

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_af"]
+
+[resource]
+script = ExtResource("1_af")
+id = &"ashfall"
+display_name = "Ashfall"
+description = "Ultimate. A long leap (11 m) the way you are moving: 110 damage and a 0.6 s stun on every enemy passed through. Counterplay: the leap only hits what it crosses; step off the line."
+delivery = 3
+is_ultimate = true
+damage = 110.0
+cast_time = 0.12
+recovery = 0.25
+cooldown = 60.0
+move_mult_while_casting = 1.0
+range = 11.0
+stun_duration = 0.6
+dash_distance = 11.0
+dash_duration = 0.28

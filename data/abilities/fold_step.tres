@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"fold_step"
+display_name = "Fold Step"
+description = "Step through a fold in the air: a 6 m blink the way you are moving. No damage, it is your way out. Counterplay: bait it out, then chase."
+delivery = 3
+cast_time = 0.05
+recovery = 0.1
+cooldown = 14.0
+move_mult_while_casting = 0.0
+range = 6.0
+dash_distance = 6.0
+dash_duration = 0.18

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"empty_the_courtyard"
+display_name = "Empty the Courtyard"
+description = "Ultimate. Plant your feet for 0.45 s, then a sweeping kick all around (4 m): 150 damage, and every enemy hit is knocked 4.5 m away from you. Walls stop them. Counterplay: the planted stance is the warning; do not stand next to her."
+delivery = 1
+is_ultimate = true
+damage = 150.0
+cast_time = 0.3
+recovery = 0.25
+cooldown = 60.0
+move_mult_while_casting = 0.0
+range = 0.0
+area_radius = 4.0
+area_delay = 0.45
+push_distance = 4.5

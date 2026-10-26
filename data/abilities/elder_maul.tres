@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"elder_maul"
+display_name = "Elder Maul"
+description = "Basic attack in the elder shape. A crushing paw (3.4 m)."
+delivery = 2
+damage = 70.0
+cast_time = 0.3
+recovery = 0.3
+cooldown = 1.3
+move_mult_while_casting = 0.5
+range = 3.4
+arc_degrees = 120.0

@@ -1,0 +1,10 @@
+{
+  "fps": 30.0,
+  "release": {
+    "ability_1": 0.3333,
+    "ability_2": 0.4,
+    "ability_3": 0.2667,
+    "attack": 0.2667
+  },
+  "source": "rb_oathwarden.blend"
+}

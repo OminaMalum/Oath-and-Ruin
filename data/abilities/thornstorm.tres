@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"thornstorm"
+display_name = "Thornstorm"
+description = "Ultimate. Arrows rain on a 4.2 m circle up to 26 m away after 1.1 s: 210 damage and a 40% slow for 1.5 s. Counterplay: the circle shows for over a second; get out."
+delivery = 1
+is_ultimate = true
+damage = 210.0
+cast_time = 0.35
+recovery = 0.2
+cooldown = 60.0
+move_mult_while_casting = 0.0
+range = 26.0
+area_radius = 4.2
+area_delay = 1.1
+slow_amount = 0.4
+slow_duration = 1.5

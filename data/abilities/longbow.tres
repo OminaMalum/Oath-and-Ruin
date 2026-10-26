@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"longbow"
+display_name = "Longbow"
+description = "Basic attack. A long, fast arrow (22 m)."
+delivery = 0
+damage = 40.0
+cast_time = 0.2
+recovery = 0.3
+cooldown = 1.05
+move_mult_while_casting = 0.55
+range = 22.0
+projectile_speed = 42.0
+projectile_radius = 0.25

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"grasping_earth"
+display_name = "Grasping Earth"
+description = "Mark the ground (13 m). After 0.7 s hands burst out of a 3.2 m circle: 60 damage, and every enemy hit is dragged up to 2.5 m toward the middle. Counterplay: leave the circle before it bursts."
+delivery = 1
+damage = 60.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 12.0
+move_mult_while_casting = 0.4
+range = 13.0
+area_radius = 3.2
+area_delay = 0.7
+pull_distance = 2.5

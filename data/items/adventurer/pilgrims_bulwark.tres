@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/iron_links.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/warding_bead.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"pilgrims_bulwark"
+display_name = "Pilgrim's Bulwark"
+short_name = "Bulwark"
+description = "+16 armor, +16 magic resist. Shielding another champion shields you for 60 (10 s cooldown)"
+cost = 960
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+armor = 16.0
+magic_resist = 16.0
+passive = 14
+passive_value = 60.0
+passive_cooldown = 10.0

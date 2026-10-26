@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/etched_focus.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/vital_cord.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"cantors_thread"
+display_name = "Cantor's Thread"
+short_name = "Cantor"
+description = "+12 spell power, +120 health. Allies you heal or shield walk 15% faster for 1.5 s"
+cost = 920
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+spell_power = 12.0
+health = 120.0
+passive = 15
+passive_value = 0.15

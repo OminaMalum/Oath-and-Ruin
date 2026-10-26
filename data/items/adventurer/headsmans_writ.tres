@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/tempered_edge.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/hourglass_chip.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"headsmans_writ"
+display_name = "Headsman's Writ"
+short_name = "Writ"
+description = "+18 weapon power, +12 haste. An ability hit on a champion primes your next basic hit for 40 weapon damage (4 s cooldown)"
+cost = 1000
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+weapon_power = 18.0
+haste = 12.0
+passive = 7
+passive_value = 40.0
+passive_cooldown = 4.0

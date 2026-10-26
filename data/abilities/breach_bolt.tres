@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/long_breach.tres" id="4_up"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/heavy_breach.tres" id="5_up"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"breach_bolt"
+display_name = "Breach Bolt"
+description = "A heavy bolt that flies through everyone on its line (16 m): 80 damage to the first, 60% of that to the rest. Counterplay: do not line up behind your minions."
+delivery = 0
+damage = 80.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 8.0
+move_mult_while_casting = 0.4
+range = 16.0
+projectile_speed = 42.0
+projectile_radius = 0.3
+pierce = true
+pierce_falloff = 0.6
+scaling = 1
+upgrades = Array[Resource]([ExtResource("4_up"), ExtResource("5_up")])

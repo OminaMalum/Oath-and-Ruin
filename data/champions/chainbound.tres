@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_cb"]
+[ext_resource type="Resource" path="res://data/abilities/pactlash.tres" id="2_lash"]
+[ext_resource type="Resource" path="res://data/abilities/debt_collector.tres" id="3_q"]
+[ext_resource type="Resource" path="res://data/abilities/chain_traverse.tres" id="4_e"]
+[ext_resource type="Resource" path="res://data/abilities/covenant_severed.tres" id="5_ult"]
+[ext_resource type="Resource" path="res://data/abilities/break_the_seal.tres" id="6_f"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="7_def"]
+
+[resource]
+script = ExtResource("7_def")
+id = &"chainbound"
+display_name = "Chainbound"
+role = "Prototype skirmisher"
+hero_name = "Veyra Sable"
+title = "The Broken Covenant"
+ancestry = "Tiefling warlock"
+lore = "She collected souls for a patron who swore every contract was signed willingly. When she found the forged consent, she stole the chain that enforced them. Its links still tighten when she breaks a promise."
+look = 9
+max_health = 520.0
+move_speed = 6.5
+radius = 0.4
+height = 1.8
+fountain_heal = 80.0
+basic_attack = ExtResource("2_lash")
+abilities = Array[ExtResource("1_cb")]([ExtResource("3_q"), ExtResource("4_e"), ExtResource("5_ult"), ExtResource("6_f")])
+passive = 13
+passive_name = "Borrowed Momentum"
+passive_description = "A Chain Traverse that carries you at least 4 m makes your next basic hit on a champion (within 3 s) deal 60% more. One stored hit; it does not stack or refund the chain."
+passive_value = 0.6
+primary_color = Color(0.22, 0.2, 0.25, 1)
+accent_color = Color(0.78, 0.68, 0.95, 1)
+item_build = Array[StringName]([&"ember_edge", &"wayfarer_greaves", &"oathbound_plate", &"ash_hourglass"])
+adventurer_build = Array[StringName]([&"trailwardens_token", &"headsmans_writ", &"wayfarers_boots", &"ashen_brand"])
+power = 0

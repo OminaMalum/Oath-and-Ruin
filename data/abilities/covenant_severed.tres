@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_cb"]
+
+[resource]
+script = ExtResource("1_cb")
+id = &"covenant_severed"
+display_name = "Covenant Severed"
+description = "Ultimate. A chain line 14 m long and 2.4 m wide shows on the ground, then bursts after 1 s: 160 damage and a 1 s root. Does not refresh Chain Traverse. Counterplay: step sideways out of the line."
+delivery = 1
+is_ultimate = true
+damage = 160.0
+cast_time = 0.35
+recovery = 0.2
+cooldown = 60.0
+move_mult_while_casting = 0.0
+range = 14.0
+line_width = 2.4
+area_delay = 1.0
+root_duration = 1.0

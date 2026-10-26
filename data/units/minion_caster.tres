@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_dsji7"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="2_6xeqw"]
+[ext_resource type="Resource" path="res://data/abilities/minion_bolt.tres" id="2_x65wa"]
+
+[resource]
+script = ExtResource("2_6xeqw")
+id = &"minion_caster"
+display_name = "Slinger"
+role = "Minion"
+look = 3
+kind = 1
+max_health = 180.0
+move_speed = 4.2
+radius = 0.32
+height = 1.1
+respawn_time = -1.0
+basic_attack = ExtResource("2_x65wa")
+primary_color = Color(0.4, 0.38, 0.34, 1)
+accent_color = Color(1, 0.62, 0.2, 1)

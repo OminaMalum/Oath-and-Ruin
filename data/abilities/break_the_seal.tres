@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_cb"]
+
+[resource]
+script = ExtResource("1_cb")
+id = &"break_the_seal"
+display_name = "Break the Seal"
+description = "A wide close sweep: 45 damage, and each champion struck deals 30% less damage for 2.5 s. No dash, stun or healing. Counterplay: the windup is visible; step out of 3 m."
+delivery = 2
+damage = 45.0
+cast_time = 0.25
+recovery = 0.2
+cooldown = 12.0
+move_mult_while_casting = 0.5
+range = 3.4
+arc_degrees = 140.0
+weaken_amount = 0.3
+weaken_duration = 2.5

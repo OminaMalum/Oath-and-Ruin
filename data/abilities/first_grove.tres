@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"first_grove"
+display_name = "First Grove"
+description = "Grow a 3.5 m grove around you for 5 s: allied champions inside regain 20 health a second. Counterplay: pull the fight out of the grove."
+delivery = 4
+cast_time = 0.3
+recovery = 0.1
+cooldown = 15.0
+move_mult_while_casting = 0.3
+range = 0.0
+area_radius = 3.5
+ward_duration = 5.0
+ward_reduction = 0.0
+heal_per_second = 20.0
