@@ -52,7 +52,7 @@ func _run() -> void:
 		"test_marginalia", "test_stand_behind", "test_exposed_seam", "test_last_hit_xp",
 		"test_gold_and_shop", "test_items_change_stats", "test_bots_buy_items", "test_recall",
 		"test_batch_b_data", "test_root", "test_pull", "test_bramble_field", "test_mark",
-		"test_lantern_heals", "test_dawnlight", "test_quarry", "test_tithe",
+		"test_lantern_heals", "test_dawnlight", "test_quarry", "test_tithe", "test_willing_dead", "test_willing_dead_max", "test_names_remembered",
 		"test_batch_c_data", "test_taunt", "test_charm", "test_war_song", "test_refrain", "test_storm_wall",
 		"test_tempest", "test_ancestral_fury", "test_passive_snapshot", "test_keep_the_flame", "test_residual_charge", "test_kings_wrath",
 		"test_fourth_ability_data", "test_fold_step", "test_searing_light", "test_smoke_veil",
@@ -67,7 +67,7 @@ func _run() -> void:
 		"test_phase6_data", "test_field_sentry", "test_sentry_replaced", "test_masterwork_in_place", "test_sentry_kill_credit",
 		"test_breach_falloff", "test_calibration", "test_emergency_vent", "test_rally_standard", "test_ordered_retreat",
 		"test_break_their_line", "test_hold_formation", "test_grasping_root", "test_elder_shape", "test_deep_roots",
-		"test_barkskin", "test_phase6_bot_match", "test_three_lane_match",
+		"test_barkskin", "test_phase6_bot_match", "test_three_lane_match", "test_three_lane_rotate",
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract", "test_item_cards",
@@ -1445,7 +1445,9 @@ func test_root() -> void:
 
 
 func test_pull() -> void:
+	# Grasping Earth left her kit for Willing Dead; the pull itself stays tested.
 	var me := spawn(GRAVE, 0, Vector3.ZERO)
+	me.slot_overrides[2] = load("res://data/abilities/grasping_earth.tres")
 	var foe := spawn(DUMMY, 1, Vector3(2.4, 0, -8))
 	await ticks(2)
 	var center := Vector3(0, 0, -8)
@@ -1553,7 +1555,11 @@ func test_dawnlight() -> void:
 
 
 func test_tithe() -> void:
-	var me := spawn(GRAVE, 0, Vector3.ZERO)
+	# Soul Tithe left Gravebinder for Names Remembered; the rule stays for data.
+	var tithe := GRAVE.duplicate() as ChampionDef
+	tithe.passive = ChampionDef.Passive.TITHE
+	tithe.passive_value = 0.2
+	var me := spawn(tithe, 0, Vector3.ZERO)
 	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
 	await ticks(2)
 	var bolt := GRAVE.basic_attack
@@ -1563,7 +1569,75 @@ func test_tithe() -> void:
 	var h := foe.health
 	await secs(0.5)
 	await _cast(me, 0, foe.global_position, 0.8)
-	check(is_equal_approx(h - foe.health, bolt.damage * (1.0 + GRAVE.passive_value)), "Soul Tithe: a slowed target takes %d%% more" % roundi(GRAVE.passive_value * 100.0))
+	check(is_equal_approx(h - foe.health, bolt.damage * 1.2), "Soul Tithe: a slowed target takes 20% more")
+
+
+func test_willing_dead() -> void:
+	var me := spawn(GRAVE, 0, Vector3.ZERO)
+	var foe := spawn(SCRIBE, 1, Vector3(0, 0, -9))
+	foe.controller = null
+	var tower := spawn(TOWER, 1, Vector3(-3, 0, -6))
+	tower.controller = null
+	await ticks(2)
+	var cast := GRAVE.get_slot(2)
+	check(cast.id == &"willing_dead", "Gravebinder's E is Willing Dead")
+	await _cast(me, 2, Vector3(0, 0, -4), cast.cast_time + 0.05)
+	var mine := _summons(me)
+	check(mine.size() == 1, "a willing dead rises")
+	if mine.is_empty():
+		return
+	var s: Unit = mine[0]
+	var start := s.global_position
+	await secs(3.0)
+	check(s.global_position.distance_to(start) > 1.5, "it walks to the fight (%.1f m)" % s.global_position.distance_to(start))
+	check(foe.health < SCRIBE.max_health, "and strikes the enemy champion (%.0f)" % (SCRIBE.max_health - foe.health))
+	check(tower.health == TOWER.max_health, "never a structure")
+	# Leash: the owner walks away and the spirit follows instead of chasing on.
+	foe.global_position = Vector3(0, 0, -30)
+	me.global_position = Vector3(0, 0, 16)
+	await secs(3.5)
+	check(UnitController.flat_distance(s.global_position, me.global_position) < 8.0, "with no fight near, it keeps to its owner (%.1f m)" % UnitController.flat_distance(s.global_position, me.global_position))
+	s.life_timer = 0.1
+	await secs(0.2)
+	check(not s.alive, "it fades when its time runs out")
+
+
+func test_willing_dead_max() -> void:
+	var me := spawn(GRAVE, 0, Vector3.ZERO)
+	await ticks(2)
+	var cast := GRAVE.get_slot(2)
+	var first: Unit = null
+	for k in 3:
+		me.cooldowns[2] = 0.0
+		await _cast(me, 2, Vector3(k * 2.0 - 2.0, 0, -4), cast.cast_time + cast.recovery + 0.05)
+		if k == 0 and not _summons(me).is_empty():
+			first = _summons(me)[0]
+	var mine := _summons(me)
+	check(mine.size() == 2, "at most two willing dead (%d)" % mine.size())
+	check(first != null and (not is_instance_valid(first) or not first.alive), "a third replaces the oldest")
+
+
+func test_names_remembered() -> void:
+	var me := spawn(GRAVE, 0, Vector3.ZERO)
+	var foe := spawn(DUMMY, 1, Vector3(0, 0, -8))
+	var foe2 := spawn(DUMMY, 1, Vector3(1.2, 0, -8))
+	await ticks(2)
+	check(GRAVE.passive == ChampionDef.Passive.REMEMBRANCE, "Gravebinder's passive is Names Remembered")
+	await _cast(me, 0, foe.global_position, 0.8)
+	check(me.passive_stacks == 0.0, "a basic hit stores no name")
+	await _cast(me, 4, foe.global_position, GRAVE.get_slot(4).cast_time + 0.6)
+	check(me.passive_stacks == 1.0, "Withering Curse through two enemies stores one name, once per cast (%.0f)" % me.passive_stacks)
+	await _cast(me, 1, foe.global_position, GRAVE.get_slot(1).cast_time + 0.9)
+	check(me.passive_stacks == 2.0, "Binding Chains stores another (%.0f)" % me.passive_stacks)
+	var cast := GRAVE.get_slot(2)
+	await _cast(me, 2, Vector3(3, 0, -3), cast.cast_time + 0.05)
+	var mine := _summons(me)
+	check(me.passive_stacks == 0.0, "Willing Dead spends the names")
+	if mine.is_empty():
+		return
+	var want := cast.summon_duration + 2.0 * GRAVE.passive_value - cast.cast_time
+	check(mine[0].life_timer > cast.summon_duration + 0.5, "the spirit lasts longer: %.1f s left (plain %.0f)" % [mine[0].life_timer, cast.summon_duration])
+	check(absf(mine[0].life_timer - want) < 0.5, "2 s per name")
 
 
 # --- Batch C: Barrowking, Veilsinger, Stormscald -------------------------------
@@ -2802,6 +2876,71 @@ func test_phase6_bot_match() -> void:
 	var stray := authority.units.filter(func(u: Unit) -> bool: return u.def.kind == ChampionDef.Kind.SUMMON and u.alive and u.life_timer > 20.0)
 	check(stray.is_empty(), "no summon outlives its time")
 	map.queue_free()
+
+
+## Three lanes: when an allied side tower is pressed by a champion and
+## nobody is there, the nearest free bot (mid) rotates through a wall gap
+## to defend it; an open enemy core pulls everyone mid.
+func test_three_lane_rotate() -> void:
+	var mc := MatchController.new()
+	mc.human_slot = false
+	mc.three_lane = true
+	mc.lineup_ids = [&"ruinscribe", &"oathwarden", &"thornwright"]
+	mc.bot_seed = 5
+	var map := ThreeLaneBuilder.new()
+	world.add_child(map)
+	world.add_child(mc)
+	mc.setup(authority, world)
+	mc.start()
+	await secs(25.0)
+	var west: Unit = null
+	for t: Unit in mc.lane_towers[0]:
+		if t.global_position.x < -20.0:
+			west = t
+	var mid: Unit = null
+	for c: Unit in mc.champions:
+		if c.team == 0 and mc.info.slot_of(c) == 0:
+			mid = c
+	var raider: Unit = null
+	for c: Unit in mc.champions:
+		if c.team == 1:
+			raider = c
+			break
+	check(west != null and mid != null and raider != null, "towers and champions found")
+	if west == null or mid == null or raider == null:
+		map.queue_free()
+		return
+	raider.controller = null
+	for c: Unit in mc.champions:
+		if c.team == 1 and c != raider:
+			c.controller = null  # the others wait at home, out of the way
+			c.global_position = Vector3(c.global_position.x * 0.0 + 6.0 * mc.info.slot_of(c), 0, -76)
+	for c: Unit in mc.champions:
+		if c.team == 0 and mc.info.slot_of(c) == 1:
+			c.controller = null  # the west laner is away (at home)
+			c.global_position = Vector3(-6, 0, 76)
+	var best := INF
+	for i in 40:
+		raider.global_position = west.global_position + Vector3(0, 0, -4)
+		raider.health = raider.max_health
+		mid.health = mid.max_health
+		await secs(0.5)
+		best = minf(best, UnitController.flat_distance(mid.global_position, west.global_position))
+		if best < DEFEND_NEAR:
+			break
+	check(best < DEFEND_NEAR, "the mid bot rotates to the pressed west tower (closest %.0f m)" % best)
+	check((mid.controller as ChampionBot)._target == raider, "and takes on the raider")
+	raider.global_position = Vector3(36, 0, -70)
+	for t: Unit in mc.lane_towers[1]:
+		if t.global_position.x > -20.0:
+			t.set_dead(null)
+	await secs(1.0)
+	var bot := mid.controller as ChampionBot
+	check(bot != null and is_equal_approx(bot._lane_now(mid), 0.0), "with the enemy core open, it goes mid")
+	map.queue_free()
+
+
+const DEFEND_NEAR := 20.0  # in casting range of an attacker at the tower
 
 
 func test_three_lane_match() -> void:

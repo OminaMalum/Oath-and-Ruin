@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/units/willing_dead.tres" id="8_sm"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"willing_dead"
+display_name = "Willing Dead"
+description = "Call a willing dead up to 6 m away for 8 s. It walks with you and strikes the champion fighting you, or the nearest enemy. Up to two: a third replaces the oldest. It never hits structures. Counterplay: break it (240 health), or step away from it."
+delivery = 8
+cast_time = 0.35
+recovery = 0.2
+cooldown = 10.0
+move_mult_while_casting = 0.4
+range = 6.0
+summon_duration = 8.0
+summon_max = 2
+summon_group = &"willing_dead"
+summon = ExtResource("8_sm")

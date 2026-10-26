@@ -13,6 +13,8 @@ var lanes: Array[float] = [0.0]
 var base_z: float = 46.0
 ## The walk to the neutral camp, per team (four points, the last at the camp).
 var routes: Array[PackedVector3Array] = []
+## Three lanes: the west lane's walk to the camp, per team.
+var routes_west: Array[PackedVector3Array] = []
 ## For the objective's public state (announced to everyone).
 var match_ctl: MatchController
 
@@ -22,7 +24,15 @@ func objective_open() -> bool:
 	return match_ctl != null and match_ctl.beast_state in [MatchController.Beast.AWAKE, MatchController.Beast.CAPTURE]
 
 
-func objective_route(team: int) -> PackedVector3Array:
+## Which slots take the camp: the two nearest it. One lane: slots 1 and 2
+## (slot 0 holds the lane). Three lanes: mid and west (the camp is west).
+func objective_slot(slot: int) -> bool:
+	return slot in ([0, 1] if lanes.size() >= 3 else [1, 2])
+
+
+func objective_route(team: int, slot := 0) -> PackedVector3Array:
+	if slot == 1 and not routes_west.is_empty():
+		return routes_west[team]
 	if not routes.is_empty():
 		return routes[team]
 	var s := 1.0 if team == 0 else -1.0
