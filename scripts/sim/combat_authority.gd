@@ -222,6 +222,13 @@ func release_ability(caster: Unit, a: AbilityDef, target: Vector3, target_unit: 
 			self_cast.emit(caster, a)
 		AbilityDef.Delivery.SUMMON:
 			_summon(caster, a, target)
+			if caster.def.passive == ChampionDef.Passive.REMEMBRANCE and caster.passive_stacks >= 1.0:
+				# Names Remembered: every own summon lasts longer, the new one too.
+				var extra := caster.def.passive_value * floorf(caster.passive_stacks)
+				caster.passive_stacks = 0.0
+				for u in units:
+					if u.alive and u.summoner == caster and u.life_timer > 0.0:
+						u.life_timer += extra
 		AbilityDef.Delivery.DASH:
 			caster.start_dash(a, target)
 			dash_started.emit(caster, a)
@@ -935,6 +942,7 @@ const PRIMED_TIME := 6.0    # STAND_BEHIND: a cast primes the next hit this long
 const STAND_COOLDOWN := 8.0
 const MEASURED_COOLDOWN := 6.0
 const CALIBRATE_MAX := 4.0
+const REMEMBRANCE_MAX := 3.0
 const FORMATION_MAX := 3.0
 const FORMATION_TIME := 4.0
 const ROOTS_EVERY := 6.0
@@ -971,6 +979,12 @@ func _hit_passives(source: Unit, target: Unit, a: AbilityDef) -> void:
 					source.passive_marks.erase(target.net_id)
 					source.apply_shield(source.def.passive_value, PASSIVE_SHIELD_TIME)
 					unit_shielded.emit(source, source.shield)
+		ChampionDef.Passive.REMEMBRANCE:
+			if a != source.def.basic_attack and a != source.get_slot(0) and target.def.kind != ChampionDef.Kind.STRUCTURE:
+				var key := "rem:ult" if a.is_ultimate else "rem:%s" % a.id
+				if time - float(source.passive_marks.get(key, -100.0)) > RESIDUAL_WINDOW:
+					source.passive_marks[key] = time  # once per cast, however many it hits
+					source.passive_stacks = minf(source.passive_stacks + 1.0, REMEMBRANCE_MAX)
 		ChampionDef.Passive.CALIBRATE:
 			if a == source.get_slot(0):
 				source.passive_stacks = minf(source.passive_stacks + 1.0, CALIBRATE_MAX)

@@ -4,7 +4,7 @@
 [ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="2_ab"]
 [ext_resource type="Resource" path="res://data/abilities/grave_bolt.tres" id="3_b"]
 [ext_resource type="Resource" path="res://data/abilities/binding_chains.tres" id="4_a"]
-[ext_resource type="Resource" path="res://data/abilities/grasping_earth.tres" id="5_a"]
+[ext_resource type="Resource" path="res://data/abilities/willing_dead.tres" id="5_a"]
 [ext_resource type="Resource" path="res://data/abilities/grave_pact.tres" id="6_a"]
 [ext_resource type="Resource" path="res://data/abilities/withering_curse.tres" id="9_f"]
 
@@ -23,10 +23,10 @@ move_speed = 6.0
 fountain_heal = 80.0
 basic_attack = ExtResource("3_b")
 abilities = Array[ExtResource("2_ab")]([ExtResource("4_a"), ExtResource("5_a"), ExtResource("6_a"), ExtResource("9_f")])
-passive = 6
-passive_name = "Soul Tithe"
-passive_description = "20% more damage to enemies that are rooted, slowed or stunned."
-passive_value = 0.2
+passive = 23
+passive_name = "Names Remembered"
+passive_description = "Ability hits on champions store a name (once per cast, up to 3). Willing Dead spends them: every spirit you have lasts 2 s longer per name."
+passive_value = 2.0
 passive_range = 0.0
 primary_color = Color(0.22, 0.18, 0.28, 1)
 accent_color = Color(0.72, 0.58, 0.92, 1)

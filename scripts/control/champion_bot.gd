@@ -31,6 +31,13 @@ var _route_back: bool = false
 ## Which upgrade this bot takes at level 3 (1 or 2).
 var upgrade_pick: int = 1
 var _committed: bool = false  # fighting at the objective camp
+## Three lanes: the lane played now (see _lane_now) and when to look again.
+var _lane_x: float = INF
+var _lane_look_at: float = 0.0
+var _defend_until: float = -1.0
+var _defend_at := Vector3.ZERO
+const DEFEND_RANGE := 16.0
+const DEFEND_HOLD := 5.0
 ## Diagnosis log (OATH_CAMLOG=1): prints target switches and large facing
 ## changes for the followed bot (team 0 slot 0) so camera work can be checked.
 var _camlog: bool = false
@@ -162,9 +169,10 @@ func _decide(unit: Unit) -> UnitCommand:
 		c.move = world_to_move((back - pos).normalized(), c.aim_yaw)
 		return c
 	if state == State.RETREAT:
-		var dir := fountain - pos
+		var home := _home_way(unit, fountain)
+		var dir := home - pos
 		if flat_distance(pos, fountain) > 2.0:
-			c.aim_yaw = yaw_towards(pos, fountain)
+			c.aim_yaw = yaw_towards(pos, home)
 			c.move = world_to_move(dir.normalized(), c.aim_yaw)
 			# A dash is also an escape: use it when an enemy champion is close.
 			# A grapple too, when a wall lies on the way home.
@@ -232,6 +240,10 @@ func _decide(unit: Unit) -> UnitCommand:
 	var finishing := enemy_champ != null and enemy_champ.health / enemy_champ.max_health < 0.35 \
 			and hp > 0.4 and _safe_from_tower(unit, enemy_champ.global_position)
 	var edge := _numbers_edge(unit)
+	if _rushing(unit):
+		# On the way to defend another lane's tower: no stopping for minions.
+		weakest_minion = null
+		can_siege = false
 	if enemy_champ and (d_champ <= reach or finishing) and _safe_from_tower(unit, enemy_champ.global_position):
 		pick = enemy_champ
 	elif can_siege and (enemy_champ == null or edge):
@@ -524,7 +536,7 @@ func _enemy_champion_within(unit: Unit, r: float) -> bool:
 ## Bots in slots 1 and 2 contest the objective when it is open, they are
 ## healthy and their team still has at least two champions up.
 func _wants_objective(unit: Unit, enemy_champ: Unit) -> bool:
-	if not match_info.objective_open() or match_info.slot_of(unit) == 0:
+	if not match_info.objective_open() or not match_info.objective_slot(match_info.slot_of(unit)):
 		_committed = false
 		return false
 	var hp := unit.health / unit.max_health
@@ -537,7 +549,7 @@ func _wants_objective(unit: Unit, enemy_champ: Unit) -> bool:
 		return false
 	for u in authority.units:
 		if u != unit and u.alive and u.team == unit.team and u.def.kind == ChampionDef.Kind.CHAMPION \
-				and match_info.slot_of(u) > 0 and u.health / u.max_health >= 0.6:
+				and match_info.objective_slot(match_info.slot_of(u)) and u.health / u.max_health >= 0.6:
 			if _route_idx >= 3:
 				_committed = true
 			return true
@@ -546,7 +558,7 @@ func _wants_objective(unit: Unit, enemy_champ: Unit) -> bool:
 
 ## Next point on the walk to the camp (or back out of it).
 func _route_goal(unit: Unit, back: bool) -> Vector3:
-	var route := match_info.objective_route(unit.team)
+	var route := match_info.objective_route(unit.team, match_info.slot_of(unit))
 	var pos := unit.global_position
 	if back:
 		var i := _route_idx - 1
@@ -558,6 +570,21 @@ func _route_goal(unit: Unit, back: bool) -> Vector3:
 		return route[maxi(i, 0)]
 	if _route_idx < route.size() and flat_distance(pos, route[_route_idx]) < 1.5:
 		_route_idx += 1
+	if _route_idx == 0 and match_info.lanes.size() >= 3:
+		# Three lanes: reach the route's lane first (out through its gate,
+		# or across through a wall gap), then walk the route.
+		var lx: float = match_info.lanes[0]
+		for x: float in match_info.lanes:
+			if absf(route[0].x - x) < absf(route[0].x - lx):
+				lx = x
+		var s := 1.0 if unit.team == 0 else -1.0
+		if pos.z * s > match_info.base_z - 1.0:
+			if absf(pos.x - lx) > 4.0:
+				return Vector3(lx, 0, s * (match_info.base_z + 2.0))
+		else:
+			var cross := _lane_crossing(pos, lx)
+			if cross.is_finite():
+				return cross
 	return route[mini(_route_idx, route.size() - 1)]
 
 
@@ -583,14 +610,20 @@ func _numbers_edge(unit: Unit) -> bool:
 ## gone. With a numbers edge it walks level with the wave to press the push.
 func _push_position(unit: Unit, press: bool) -> Vector3:
 	var lane := match_info.lane_dir(unit.team)  # unit vector toward the enemy base
-	var lx := match_info.lane_x(unit)
+	var lx := _lane_now(unit)
 	var many := match_info.lanes.size() > 1
 	if many:
-		# Three lanes: leave the base through this lane's gate first.
+		# Three lanes: leave the base through this lane's gate first, and
+		# cross to another lane only through a gap in the lane walls.
 		var s := 1.0 if unit.team == 0 else -1.0
 		var gate_z := s * (match_info.base_z + 2.0)
 		if unit.global_position.z * s > match_info.base_z - 1.0 and absf(unit.global_position.x - lx) > 4.0:
 			return Vector3(lx, 0, gate_z)
+		var cross := _lane_crossing(unit.global_position, lx)
+		if cross.is_finite():
+			return cross
+		if authority.time < _defend_until and absf(_defend_at.x - lx) < 1.0:
+			return _defend_at  # stand in front of the pressed tower
 	var front: Unit = null
 	var best := -INF
 	for u in authority.units:
@@ -608,6 +641,107 @@ func _push_position(unit: Unit, press: bool) -> Vector3:
 	if front:
 		return front.global_position - lane * (1.0 if press else 5.0) + side
 	return match_info.hold_point(unit.team) + side + Vector3(lx, 0, 0)
+
+
+## Rotating to defend a tower in another lane and not there yet.
+func _rushing(unit: Unit) -> bool:
+	return authority.time < _defend_until and is_finite(_lane_x) and absf(_defend_at.x - _lane_x) < 1.0 \
+			and flat_distance(unit.global_position, _defend_at) > 8.0
+
+
+## The way home: straight to the fountain, except on three lanes, where it
+## walks back down the lane it is in (or out of the jungle through the
+## nearest gap) to that lane's base gate first.
+func _home_way(unit: Unit, fountain: Vector3) -> Vector3:
+	if match_info.lanes.size() < 3:
+		return fountain
+	var pos := unit.global_position
+	var s := 1.0 if unit.team == 0 else -1.0
+	if pos.z * s > match_info.base_z - 1.0:
+		return fountain
+	var lx: float = match_info.lanes[0]
+	for x: float in match_info.lanes:
+		if absf(pos.x - x) < absf(pos.x - lx):
+			lx = x
+	var cross := _lane_crossing(pos, lx)
+	if cross.is_finite():
+		return cross
+	return Vector3(lx, 0, s * (match_info.base_z + 2.0))
+
+
+## Three lanes: the lane this bot plays right now (world x). Its own lane,
+## unless an allied tower elsewhere is under champion attack and this bot
+## is the nearest one free to help, or an enemy core is open (all go mid).
+func _lane_now(unit: Unit) -> float:
+	var home := match_info.lane_x(unit)
+	if match_info.lanes.size() < 3 or match_info.match_ctl == null:
+		return home
+	if authority.time >= _lane_look_at:
+		_lane_look_at = authority.time + 0.5
+		_lane_x = _pick_lane(unit, home)
+	return _lane_x if is_finite(_lane_x) else home
+
+
+func _pick_lane(unit: Unit, home: float) -> float:
+	var ctl := match_info.match_ctl
+	var enemy_core: Unit = ctl.cores[1 - unit.team]
+	if enemy_core and is_instance_valid(enemy_core) and enemy_core.alive and not enemy_core.is_protected():
+		return 0.0  # the core is open: group up mid and finish it
+	if unit.health / unit.max_health < 0.5:
+		return home
+	# Defend: an allied tower with more enemy champions at it than allies.
+	for tower: Unit in ctl.lane_towers[unit.team]:
+		if not is_instance_valid(tower) or not tower.alive:
+			continue
+		var tx := tower.global_position.x
+		var foes := _enemy_champions_within(unit, tower.global_position, DEFEND_RANGE)
+		if foes == 0:
+			continue
+		if absf(tx - home) < 1.0:
+			return home  # its own tower is pressed: stay
+		var friends := 0
+		var nearest := true
+		var my_d := flat_distance(unit.global_position, tower.global_position)
+		for u in authority.units:
+			if u.alive and u.team == unit.team and u.def.kind == ChampionDef.Kind.CHAMPION:
+				var d := flat_distance(u.global_position, tower.global_position)
+				if d <= DEFEND_RANGE:
+					friends += 1
+				elif u != unit and d < my_d and u.health / u.max_health >= 0.5 \
+						and _enemy_champions_within(u, Vector3(match_info.lane_x(u), 0, u.global_position.z), DEFEND_RANGE) == 0:
+					nearest = false
+		var going := is_finite(_lane_x) and absf(_lane_x - tx) < 1.0  # already on the way: keep going
+		if friends < foes and nearest and (going or _enemy_champions_within(unit, unit.global_position, DEFEND_RANGE) == 0):
+			_defend_until = authority.time + DEFEND_HOLD
+			_defend_at = tower.global_position + match_info.lane_dir(unit.team) * 4.0
+			return tx
+	if authority.time < _defend_until and is_finite(_lane_x):
+		return _lane_x  # stay a moment after the attackers leave
+	return home
+
+
+## Three lanes: the next point when `pos` is not in lane `lx`: along its
+## current lane to the nearest wall gap, then straight across. INF when it
+## is already in that lane (or out in the base, where lanes meet).
+func _lane_crossing(pos: Vector3, lx: float) -> Vector3:
+	if absf(pos.x - lx) <= ThreeLaneBuilder.LANE_HALF or absf(pos.z) > match_info.base_z - 1.0:
+		return Vector3.INF
+	var gz := 0.0
+	var best := INF
+	for g: float in ThreeLaneBuilder.GAPS:
+		for z in [g, -g]:
+			if absf(pos.z - z) < best:
+				best = absf(pos.z - z)
+				gz = z
+	var in_lane := false
+	var here := pos.x
+	for x: float in match_info.lanes:
+		if absf(pos.x - x) <= ThreeLaneBuilder.LANE_HALF:
+			in_lane = true
+			here = x
+	if in_lane and absf(pos.z - gz) > ThreeLaneBuilder.GAP_HALF - 1.0:
+		return Vector3(here, 0, gz)  # walk the lane to the gap
+	return Vector3(lx, 0, gz)  # through the gap (and across the jungle)
 
 
 func _wave_tanks(unit: Unit, structure: Unit) -> bool:

@@ -575,6 +575,39 @@ sentry 20 to 16 and calibration 12% to 10%). With Ruinscribe and
 Lanternkeeper: sides 3/3, median 12.6 min, Brasswright 47%. Stillhand with
 Lanternkeeper and Ruinscribe: all ended, Stillhand 35%.
 
+## Phase 7: Willing Dead and three lane bots (added 2026-10-26)
+
+Gravebinder takes the brief's E and passive:
+- E Willing Dead: a walking spirit (240 health, 20 a strike) for 8 s, up to
+  two, a third replaces the oldest. It keeps near her, strikes the champion
+  fighting her first, never structures, never body-blocks (units do not
+  collide) and carries no items, so it cannot trigger her item passives.
+  Kills are hers. Grasping Earth (the pull circle) leaves her kit; the pull
+  rule stays in code and tests.
+- Passive Names Remembered: an ability hit on a champion stores a name, once
+  per cast, up to 3. Willing Dead spends them: each of her spirits lasts 2 s
+  longer per name. Replaces Soul Tithe (kept in code, unused).
+
+Three lane bots:
+- Each bot plays its lane (slot 0 mid, 1 west, 2 east). Twice a second it
+  looks at its team's towers: if one in another lane has more enemy
+  champions at it than allies, the nearest healthy bot that is not under
+  pressure itself rotates there, skipping minions on the way, and holds in
+  front of the tower until 5 s after the attackers leave.
+- Lane changes and retreats go through the gaps in the lane walls (z 12 and
+  34 each side) and the lane gates of the base, never straight into a wall.
+- Once an enemy core is open (two of its towers down) all three group mid.
+- Mid and west take the camp on three lanes (it sits in the west jungle).
+
+Soaks (adventurer items, mirror lineups): one lane seeds 18 to 29, all 12
+ended, sides 5/7, median 10.5 min, 22 kills a match, Gravebinder 46% team
+kill share. Three lane seeds 18 to 25, all 8 ended, sides 4/4, median 11.4
+min (9.0 to 14.9), 15.6 kills a match. Before the bot work the three lane
+map ran 5.7 to 15.9 min with lanes pushed unopposed; a first try had a
+25 min stalemate from bots walking into the base wall on the way to the
+camp, fixed by routing that walk through the lane gates. OATH_POSLOG=1
+prints where every champion is every 20 s for this kind of check.
+
 ## Presentation and sound (review batches 1 to 3)
 
 Everything here is view only and reads public sim state; timing stays in the sim.

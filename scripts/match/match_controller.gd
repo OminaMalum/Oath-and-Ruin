@@ -123,6 +123,7 @@ func setup(a: CombatAuthority, parent: Node3D) -> void:
 		info.lane_dirs.append(Vector3(0, 0, -s))
 		if three_lane:
 			info.routes.append(PackedVector3Array([Vector3(-3, 0, s * 12.0), Vector3(-10, 0, s * 12.0), Vector3(-13, 0, s * 5.0), Vector3(-14, 0, 0)]))
+			info.routes_west.append(PackedVector3Array([Vector3(-33, 0, s * 12.0), Vector3(-26, 0, s * 12.0), Vector3(-23, 0, s * 5.0), Vector3(-22, 0, 0)]))
 	if three_lane:
 		info.lanes = ThreeLaneBuilder.LANES.duplicate()
 		info.base_z = ThreeLaneBuilder.BASE_Z
@@ -232,10 +233,22 @@ func _spawn(def: ChampionDef, team: int, pos: Vector3, yaw: float) -> Unit:
 	return u
 
 
+## Diagnosis (OATH_POSLOG=1): every 20 s, where each champion stands and
+## what its bot is doing, to find bots stuck on walls or in loops.
+var _poslog := OS.get_environment("OATH_POSLOG") == "1"
+var _poslog_t := 0.0
+
+
 func _physics_process(dt: float) -> void:
 	if over:
 		return
 	stats.duration = authority.time
+	if _poslog and authority.time >= _poslog_t:
+		_poslog_t += 20.0
+		for c: Unit in champions:
+			var b := c.controller as ChampionBot
+			print("POSLOG %.0f %s x %.1f z %.1f hp %.0f%% %s" % [authority.time, c.name, c.global_position.x, c.global_position.z,
+				100.0 * c.health / c.max_health, ChampionBot.State.keys()[b.state] if b else "-"])
 	_wave_timer -= dt
 	if _wave_timer <= 0.0:
 		_wave_timer += WAVE_EVERY

@@ -634,6 +634,8 @@ static func passive_readout(u: Unit) -> String:
 			return "Fury %d" % floori(u.passive_stacks) if u.passive_stacks >= 1.0 else ""
 		ChampionDef.Passive.RESIDUAL:
 			return "Charges %d/%d" % [floori(u.passive_stacks), roundi(CombatAuthority.RESIDUAL_MAX)] if u.passive_stacks >= 1.0 else ""
+		ChampionDef.Passive.REMEMBRANCE:
+			return "Names %d/%d" % [floori(u.passive_stacks), roundi(CombatAuthority.REMEMBRANCE_MAX)] if u.passive_stacks >= 1.0 else ""
 		ChampionDef.Passive.REFRAIN:
 			if u.refrain_slot > 0:
 				var other := u.get_slot(3 - u.refrain_slot)

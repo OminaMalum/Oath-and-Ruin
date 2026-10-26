@@ -2,7 +2,7 @@ class_name ChampionDef
 extends Resource
 ## Base stats and kit for a champion (or any unit that uses the same rules).
 
-enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER, CLERIC, RANGER, WARLOCK, BARBARIAN, BARD, EVOKER, SENTRY, BANNER }
+enum Look { SPELLCASTER, TRAINING_DUMMY, MINION_MELEE, MINION_CASTER, TOWER, CORE, SHRINEBEARER, BREAKER, WARDEN, SKIRMISHER, CLERIC, RANGER, WARLOCK, BARBARIAN, BARD, EVOKER, SENTRY, BANNER, SPIRIT }
 ## What rules apply: who can be targeted by whom, who respawns, who moves.
 enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL, SUMMON }
 ## Passive rules, resolved by the CombatAuthority. INSCRIBE: every third basic
@@ -42,8 +42,11 @@ enum Kind { CHAMPION, MINION, STRUCTURE, DUMMY, NEUTRAL, SUMMON }
 ## every ROOTS_EVERY.
 ## RESIDUAL: slot 4 or ultimate hits on champions store charges (once per cast,
 ## up to 2); the next slot 1 cast spends them for passive_value more damage each.
+## REMEMBRANCE: an ability hit on a champion stores a name (once per cast,
+## up to REMEMBRANCE_MAX); the next summon cast spends them, and every own
+## summon lives passive_value seconds longer per name.
 enum Passive { NONE, INSCRIBE, RESOLVE, EMBER, LANTERN, LONGSHOT, TITHE, BARROWBLOOD, ENCORE, STORMEYE,
-	MARGINALIA, STAND_BEHIND, QUARRY, MOMENTUM, SEAM, FLAME, FURY, REFRAIN, RESIDUAL, MEASURED, CALIBRATE, FORMATION, ROOTS }
+	MARGINALIA, STAND_BEHIND, QUARRY, MOMENTUM, SEAM, FLAME, FURY, REFRAIN, RESIDUAL, MEASURED, CALIBRATE, FORMATION, ROOTS, REMEMBRANCE }
 
 @export var id: StringName
 @export var display_name: String = ""
