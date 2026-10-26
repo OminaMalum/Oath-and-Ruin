@@ -209,7 +209,7 @@ def animate(rig, spec):
         (rel * 0.6, b(chest=(0, 0, 10), upper_arm_r=(40, 0, 40), forearm_r=(-80, 0, 30)), (0, -0.02, -0.02)),
         (rel, b(spine=(8, 0, -6), chest=(6, 0, -8), upper_arm_r=(25, 0, 20), forearm_r=(-30, 0, 10), lute=(10, 0, 0)), (0, 0.04, -0.04)),
         (rel + rec * 0.5, b(spine=(6, 0, -4), upper_arm_r=(20, 0, 15), forearm_r=(-25, 0, 0), lute=(8, 0, 0)), (0, 0.03, -0.04)),
-        (rel + rec, b(), (0, 0, -0.012))], feet)
+        (rel + rec, b(), (0, 0, -0.012))], feet, amp=1.6)
 
     # War Song: the lute lifted, head thrown back, singing.
     c = slots["ability_1"]
@@ -220,7 +220,7 @@ def animate(rig, spec):
         (rel, b(spine=(-12, 0, 0), chest=(-10, 0, 0), head=(-28, 0, 0), lute=(-25, 0, 0), upper_arm_l=(60, 0, 30), upper_arm_r=(45, 0, 30)),
          (0, 0, 0.0)),
         (rel + rec, b(spine=(-10, 0, 0), head=(-22, 0, 0), lute=(-20, 0, 0), upper_arm_l=(55, 0, 30), upper_arm_r=(42, 0, 30)), (0, 0, -0.01))],
-        feet)
+        feet, amp=1.5)
 
     # Lure: the lute thrust out ahead, a long bright note.
     c = slots["ability_2"]
@@ -232,7 +232,7 @@ def animate(rig, spec):
          (0, 0.08, -0.08)),
         (rel + rec * 0.5, b(spine=(12, 0, -3), lute=(24, 0, 0)), (0, 0.06, -0.07)),
         (rel + rec, b(), (0, 0, -0.012))],
-        {"l": (feet["l"][0], feet["l"][1] + 0.2, feet["l"][2]), "r": (feet["r"][0], feet["r"][1] - 0.15, feet["r"][2])})
+        {"l": (feet["l"][0], feet["l"][1] + 0.2, feet["l"][2]), "r": (feet["r"][0], feet["r"][1] - 0.15, feet["r"][2])}, amp=1.4)
 
     # Rally Chorus: a spin of the body, the lute raised high over the head.
     c = slots["ability_3"]
@@ -243,7 +243,7 @@ def animate(rig, spec):
         (rel, b(spine=(-14, 0, 0), chest=(-12, 0, 0), head=(-24, 0, 0), lute=(-60, 0, 0), upper_arm_l=(150, 0, 10), forearm_l=(-30, 0, 20),
                 upper_arm_r=(140, 0, 10), forearm_r=(-30, 0, 0)), (0, 0, 0.04)),
         (rel + rec, b(spine=(-12, 0, 0), head=(-20, 0, 0), lute=(-55, 0, 0), upper_arm_l=(145, 0, 10), upper_arm_r=(135, 0, 10)), (0, 0, 0.03))],
-        feet)
+        feet, amp=1.15)
 
     ck.death_clip(rig, NAMES, lambda t: {"lute": (30 * min(1.0, t / 0.6), 0, 0)})
 

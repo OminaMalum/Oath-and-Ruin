@@ -539,14 +539,17 @@ def idle_clip(rig, length, fn, step=6):
 OVERSHOOT = ("spine", "chest", "head", "upper_arm_r", "forearm_r", "upper_arm_l", "forearm_l")
 
 
-def cast_clip(rig, name, rel, rec, keys, feet=None):
+def cast_clip(rig, name, rel, rec, keys, feet=None, amp=1.0):
     """keys: [(time, rots, hips_offset)]; times may use rel and rel + rec.
 
     Every cast also gets weight: the body sinks and shifts onto a braced
     stance into the release (lead foot forward, back foot back), and the
     release pose overshoots a little before the recovery (follow through).
-    Clips that place their own feet keep them."""
+    Clips that place their own feet keep them. amp scales every keyed
+    rotation and hips offset (bigger, more readable poses from the camera)."""
     act, end = clip(rig, name, rel + rec, rel)
+    if amp != 1.0:
+        keys = [(t, {k: tuple(v * amp for v in r) for k, r in rots.items()}, tuple(h * amp for h in hp)) for t, rots, hp in keys]
     rest = rest_feet(rig)
     own_feet = feet is not None and feet != rest
     feet = feet or rest
