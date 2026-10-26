@@ -536,12 +536,47 @@ def idle_clip(rig, length, fn, step=6):
     close_clip(rig, act, "idle-loop")
 
 
+OVERSHOOT = ("spine", "chest", "head", "upper_arm_r", "forearm_r", "upper_arm_l", "forearm_l")
+
+
 def cast_clip(rig, name, rel, rec, keys, feet=None):
-    """keys: [(time, rots, hips_offset)]; times may use rel and rel + rec."""
+    """keys: [(time, rots, hips_offset)]; times may use rel and rel + rec.
+
+    Every cast also gets weight: the body sinks and shifts onto a braced
+    stance into the release (lead foot forward, back foot back), and the
+    release pose overshoots a little before the recovery (follow through).
+    Clips that place their own feet keep them."""
     act, end = clip(rig, name, rel + rec, rel)
-    feet = feet or rest_feet(rig)
+    rest = rest_feet(rig)
+    own_feet = feet is not None and feet != rest
+    feet = feet or rest
+    keys = sorted(keys, key=lambda k: k[0])
+    total = rel + rec
+    # Follow through: past the release pose, unless the clip already keys there.
+    t_os = rel + min(0.12, rec * 0.35)
+    rk = min(keys, key=lambda k: abs(k[0] - rel))
+    if abs(rk[0] - rel) < 0.02 and not any(rel + 0.01 < k[0] <= t_os + 0.03 for k in keys) and t_os < total - 0.05:
+        r = dict(rk[1])
+        for bn in OVERSHOOT:
+            if bn in r:
+                r[bn] = tuple(v * 1.15 for v in r[bn])
+        keys.append((t_os, r, rk[2]))
+        keys.sort(key=lambda k: k[0])
+    s = rig.data.bones["hips"].head_local.z / 0.96
+
+    def weight(t):
+        if t <= rel:
+            return 0.5 - 0.5 * math.cos(math.pi * max(0.0, t / max(rel, 1e-3)))
+        return max(0.0, 1.0 - (t - rel) / max(rec, 1e-3)) ** 1.5
+
     for t, rots, hp in keys:
-        pose(rig, round(t * FPS), rots, {"hips": hp}, feet)
+        w = weight(t)
+        hp = (hp[0], hp[1] + 0.03 * s * w, hp[2] - 0.04 * s * w)
+        f = feet
+        if not own_feet and w > 0.0:
+            f = {side: (p[0] + (-0.025 if side == "l" else 0.025) * s * w,
+                        p[1] + (0.11 if side == "l" else -0.07) * s * w, p[2]) for side, p in rest.items()}
+        pose(rig, round(t * FPS), rots, {"hips": hp}, f)
     close_clip(rig, act, name)
 
 
