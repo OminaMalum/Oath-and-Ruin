@@ -13,6 +13,12 @@ func _init(u: Unit) -> void:
 
 
 func _ready() -> void:
+	# A summon with a modelled body (assets/units/<id>.glb) is drawn like a
+	# minion: clips, cloth, ragdoll. The built shapes below stay the fallback.
+	if not ChampionModel.path_for(unit.def.id).is_empty():
+		unit.add_child.call_deferred(UnitView.new(unit))
+		queue_free()
+		return
 	match unit.def.look:
 		ChampionDef.Look.SENTRY:
 			_sentry()
@@ -23,6 +29,8 @@ func _ready() -> void:
 
 
 func _process(_dt: float) -> void:
+	if is_queued_for_deletion():
+		return
 	if unit.def.look == ChampionDef.Look.SPIRIT:
 		position.y = 0.15 + sin(Time.get_ticks_msec() * 0.004 + unit.net_id) * 0.08  # it floats
 
