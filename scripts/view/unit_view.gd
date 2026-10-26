@@ -47,6 +47,7 @@ var _cast_clip := ""
 var _layers: ModelAnimator  # layered clips: casts on the upper body while running
 var _react: BodyReact       # torso lean, stop rock and hit flinch on top of the clips
 var _last_yaw := 0.0
+var _ragdoll: Ragdoll       # limp body while dead (modelled units only)
 var _run_pos := 0.0
 var _gather: CPUParticles3D  # motes drawn into the casting hand during a windup
 
@@ -129,12 +130,24 @@ func _connect_signals() -> void:
 	else:
 		unit.died.connect(func(_k: Unit) -> void:
 			_death_t = 0.0
+			if _model and _layers and visible:
+				var away := Vector3(0, 0, 1).rotated(Vector3.UP, unit.aim_yaw)  # falls back off its facing
+				if _k != null and is_instance_valid(_k):
+					var d := unit.global_position - _k.global_position
+					d.y = 0.0
+					if d.length() > 0.05:
+						away = d.normalized()
+				var champ := unit.def.kind == ChampionDef.Kind.CHAMPION
+				_ragdoll = Ragdoll.fall(_model, away * (2.6 if champ else 2.0) + Vector3.UP * 1.4)
 			if visible:
 				Fx.death(self, global_position, Palette.team_color(unit.team),
 					1.0 if unit.def.kind == ChampionDef.Kind.CHAMPION else 0.6))
 		unit.respawned.connect(func() -> void:
 			_death_t = -1.0
 			visible = true
+			if is_instance_valid(_ragdoll):
+				_ragdoll.stand()
+			_ragdoll = null
 			_body.rotation = Vector3.ZERO
 			_body.position = Vector3.ZERO
 			if _layers:
@@ -320,8 +333,11 @@ func _pose_model(delta: float) -> void:
 		_death_t += delta
 		_layers.die()
 		_layers.update(delta, 0.0, 1.0, false)
-		if _death_t > 1.7:
+		if _death_t > (2.4 if _ragdoll else 1.7) and visible:
 			visible = false
+			if is_instance_valid(_ragdoll):
+				_ragdoll.stand()
+			_ragdoll = null
 		return
 	var k := 1.0 - exp(-10.0 * delta)
 	var casting := not _cast_clip.is_empty() and (_layers.casting() or unit.cast_phase != Unit.CastPhase.NONE)
