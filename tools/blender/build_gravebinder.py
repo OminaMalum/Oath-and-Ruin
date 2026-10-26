@@ -188,6 +188,7 @@ def build_model(rig, M):
 # ---------------------------------------------------------------- clips
 
 def animate(rig, spec):
+    ck.CAST_AMP = 1.4  # casts read from the top down camera
     slots = spec["slot_clips"]
     feet = ck.rest_feet(rig)
     rest = dict(upper_arm_r=(8, 0, 4), forearm_r=(-6, 0, 0), upper_arm_l=(8, 0, -4), forearm_l=(0, 0, 0), rod=(0, 0, 0),
