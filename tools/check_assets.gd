@@ -14,7 +14,7 @@ extends SceneTree
 
 const CHAMPIONS := "res://data/champions/"
 const UNITS := "res://data/units/"
-const MINIONS: Array[StringName] = [&"minion_melee", &"minion_caster", &"minion_breaker"]
+const MINIONS: Array[StringName] = [&"minion_melee", &"minion_caster", &"minion_breaker", &"willing_dead"]
 
 
 func _initialize() -> void:
