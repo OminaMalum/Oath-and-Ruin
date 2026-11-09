@@ -192,7 +192,7 @@ func _towers() -> void:
 	var iron := Palette.mat(Palette.IRON, 0.55, 0.75)
 	var wood := Palette.mat(Palette.WOOD, 0.8)
 	for s: float in [1.0, -1.0]:
-		var cloth := Palette.mat(Palette.team_color(0 if s > 0.0 else 1).darkened(0.3), 0.95)
+		var team := 0 if s > 0.0 else 1
 		for lane: float in L.LANES:
 			for side: float in [-1.0, 1.0]:
 				var bx := lane + side * (L.LANE_HALF - 0.6)
@@ -203,16 +203,9 @@ func _towers() -> void:
 				pole.height = 5.4
 				_deco(pole, wood, Vector3(bx, 2.7, bz))
 				_deco(ThreeLaneBuilder._box_mesh(Vector3(1.3, 0.07, 0.07)), brass, Vector3(bx - side * 0.6, 5.15, bz))
-				_deco(ThreeLaneBuilder._box_mesh(Vector3(1.1, 2.4, 0.04)), cloth, Vector3(bx - side * 0.6, 3.9, bz))
-				var tail := PrismMesh.new()
-				tail.size = Vector3(1.1, 0.5, 0.04)
-				_deco(tail, cloth, Vector3(bx - side * 0.6, 2.45, bz), Vector3(0, 0, 180))
-				var sig := CylinderMesh.new()
-				sig.top_radius = 0.26
-				sig.bottom_radius = 0.26
-				sig.height = 0.02
-				for dz: float in [0.03, -0.03]:
-					_deco(sig, brass, Vector3(bx - side * 0.6, 4.2, bz + dz), Vector3(90, 0, 0))
+				var flag := TeamBanner.cloth(Vector2(1.1, 2.9), team)
+				flag.position = Vector3(bx - side * 0.6, 5.12, bz)
+				_root.add_child(flag)
 				var pz := s * (L.TOWER_Z + 4.5)
 				_deco(ThreeLaneBuilder._box_mesh(Vector3(0.9, 0.85, 0.9)), _root._plinth, Vector3(bx, 0.42, pz))
 				_deco(ThreeLaneBuilder._box_mesh(Vector3(1.05, 0.12, 1.05)), _root._slate, Vector3(bx, 0.91, pz))

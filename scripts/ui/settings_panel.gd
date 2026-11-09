@@ -1,6 +1,6 @@
 class_name SettingsPanel
 extends PanelContainer
-## Volume, mouse sensitivity and fullscreen. Changes apply at once and are
+## Volume, mouse sensitivity, fullscreen and graphics quality. Changes apply at once and are
 ## saved when the panel closes. Used by the main menu and the pause menu.
 
 signal closed
@@ -48,6 +48,24 @@ func _ready() -> void:
 		Settings.apply()
 		full.text = "Fullscreen: %s" % ("On" if Settings.fullscreen else "Off"))
 	box.add_child(full)
+	# Graphics: one button that steps through the levels, with a line under
+	# it saying what the level adds. Applies at once, also mid match.
+	var gfx := Button.new()
+	gfx.custom_minimum_size = Vector2(0, 60)
+	UiStyle.button(gfx, 26)
+	var gfx_note := _label("", 20, Color(0.78, 0.74, 0.66))
+	gfx_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	gfx_note.custom_minimum_size = Vector2(560, 56)
+	var show_gfx := func() -> void:
+		gfx.text = "Graphics: %s" % Settings.GRAPHICS_NAMES[Settings.graphics]
+		gfx_note.text = Settings.GRAPHICS_NOTES[Settings.graphics]
+	show_gfx.call()
+	gfx.pressed.connect(func() -> void:
+		Settings.graphics = (Settings.graphics + 1) % Settings.GRAPHICS_NAMES.size()
+		Art.apply_quality()
+		show_gfx.call())
+	box.add_child(gfx)
+	box.add_child(gfx_note)
 	var back := Button.new()
 	back.text = "Back"
 	back.custom_minimum_size = Vector2(0, 64)

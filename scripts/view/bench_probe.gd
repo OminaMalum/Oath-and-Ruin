@@ -59,9 +59,9 @@ static func _pct(a: Array, p: float) -> float:
 
 
 func _finish() -> void:
-	var ultra := "--ultra" in OS.get_cmdline_user_args()
+	var level := Settings.GRAPHICS_NAMES[Art.quality()].to_lower()
 	var lines := PackedStringArray()
-	lines.append("PactFall fight benchmark  %s  %s  %dx%d  %s" % [Time.get_datetime_string_from_system(), "ultra" if ultra else "normal",
+	lines.append("PactFall fight benchmark  %s  %s  %dx%d  %s" % [Time.get_datetime_string_from_system(), level,
 			get_viewport().size.x, get_viewport().size.y, RenderingServer.get_video_adapter_name()])
 	lines.append("args: %s" % " ".join(OS.get_cmdline_user_args()))
 	lines.append("frames %d over %.1f s, average %.1f fps" % [_frames.size(), _t, _frames.size() / maxf(_t, 0.001)])

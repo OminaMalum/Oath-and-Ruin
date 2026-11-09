@@ -71,7 +71,7 @@ func _run() -> void:
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract", "test_item_cards",
-		"test_match_feed", "test_match_feed_alarm", "test_minimap", "test_kit_cards", "test_sound_bank", "test_ability_icons",
+		"test_match_feed", "test_match_feed_alarm", "test_minimap", "test_kit_cards", "test_sound_bank", "test_ability_icons", "test_graphics_quality", "test_team_banner",
 	]
 	for t: String in tests:
 		_make_world()
@@ -3101,6 +3101,55 @@ func test_ability_icons() -> void:
 		check(seen.size() >= 2, "%s has at least two different signs (%d)" % [d.id, seen.size()])
 	check(AbilityIcon.kind(THORN.basic_attack, true) == "arrow", "a bow shot is an arrow")
 	check(AbilityIcon.kind(SCRIBE.basic_attack, false) == "bolt", "a spell shot is a bolt")
+
+
+## The four graphics levels: each one sets the whole picture, so stepping up
+## and back down again leaves no setting behind.
+func test_graphics_quality() -> void:
+	check(Settings.GRAPHICS_NAMES.size() == 4 and Settings.GRAPHICS_NOTES.size() == 4, "four levels, each with a note")
+	var was := Settings.graphics
+	var map := LaneMapBuilder.new()
+	world.add_child(map)
+	await ticks(1)
+	var env: Environment = Art._env
+	var sun: DirectionalLight3D = Art._sun
+	check(env != null and sun != null, "the map hands its environment and sun to Art")
+	var reach := 0.0
+	for q in 4:
+		Settings.graphics = q
+		Art.apply_quality()
+		var nm := Settings.GRAPHICS_NAMES[q]
+		check(env.ssao_enabled == (q >= 1), "%s: ambient shading" % nm)
+		check(env.volumetric_fog_enabled == (q >= 2) and env.ssil_enabled == (q >= 2), "%s: light shafts and bounced light" % nm)
+		check(env.sdfgi_enabled == (q >= 3) and env.ssr_enabled == (q >= 3), "%s: global light and reflections" % nm)
+		check(sun.directional_shadow_max_distance > reach, "%s: shadows reach further than the level below" % nm)
+		reach = sun.directional_shadow_max_distance
+	Settings.graphics = 1
+	Art.apply_quality()
+	check(not env.sdfgi_enabled and not env.volumetric_fog_enabled and is_equal_approx(env.fog_density, 0.35)
+		and is_equal_approx(sun.directional_shadow_max_distance, 70.0), "back on Standard nothing from Ultra is left on")
+	Settings.graphics = was
+	map.queue_free()
+	await ticks(1)
+	Art.apply_quality()  # with no map up this must do nothing, not crash
+
+
+## Banners hang from their top edge, share one material per team on the map,
+## and each team flies its own sign.
+func test_team_banner() -> void:
+	var a := TeamBanner.cloth(Vector2(1.1, 2.9), 0)
+	var b := TeamBanner.cloth(Vector2(1.1, 2.9), 0)
+	var r := TeamBanner.cloth(Vector2(1.1, 2.9), 1)
+	var own := TeamBanner.cloth(Vector2(1.1, 2.9), 0, 1.0, true)
+	var box := a.mesh.get_aabb()
+	check(absf(box.end.y) < 0.01 and absf(box.position.y + 2.9) < 0.01, "the cloth hangs down from its origin (%s)" % box)
+	check(a.material_override == b.material_override, "one material for a team's banners")
+	check(a.material_override != r.material_override and own.material_override != a.material_override, "the other team and a tower get their own")
+	var ma := a.material_override as ShaderMaterial
+	var mr := r.material_override as ShaderMaterial
+	check(int(ma.get_shader_parameter("sigil")) == 0 and int(mr.get_shader_parameter("sigil")) == 1, "Oath and Ruin fly different signs")
+	for n: MeshInstance3D in [a, b, r, own]:
+		n.free()
 
 
 ## Every clip the code asks for exists, and casts pick a clip by kind.

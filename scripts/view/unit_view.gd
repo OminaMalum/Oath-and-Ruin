@@ -5,6 +5,7 @@ extends Node3D
 
 var unit: Unit
 var _materials: Array[StandardMaterial3D] = []
+var _banners: Array[ShaderMaterial] = []  # tower banners fade with the tower
 var _focus: MeshInstance3D  # the part that glows during windups
 var _focus_mat: StandardMaterial3D
 var _flash: float = 0.0
@@ -794,7 +795,6 @@ func _build_tower() -> void:
 	var wall := Art.stone("wall", Color(1.02, 0.96, 0.88)).duplicate() as StandardMaterial3D
 	var slate := Art.stone("slate", Color(0.8, 0.78, 0.74)).duplicate() as StandardMaterial3D
 	var brass := Palette.mat(Palette.BRASS, 0.38, 0.85)
-	var cloth := Palette.mat(col.darkened(0.35), 0.95)
 	_part(_box(Vector3(4.4, 0.45, 4.4)), slate, Vector3(0, 0.22, 0))
 	_part(_box(Vector3(3.7, 0.5, 3.7)), plaza, Vector3(0, 0.7, 0))
 	_part(_box(Vector3(2.9, 0.35, 2.9)), slate, Vector3(0, 1.12, 0))
@@ -818,11 +818,12 @@ func _build_tower() -> void:
 	# Banners on the two lane faces (the axis the tower is approached along).
 	for fz in [-1.0, 1.0]:
 		_part(_box(Vector3(1.2, 0.06, 0.06)), brass, Vector3(0, 5.2, fz * 0.98))
-		_part(_box(Vector3(1.0, 2.3, 0.04)), cloth, Vector3(0, 4.0, fz * 0.97))
-		var tail := PrismMesh.new()
-		tail.size = Vector3(1.0, 0.45, 0.04)
-		_part(tail, cloth, Vector3(0, 2.63, fz * 0.97), Vector3(0, 0, 180))
-		_part(_cyl(0.24, 0.24, 0.02, 16), brass, Vector3(0, 4.3, fz * 1.0), Vector3(90, 0, 0))
+		var flag := TeamBanner.cloth(Vector2(1.0, 2.75), unit.team, 0.45, true)
+		flag.set_meta(&"banner", true)
+		flag.position = Vector3(0, 5.17, fz * 1.02)
+		flag.rotation.y = 0.0 if fz > 0.0 else PI
+		_body.add_child(flag)
+		_banners.append(flag.material_override as ShaderMaterial)
 	_focus_mat = _crystal_mat(col, 2.5)
 	_focus = _part(_octahedron(0.6, 1.0, 0.9), _focus_mat, Vector3(0, 7.15, 0))
 	_spin = _pivot_at(Vector3(0, 7.15, 0), "RuneRing")
@@ -1020,7 +1021,9 @@ func _build_shrinebearer() -> void:
 ## Destroyed structures stay as a dark broken stump, so the map remembers.
 func _ruin() -> void:
 	for c in _body.get_children():
-		if c is MeshInstance3D and c != _focus and c.name != "RangeRing":
+		if c.has_meta(&"banner"):
+			(c as Node3D).visible = false  # the cloth comes down with the tower
+		elif c is MeshInstance3D and c != _focus and c.name != "RangeRing":
 			(c as MeshInstance3D).scale.y *= 0.5
 			(c as MeshInstance3D).position.y *= 0.5
 		elif c is Node3D:
@@ -1038,6 +1041,8 @@ func _process(delta: float) -> void:
 			# a tower seen through does not flicker part over part.
 			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS if _alpha < 0.999 else BaseMaterial3D.TRANSPARENCY_DISABLED
 			m.albedo_color.a = _alpha
+		for b in _banners:
+			b.set_shader_parameter("fade", _alpha)
 	# Hit flash: brief warm white on every part.
 	_flash = maxf(0.0, _flash - delta * 6.0)
 	for m in _materials:

@@ -4,12 +4,22 @@ class_name Settings
 
 const PATH := "user://settings.cfg"
 const DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
+const GRAPHICS_NAMES: Array[String] = ["Low", "Standard", "High", "Ultra"]
+## What each graphics level adds, for the settings panel.
+const GRAPHICS_NOTES: Array[String] = [
+	"Fastest. Short plain shadows, no ambient shading.",
+	"The normal look. Soft shadows and ambient shading.",
+	"Adds light shafts, bounced light and longer shadows.",
+	"Everything on: global light, reflections, sharpest shadows. Needs a strong graphics card.",
+]
 
 ## 0 to 1, the master bus.
 static var volume: float = 0.8
 ## Multiplier on the camera's mouse sensitivity (0.4 to 2.5).
 static var mouse_sensitivity: float = 1.0
 static var fullscreen: bool = false
+## Picture quality, 0 Low to 3 Ultra (see Art.apply_quality).
+static var graphics: int = 1
 ## Enemy bots: 0 Easy, 1 Normal, 2 Hard.
 static var difficulty: int = 1
 ## Shop catalog: true the adventurer items (recipes, boots, selling), false
@@ -31,6 +41,7 @@ static func load_once() -> void:
 	volume = clampf(float(cf.get_value("audio", "volume", volume)), 0.0, 1.0)
 	mouse_sensitivity = clampf(float(cf.get_value("controls", "mouse_sensitivity", mouse_sensitivity)), 0.4, 2.5)
 	fullscreen = bool(cf.get_value("display", "fullscreen", fullscreen))
+	graphics = clampi(int(cf.get_value("display", "graphics", graphics)), 0, 3)
 	difficulty = clampi(int(cf.get_value("match", "difficulty", difficulty)), 0, 2)
 	adventurer_items = bool(cf.get_value("match", "adventurer_items", adventurer_items))
 	for i in 3:
@@ -43,6 +54,7 @@ static func save() -> void:
 	cf.set_value("audio", "volume", volume)
 	cf.set_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	cf.set_value("display", "fullscreen", fullscreen)
+	cf.set_value("display", "graphics", graphics)
 	cf.set_value("match", "difficulty", difficulty)
 	cf.set_value("match", "adventurer_items", adventurer_items)
 	for i in 3:

@@ -38,7 +38,7 @@ commercial game and is written into the manifest before it enters the repo.
 | 2 | Fantasy layer (Anthony 2026-10-22: "make it magical"): glowing rune bands on the lane walls and tower steps, a ward circle in mid lane, floating and growing amethyst crystals, spirit trees, floating islands over the valley, light motes. Minions, Breaker and Shrinebearer rebuilt. Hit sparks, death dust and wisps, structure collapse | in build art2 |
 | 3 | Champions: first modelled and rigged champion over the Ruinscribe template, through the asset contract checker | after pass 2 |
 | 4 | Spell effects: shaders for bolts, glyphs and the ward (trails, distortion, impact flashes) kept readable | |
-| 5 | Mood two: rain-wet night with lanterns (a second lighting preset), and a graphics quality menu | |
+| 5 | Mood two: rain-wet night with lanterns (a second lighting preset), and a graphics quality menu | quality menu done in gate5a (Settings: Low, Standard, High, Ultra, `Art.apply_quality`, also `--graphics=N`); High and Ultra need a look on a real PC. Night mood still open |
 | 6 | Performance pass on Anthony's PC: frame time, shadow distance, light count, LODs | needs his machine |
 
 ## How to check a pass

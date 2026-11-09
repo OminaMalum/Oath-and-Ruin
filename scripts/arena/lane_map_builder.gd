@@ -231,10 +231,15 @@ func _base(s: float) -> void:
 	pool.height = 0.02
 	_deco(pool, Palette.ground_decal(col, 0.18), Vector3(0, 0.03, s * FOUNTAIN_Z))
 	# Banners on the gate posts, readable from down the lane.
-	var cloth := Palette.mat(col.darkened(0.35))
-	for x in [-LANE_HALF - 1.0, LANE_HALF + 1.0]:
+	var gate_brass := Palette.mat(Palette.BRASS, 0.4, 0.85)
+	for x: float in [-LANE_HALF - 1.0, LANE_HALF + 1.0]:
 		_wall(Vector3(1.4, 6.0, 1.4), Vector3(x, 3.0, s * BASE_Z), _stone_mats[0])
-		_deco(BoxMesh.new(), cloth, Vector3(x, 3.6, s * (BASE_Z - 0.8)), Vector3(1.1, 3.0, 0.05))
+		# Hung on a bar a hand off the post, facing down the lane.
+		_deco(_box_mesh(Vector3(1.3, 0.07, 0.07)), gate_brass, Vector3(x, 5.3, s * (BASE_Z - 0.86)))
+		var flag := TeamBanner.cloth(Vector2(1.1, 3.2), team, 0.5)
+		flag.position = Vector3(x, 5.28, s * (BASE_Z - 0.86))
+		flag.rotation.y = PI if s > 0.0 else 0.0
+		add_child(flag)
 	var light := OmniLight3D.new()
 	light.light_color = col
 	light.light_energy = 1.5
@@ -279,7 +284,6 @@ func _art_section(s: float, z0: float, z1: float) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 33
 	var team := 0 if s > 0.0 else 1
-	var cloth := Palette.mat(Palette.team_color(team).darkened(0.3), 0.95)
 	var brass := Palette.mat(Palette.BRASS, 0.4, 0.85)
 	var iron := Palette.mat(Palette.IRON, 0.55, 0.75)
 	for side: float in [-1.0, 1.0]:
@@ -300,16 +304,9 @@ func _art_section(s: float, z0: float, z1: float) -> void:
 		pole.height = 5.4
 		_deco(pole, Palette.mat(Palette.WOOD, 0.8), Vector3(bx, 2.7, bz))
 		_deco(_box_mesh(Vector3(1.3, 0.07, 0.07)), brass, Vector3(bx - side * 0.6, 5.15, bz))
-		_deco(_box_mesh(Vector3(1.1, 2.4, 0.04)), cloth, Vector3(bx - side * 0.6, 3.9, bz))
-		var tail := PrismMesh.new()
-		tail.size = Vector3(1.1, 0.5, 0.04)
-		_deco(tail, cloth, Vector3(bx - side * 0.6, 2.45, bz), Vector3.ONE, Vector3(0, 0, 180))
-		var sig := CylinderMesh.new()
-		sig.top_radius = 0.26
-		sig.bottom_radius = 0.26
-		sig.height = 0.02
-		_deco(sig, brass, Vector3(bx - side * 0.6, 4.2, bz + 0.03), Vector3.ONE, Vector3(90, 0, 0))
-		_deco(sig, brass, Vector3(bx - side * 0.6, 4.2, bz - 0.03), Vector3.ONE, Vector3(90, 0, 0))
+		var flag := TeamBanner.cloth(Vector2(1.1, 2.9), team)
+		flag.position = Vector3(bx - side * 0.6, 5.12, bz)
+		add_child(flag)
 		var pz := s * (TOWER_Z + 4.5)
 		_deco(_box_mesh(Vector3(0.9, 0.85, 0.9)), _plinth, Vector3(bx, 0.42, pz))
 		_deco(_box_mesh(Vector3(1.05, 0.12, 1.05)), _slate, Vector3(bx, 0.91, pz))

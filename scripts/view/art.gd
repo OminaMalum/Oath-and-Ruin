@@ -19,6 +19,25 @@ const SETS := {
 }
 
 static var _cache := {}
+# The live map's environment, sun and root, so Settings can change quality.
+static var _env: Environment
+static var _sun: DirectionalLight3D
+static var _host: Node
+
+# Per graphics level, Low to Ultra (see apply_quality).
+const FOG: Array[float] = [0.35, 0.35, 0.26, 0.2]
+const GLOW: Array[float] = [0.5, 0.5, 0.6, 0.7]
+const BLOOM: Array[float] = [0.04, 0.04, 0.05, 0.06]
+const SHADOW_BLUR: Array[float] = [1.0, 1.5, 1.2, 1.0]
+const SHADOW_REACH: Array[float] = [45.0, 70.0, 95.0, 120.0]
+const SUN_ATLAS: Array[int] = [2048, 4096, 8192, 8192]
+const LAMP_ATLAS: Array[int] = [2048, 4096, 4096, 8192]
+const SUN_SOFT: Array[RenderingServer.ShadowQuality] = [RenderingServer.SHADOW_QUALITY_HARD, RenderingServer.SHADOW_QUALITY_SOFT_LOW,
+		RenderingServer.SHADOW_QUALITY_SOFT_HIGH, RenderingServer.SHADOW_QUALITY_SOFT_ULTRA]
+const LAMP_SOFT: Array[RenderingServer.ShadowQuality] = [RenderingServer.SHADOW_QUALITY_HARD, RenderingServer.SHADOW_QUALITY_SOFT_LOW,
+		RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, RenderingServer.SHADOW_QUALITY_SOFT_HIGH]
+const SSAO: Array[RenderingServer.EnvironmentSSAOQuality] = [RenderingServer.ENV_SSAO_QUALITY_LOW, RenderingServer.ENV_SSAO_QUALITY_MEDIUM,
+		RenderingServer.ENV_SSAO_QUALITY_HIGH, RenderingServer.ENV_SSAO_QUALITY_ULTRA]
 
 
 static func tex(set_id: String, map: String) -> Texture2D:
@@ -185,58 +204,86 @@ static func environment(parent: Node) -> void:
 	# into it and every unit gets a lit and a shaded half.
 	sun.rotation_degrees = Vector3(-28, 90, 0)
 	parent.add_child(sun)
-	if "--ultra" in OS.get_cmdline_user_args():
-		_ultra(env, sun, parent)
+	_env = env
+	_sun = sun
+	_host = parent
+	apply_quality()
 	if "--bench" in OS.get_cmdline_user_args():
 		parent.add_child(BenchProbe.new())
 
 
-## Godot at its best, for comparing looks on a strong PC (start with -- --ultra):
-## global illumination (SDFGI) so sunlight bounces off the stone, light shafts
-## through volumetric fog, screen space reflections and indirect light, larger
-## sharper shadows and temporal anti aliasing. Too heavy for every PC, so it is
-## off unless asked for.
-static func _ultra(env: Environment, sun: DirectionalLight3D, parent: Node) -> void:
-	env.sdfgi_enabled = true
+## How rich the picture is, picked in Settings (start with -- --ultra to force
+## the top one). Each step keeps the same art and adds light work:
+##   Low       no ambient shadowing, short plain shadows, lighter anti aliasing
+##   Standard  the look every build so far has had
+##   High      light shafts through fog, bounced light near surfaces, longer
+##             and softer shadows
+##   Ultra     Godot at its best: global illumination (SDFGI) so sunlight
+##             bounces off the stone, reflections, the largest shadows and
+##             temporal anti aliasing. For a strong graphics card.
+## Safe to call again while a map is up: every value is set for every level.
+static func apply_quality() -> void:
+	if _env == null or not is_instance_valid(_host):
+		return
+	var q := quality()
+	var env := _env
+	var sun := _sun
+	env.ssao_enabled = q >= 1
+	env.ssil_enabled = q >= 2
+	env.ssil_radius = 4.0
+	env.ssil_intensity = 0.9 if q >= 3 else 0.7
+	env.sdfgi_enabled = q >= 3
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_bounce_feedback = 0.6
 	env.sdfgi_cascades = 6
 	env.sdfgi_min_cell_size = 0.15
 	env.sdfgi_energy = 1.0
-	env.ssil_enabled = true
-	env.ssil_radius = 4.0
-	env.ssil_intensity = 0.9
-	env.ssr_enabled = true
+	env.ssr_enabled = q >= 3
 	env.ssr_max_steps = 96
-	env.ambient_light_energy = 0.45
-	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.012
+	env.ambient_light_energy = 0.45 if q >= 3 else 0.4
+	env.volumetric_fog_enabled = q >= 2
+	env.volumetric_fog_density = 0.012 if q >= 3 else 0.008
 	env.volumetric_fog_albedo = Color(0.95, 0.85, 0.72)
 	env.volumetric_fog_anisotropy = 0.6
 	env.volumetric_fog_length = 90.0
 	env.volumetric_fog_detail_spread = 2.0
 	env.volumetric_fog_ambient_inject = 0.4
 	env.volumetric_fog_sky_affect = 0.2
-	env.fog_density = 0.2
-	env.glow_intensity = 0.7
-	env.glow_bloom = 0.06
-	env.sky.radiance_size = Sky.RADIANCE_SIZE_512
-	sun.light_volumetric_fog_energy = 2.5
-	sun.shadow_blur = 1.0
-	sun.directional_shadow_max_distance = 120.0
-	RenderingServer.directional_shadow_atlas_set_size(8192, true)
-	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
-	RenderingServer.positional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_HIGH)
-	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_ULTRA, true, 0.5, 2, 50.0, 300.0)
-	if parent.is_inside_tree():
-		_ultra_viewport(parent.get_viewport())
+	# The fog volume adds its own haze, so the plain depth fog steps back.
+	env.fog_density = FOG[q]
+	env.glow_intensity = GLOW[q]
+	env.glow_bloom = BLOOM[q]
+	env.sky.radiance_size = Sky.RADIANCE_SIZE_512 if q >= 3 else Sky.RADIANCE_SIZE_256
+	sun.light_volumetric_fog_energy = 2.5 if q >= 3 else 2.0
+	sun.shadow_blur = SHADOW_BLUR[q]
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if q == 0 else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	sun.directional_shadow_max_distance = SHADOW_REACH[q]
+	if DisplayServer.get_name() == "headless":
+		return
+	RenderingServer.directional_shadow_atlas_set_size(SUN_ATLAS[q], true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(SUN_SOFT[q])
+	RenderingServer.positional_soft_shadow_filter_set_quality(LAMP_SOFT[q])
+	RenderingServer.environment_set_ssao_quality(SSAO[q], q < 3, 0.5, 2, 50.0, 300.0)
+	if _host.is_inside_tree():
+		_quality_viewport(_host.get_viewport(), q)
 	else:
-		parent.tree_entered.connect(func() -> void: _ultra_viewport(parent.get_viewport()), CONNECT_ONE_SHOT)
+		_host.tree_entered.connect(func() -> void: _quality_viewport(_host.get_viewport(), quality()), CONNECT_ONE_SHOT)
 
 
-static func _ultra_viewport(vp: Viewport) -> void:
-	vp.use_taa = true
-	vp.msaa_3d = Viewport.MSAA_4X
-	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
-	vp.mesh_lod_threshold = 0.0
-	vp.positional_shadow_atlas_size = 8192
+## 0 Low to 3 Ultra: the saved setting, unless the game was started with
+## --ultra or --graphics=N (benchmarks and screenshots).
+static func quality() -> int:
+	for a in OS.get_cmdline_user_args():
+		if a == "--ultra":
+			return 3
+		if a.begins_with("--graphics="):
+			return clampi(int(a.get_slice("=", 1)), 0, 3)
+	return clampi(Settings.graphics, 0, 3)
+
+
+static func _quality_viewport(vp: Viewport, q: int) -> void:
+	vp.use_taa = q >= 3
+	vp.msaa_3d = Viewport.MSAA_2X if q == 0 else Viewport.MSAA_4X
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED if q >= 3 else Viewport.SCREEN_SPACE_AA_FXAA
+	vp.mesh_lod_threshold = 0.0 if q >= 3 else (2.0 if q == 0 else 1.0)
+	vp.positional_shadow_atlas_size = LAMP_ATLAS[q]

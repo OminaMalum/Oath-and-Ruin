@@ -8,14 +8,19 @@ Third-person fantasy MOBA for Windows. Original setting and champions. Godot **4
 1. Install Godot 4.7.2-stable (standard build, not .NET): https://github.com/godotengine/godot/releases/tag/4.7.2-stable
 2. Open `project.godot` and press Play (F5). Or run a Windows build: `OathAndRuin.exe` (from the PR or release).
 
-The menu offers a champion pick (**Ruinscribe**, **Oathwarden**, **Ashrunner**), then **3v3 Bot Match**,
-**Training Court** and **Quit**.
+The menu shows every champion with a turning model, its story and its kit (what each ability does and how to
+beat it), then **Play 3v3 Bot Match**, **Three Lane Map**, **Training Court**, **Settings** and **Quit**.
+Settings holds volume, mouse sensitivity, fullscreen and graphics quality (Low, Standard, High, Ultra).
 
 Controls: **WASD** move, **mouse** turn and aim (the reticle is the aim), **hold left mouse** basic attack,
-**Q** or **right mouse** the first ability (for Binding Glyph, hold Q to preview and release to cast), **E** the
-second ability, **R** the ultimate (from level 4), **1 / 2** pick an upgrade at level 3, **F1** dummies
-fight back on/off (court), **F2** hide help, **Esc** free the mouse (click to recapture). After a match: **F5**
-play again, **M** menu.
+**Q** or **right mouse** the first ability (ground spells: hold Q to preview and release to cast), **E** the
+second ability, **F** the third, **R** the ultimate (from level 4), **1 / 2** pick an upgrade when offered,
+**B** shop at the fountain or while dead, **T** recall home, **Tab** (hold) scoreboard, **Alt** (hold) your items
+and what each ability does, **F1** dummies fight back on/off (court), **F2** controls help, **Esc** menu. After a
+match: **F5** play again, **M** menu.
+
+In a match the top right holds the minimap (enemy champions show only while your team can see them) with the
+kill feed under it; callouts announce first blood, multi kills, a fallen tower and a base under attack.
 
 ## Bot match (Gate 2)
 
@@ -72,6 +77,8 @@ godot --headless --path . -s tools/check_assets.gd    check champion models in a
 tools/blender/make_fixtures.sh [python]               rebuild template rigs and test fixtures (needs pip install bpy)
 godot --path . -- --autoplay --bot --shot=out.png --shot-frames=200   self-playing capture
 godot --fixed-fps 60 --path . -- --mode=match --spectate --warp=190 --shot=out.png --shot-frames=20   capture mid match
+godot --path . -- --mode=match --graphics=3 --bench    force a graphics level (0 Low to 3 Ultra) and write bench.txt
+python3 tools/mksounds.py; python3 tools/mksounds2.py  rebuild every sound from its formula (needs numpy)
 ```
 
 ## Assets and licenses
