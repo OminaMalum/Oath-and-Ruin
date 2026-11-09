@@ -63,7 +63,7 @@ func _button(t: String, f: Callable) -> Button:
 	var b := Button.new()
 	b.text = t
 	b.custom_minimum_size = Vector2(0, 64)
-	b.add_theme_font_size_override("font_size", 28)
+	UiStyle.button(b, 28, t == "Resume")
 	b.pressed.connect(f)
 	_box.add_child(b)
 	return b

@@ -370,7 +370,7 @@ func _draw() -> void:
 			"1 or 2  pick an upgrade when offered" if player.upgrade_pending else "",
 			"B  shop at your fountain or while dead, then 1 to 4 to buy" if player.shop_point.is_finite() else "",
 			"T  recall home (stand still %d s)     Tab (hold)  scoreboard" % roundi(Unit.ECONOMY.recall_time) if player.shop_point.is_finite() else "",
-			"Alt (hold)  item details     Mouse over an item in the shop  its details" if player.shop_point.is_finite() else "",
+			"Alt (hold)  your items and what each ability does" if player.shop_point.is_finite() else "",
 			("F1  dummies fight back: %s" % ("ON" if bot.enabled else "OFF")) if bot else "",
 			"F2  hide this     Esc  menu",
 			("%s: %s" % [player.def.passive_name, player.def.passive_description]) if not player.def.passive_name.is_empty() else "",
@@ -684,7 +684,7 @@ func _draw_item_row(area: Rect2) -> void:
 		_text(r.position + Vector2(4, 26), nm, size, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_CENTER, tw - 4)
 		_hud_hits.append({"rect": r, "item": it})
 	if not player.items.is_empty():
-		_text(area.position + Vector2(0, -8), "Alt  item details", SMALL, Color(0.80, 0.77, 0.70), HORIZONTAL_ALIGNMENT_LEFT, area.size.x)
+		_text(area.position + Vector2(0, -8), "Alt  items and abilities", SMALL, Color(0.80, 0.77, 0.70), HORIZONTAL_ALIGNMENT_LEFT, area.size.x)
 
 
 static func _group_color(it: ItemDef) -> Color:
@@ -719,6 +719,7 @@ func _draw_item_details(vs: Vector2, c: Vector2) -> void:
 	draw_rect(panel.grow(2), Palette.BRASS)
 	draw_rect(panel, Color(0.10, 0.09, 0.08, 0.94))
 	_text(Vector2(x + 16, y + 34), "Your items", 26, Palette.GOLD, HORIZONTAL_ALIGNMENT_LEFT, w - 32)
+	_draw_ability_details(Vector2(x, panel.end.y + 14.0), w)
 	if items.is_empty():
 		_text(Vector2(x + 16, y + 76), "No items yet. Press B at your fountain to shop.", 20, Color(0.85, 0.82, 0.75), HORIZONTAL_ALIGNMENT_LEFT, w - 32)
 		return
@@ -731,6 +732,41 @@ func _draw_item_details(vs: Vector2, c: Vector2) -> void:
 		_text(Vector2(bx + 14, cy[col] + 30), it.display_name, 24, Color(0.96, 0.93, 0.86), HORIZONTAL_ALIGNMENT_LEFT, col_w - 20)
 		draw_multiline_string(_font, Vector2(bx + 14, cy[col] + 40 + _font.get_ascent(20)), _item_body(it, true), HORIZONTAL_ALIGNMENT_LEFT, col_w - 24, 20, -1, Color(0.88, 0.86, 0.80))
 		cy[col] += heights[k]
+
+
+## Under the items on the Alt panel: what the passive and each ability do,
+## one row each with its key, as the kit stands now (an upgrade shows here).
+func _draw_ability_details(at: Vector2, w: float) -> void:
+	var rows: Array[Array] = []  # [key, name, text]
+	if not player.def.passive_name.is_empty():
+		rows.append(["Passive", player.def.passive_name, player.def.passive_description])
+	var keys := ["LMB", "Q", "E", "R", "F"]
+	for i: int in ([0, 1, 2, 4, 3] if player.def.slot_count() == 5 else range(player.def.slot_count())):
+		var a := player.get_slot(i)
+		if a == null:
+			continue
+		var e := MainMenu.kit_entry_of(a)
+		rows.append([keys[i] if i < keys.size() else "", a.display_name, String(e.text).trim_prefix("Upgrade: ")])
+	if rows.is_empty():
+		return
+	var lh := _font.get_height(20)
+	var text_w := w - 32.0 - 96.0
+	var heights: Array[float] = []
+	var total := 52.0
+	for r in rows:
+		var hgt := maxf(_text_lines("%s: %s" % [r[1], r[2]], text_w, 20) * lh + 12.0, 40.0)
+		heights.append(hgt)
+		total += hgt
+	var panel := Rect2(at, Vector2(w, total + 8.0))
+	draw_rect(panel.grow(2), Palette.BRASS)
+	draw_rect(panel, Color(0.10, 0.09, 0.08, 0.94))
+	_text(at + Vector2(16, 34), "Your abilities", 26, Palette.GOLD, HORIZONTAL_ALIGNMENT_LEFT, w - 32)
+	var y := at.y + 50.0
+	for k in rows.size():
+		var r: Array = rows[k]
+		_text(Vector2(at.x + 16, y + 24), r[0], 20, Palette.TEAL, HORIZONTAL_ALIGNMENT_LEFT, 90)
+		draw_multiline_string(_font, Vector2(at.x + 112, y + 4 + _font.get_ascent(20)), "%s: %s" % [r[1], r[2]], HORIZONTAL_ALIGNMENT_LEFT, text_w, 20, -1, Color(0.92, 0.90, 0.84))
+		y += heights[k]
 
 
 ## Stats, recipe and the passive, one fact per line. Compact (the Alt

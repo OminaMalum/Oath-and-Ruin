@@ -9,20 +9,78 @@ var _font: Font
 var _banner: String = ""
 var _banner_t: float = 0.0
 var _banner_col := Color.WHITE
+var _banner_size := 30
+var feed: MatchFeed
+var minimap: Minimap
 ## Screenshots: keep the scoreboard up without Tab (--scoreboard).
 static var force_scoreboard: bool = false
 
 
-func setup(m: MatchController, r: CameraRig) -> void:
+func setup(m: MatchController, r: CameraRig, map_root: Node = null) -> void:
 	match_ctl = m
 	rig = r
-	m.match_over.connect(func(_w: int) -> void:
+	m.match_over.connect(func(w: int) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		_add_result_buttons())
+		_add_result_buttons()
+		Sounds.ui("victory" if w == _my_team() else "defeat", -2.0))
 	m.announce.connect(func(text: String, team: int) -> void:
-		_banner = text
-		_banner_t = 4.0
-		_banner_col = Palette.team_color(team) if team >= 0 else Color(0.92, 0.84, 0.66))
+		_show_banner(text, Palette.team_color(team) if team >= 0 else Color(0.92, 0.84, 0.66), 30)
+		if team < 0:
+			Sounds.ui("objective", -4.0)
+		else:
+			Sounds.ui("horn_ally" if team == _my_team() else "horn_enemy", -3.0))
+	feed = MatchFeed.new(m)
+	feed.callout.connect(_on_callout)
+	feed.entry_added.connect(_on_feed_entry)
+	minimap = Minimap.new()
+	add_child(minimap)
+	minimap.setup(m, r, map_root)
+	Sounds.ui("horn_start", -5.0)
+
+
+func _my_team() -> int:
+	var me: Unit = rig.target if rig else null
+	return me.team if me else 0
+
+
+func _show_banner(text: String, col: Color, size: int) -> void:
+	_banner = text
+	_banner_t = 4.0
+	_banner_col = col
+	_banner_size = size
+
+
+## The feed's big lines: shown in the colour of the team they favour, with
+## a horn that tells good news from bad before the words are read.
+func _on_callout(text: String, team: int, kind: String) -> void:
+	var good := team == _my_team()
+	if kind == "alarm":
+		# Only your own structures, and only when you are not already there.
+		var me: Unit = rig.target if rig else null
+		if good or (me and UnitController.flat_distance(me.global_position, feed.alarm_at) < 26.0):
+			return
+		_show_banner(text.replace(Palette.TEAM_NAMES[_my_team()], "Your"), Palette.team_color(team), 30)
+		Sounds.ui("kill_enemy", -5.0)
+		return
+	_show_banner(text, Palette.team_color(team), 30 if kind == "tower" else 38)
+	match kind:
+		"wipe":
+			Sounds.ui("flourish_big" if good else "horn_enemy", -3.0)
+		"tower":
+			Sounds.ui("horn_ally" if good else "horn_enemy", -3.0)
+		_:
+			Sounds.ui("flourish" if good else "horn_enemy", -3.0)
+
+
+## A plain kill: a short sting, bright for your side, low for theirs. Your
+## own death has its own sound and screen already.
+func _on_feed_entry(e: Dictionary) -> void:
+	if not String(e.kind).is_empty():
+		return
+	var me: Unit = rig.target if rig else null
+	if e.victim_unit == me:
+		return
+	Sounds.ui("kill_ally" if int(e.victim_team) != _my_team() else "kill_enemy", -6.0)
 
 
 func _ready() -> void:
@@ -64,7 +122,9 @@ func _draw() -> void:
 	if not HumanController.shop_open:
 		_objective_marker(vs)
 	if _banner_t > 0.0:
-		_text(Vector2(0, 128), _banner, 30, Color(_banner_col, clampf(_banner_t, 0.0, 1.0)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, 128 if _banner_size <= 30 else 136), _banner, _banner_size, Color(_banner_col, clampf(_banner_t, 0.0, 1.0)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	if not match_ctl.over and not HumanController.shop_open:
+		_kill_feed(vs)
 	if match_ctl.over:
 		_results(vs)
 	elif match_ctl.authority.time < INTRO_TIME and not HumanController.shop_open:
@@ -121,6 +181,34 @@ func _scoreboard(vs: Vector2) -> void:
 			row += 1
 
 
+## Who fell to whom, newest at the bottom, under the minimap. Names in team
+## colours with an arrow from killer to victim; a row fades in its last second.
+func _kill_feed(vs: Vector2) -> void:
+	if feed == null:
+		return
+	var rows := feed.visible_entries()
+	var y := Minimap.TOP + (minimap.map_size().y if minimap else 0.0) + 16.0
+	var me: Unit = rig.target if rig else null
+	for e in rows:
+		var a := clampf(MatchFeed.FEED_LIFE - (match_ctl.authority.time - float(e.t)), 0.0, 1.0)
+		var kw := _font.get_string_size(e.killer, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+		var vw := _font.get_string_size(e.victim, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+		var w := kw + vw + 62.0
+		var r := Rect2(vs.x - Minimap.MARGIN - w, y, w, 34)
+		draw_rect(r, Color(0.06, 0.05, 0.04, 0.78 * a))
+		if e.victim_unit == me or (me and e.killer == me.def.display_name and int(e.killer_team) == me.team):
+			draw_rect(r, Color(Palette.BRASS, a), false, 2.0)
+		var kc := Palette.team_color(int(e.killer_team)) if int(e.killer_team) >= 0 else Color(0.85, 0.82, 0.76)
+		_text(r.position + Vector2(12, 25), e.killer, 20, Color(kc.lightened(0.25), a), HORIZONTAL_ALIGNMENT_LEFT)
+		# The arrow: a short shaft and a head, pointing at the one who fell.
+		var ax := r.position.x + 12 + kw + 10
+		var ay := r.position.y + 17
+		draw_line(Vector2(ax, ay), Vector2(ax + 16, ay), Color(0.95, 0.92, 0.85, a), 3.0)
+		draw_colored_polygon(PackedVector2Array([Vector2(ax + 26, ay), Vector2(ax + 14, ay - 7), Vector2(ax + 14, ay + 7)]), Color(0.95, 0.92, 0.85, a))
+		_text(Vector2(ax + 38, r.position.y + 25), e.victim, 20, Color(Palette.team_color(int(e.victim_team)).lightened(0.25), a), HORIZONTAL_ALIGNMENT_LEFT)
+		y += 40.0
+
+
 func _small_bar(r: Rect2, f: float, col: Color) -> void:
 	draw_rect(r.grow(1), Color(0, 0, 0, 0.8))
 	draw_rect(Rect2(r.position, Vector2(r.size.x * clampf(f, 0, 1), r.size.y)), col)
@@ -137,17 +225,23 @@ func _marker() -> void:
 		return
 	var p3 := target.global_position + Vector3(0, target.def.height + 1.5, 0)
 	var vs := get_viewport_rect().size
-	var p: Vector2
-	if rig.camera.is_position_behind(p3):
-		p = Vector2(vs.x * 0.5, vs.y - 160)
-	else:
-		p = rig.camera.unproject_position(p3)
-	p = p.clamp(Vector2(40, 100), vs - Vector2(40, 170))
+	var p := _screen_point(p3, vs)
 	var col := Palette.team_color(enemy)
 	var d := 12.0
 	draw_colored_polygon(PackedVector2Array([p + Vector2(0, -d), p + Vector2(d, 0), p + Vector2(0, d), p + Vector2(-d, 0)]), Color(col, 0.9))
 	var dist := UnitController.flat_distance(match_ctl.player().global_position, target.global_position)
 	_text(p + Vector2(-80, 32), "%s  %d m" % [target.def.display_name, roundi(dist)], 18, Color(0.95, 0.92, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 160)
+
+
+## Where a world marker goes on screen. In view: over the thing, kept clear
+## of the top bar and the ability bar. Behind the camera: at the left or
+## right edge, on the side to turn toward (the minimap shows the rest).
+func _screen_point(p3: Vector3, vs: Vector2) -> Vector2:
+	var cam := rig.camera
+	if cam.is_position_behind(p3):
+		var local := cam.global_transform.affine_inverse() * p3
+		return Vector2(110.0 if local.x < 0.0 else vs.x - 110.0, vs.y * 0.62)
+	return cam.unproject_position(p3).clamp(Vector2(110, 100), vs - Vector2(110, 290))
 
 
 ## The objective: warning countdown in the top bar, a marker over the camp
@@ -167,8 +261,7 @@ func _objective_marker(vs: Vector2) -> void:
 	if rig == null or rig.camera == null:
 		return
 	var p3 := m.objective_position() + Vector3(0, 5.0, 0)
-	var p := Vector2(vs.x * 0.5, vs.y - 160) if rig.camera.is_position_behind(p3) else rig.camera.unproject_position(p3)
-	p = p.clamp(Vector2(40, 100), vs - Vector2(40, 170))
+	var p := _screen_point(p3, vs)
 	var col := Color(0.85, 0.75, 1.0)
 	var d := 12.0
 	draw_colored_polygon(PackedVector2Array([p + Vector2(0, -d), p + Vector2(d, 0), p + Vector2(0, d), p + Vector2(-d, 0)]), col)
@@ -224,8 +317,8 @@ func _add_result_buttons() -> void:
 		var b := Button.new()
 		b.text = item[0]
 		b.custom_minimum_size = Vector2(328, 64)
-		b.add_theme_font_size_override("font_size", 26)
 		var to_menu: bool = item[1]
+		UiStyle.button(b, 26, not to_menu)
 		b.pressed.connect(func() -> void:
 			if to_menu:
 				Session.mode = ""

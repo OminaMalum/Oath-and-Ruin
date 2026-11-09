@@ -44,6 +44,8 @@ var net: NetSession
 var world_view: WorldView
 var match_ctl: MatchController
 var pause_menu: PauseMenu
+var map_root: Node3D
+var sounds: Sounds
 
 var autoplay := false
 var args := {}
@@ -84,6 +86,7 @@ func _ready() -> void:
 		mode = "match3"
 	var map: Node3D = LaneMapBuilder.new() if mode == "match" else (ThreeLaneBuilder.new() if mode == "match3" else ArenaBuilder.new())
 	add_child(map)
+	map_root = map
 	GrappleAnchors.mark(map, LaneMapBuilder.BASE_Z + 1.0 if mode == "match" else (ThreeLaneBuilder.BASE_Z + 1.0 if mode == "match3" else INF))
 	authority = CombatAuthority.new()
 	authority.name = "CombatAuthority"
@@ -148,7 +151,7 @@ func _start_match(three_lane := false) -> void:
 	add_child(layer)
 	var mh := MatchHud.new()
 	layer.add_child(mh)
-	mh.setup(match_ctl, rig)
+	mh.setup(match_ctl, rig, map_root)
 	if match_ctl.human_slot and not args.has("seed"):
 		match_ctl.match_over.connect(func(w: int) -> void: Settings.record(w == 0))
 
@@ -276,6 +279,9 @@ func _setup_presentation(local_unit: Unit) -> void:
 	world_view = WorldView.new()
 	add_child(world_view)
 	world_view.setup(authority, local_unit)
+	sounds = Sounds.new()
+	add_child(sounds)
+	sounds.setup(authority, local_unit, world_view, match_ctl)
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	hud = Hud.new()

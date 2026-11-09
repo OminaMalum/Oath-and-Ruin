@@ -129,7 +129,7 @@ func _on_projectile_spawned(p: CombatAuthority.SimProjectile) -> void:
 	if p.source.def.kind == ChampionDef.Kind.STRUCTURE:
 		sfx("tower_shot", p.position, -2.0)
 	else:
-		sfx("cast_bolt", p.position, 0.0 if p.source.def.kind == ChampionDef.Kind.CHAMPION else -9.0)
+		sfx(Sounds.cast_clip(p), p.position, 0.0 if p.source.def.kind == ChampionDef.Kind.CHAMPION else -9.0)
 
 
 func _on_projectile_ended(p: CombatAuthority.SimProjectile, at: Vector3) -> void:
@@ -363,7 +363,8 @@ func _on_unit_damaged(target: Unit, _amount: float, source: Unit) -> void:
 	_spawn_burst(target.global_position + Vector3(0, target.def.height * 0.6, 0), Color(1, 0.9, 0.7), 0.3 if mine else 0.18, 0.1)
 	if source and is_instance_valid(source) and source.def.kind != ChampionDef.Kind.STRUCTURE \
 			and source.def.basic_attack and source.def.basic_attack.range < 5.0:
-		sfx("hit_melee", target.global_position + Vector3(0, 1.0, 0), 0.0 if source.def.kind == ChampionDef.Kind.CHAMPION else -8.0)
+		var champ := source.def.kind == ChampionDef.Kind.CHAMPION
+		sfx("hit_heavy" if champ and _amount >= 90.0 else "hit_melee", target.global_position + Vector3(0, 1.0, 0), 0.0 if champ else -8.0)
 
 
 func _spawn_burst(at: Vector3, col: Color, size: float, life: float) -> void:
@@ -573,30 +574,21 @@ func _make_tell(u: Unit, a: AbilityDef) -> Node3D:
 	return n
 
 
-## Sound effects: short original synthesised clips (tools/mksounds.py),
-## played in 3D at the event's position. Readers of sim state only.
-const SFX := {
-	"cast_bolt": preload("res://assets/sounds/cast_bolt.wav"),
-	"hit_bolt": preload("res://assets/sounds/hit_bolt.wav"),
-	"hit_melee": preload("res://assets/sounds/hit_melee.wav"),
-	"area_land": preload("res://assets/sounds/area_land.wav"),
-	"ward_rise": preload("res://assets/sounds/ward_rise.wav"),
-	"tower_shot": preload("res://assets/sounds/tower_shot.wav"),
-	"death_champion": preload("res://assets/sounds/death_champion.wav"),
-	"death_minion": preload("res://assets/sounds/death_minion.wav"),
-}
+## Sound effects: short original synthesised clips (see Sounds), played in
+## 3D at the event's position. Readers of sim state only.
 var _sfx_rng := RandomNumberGenerator.new()
 
 
-func sfx(name: String, at: Vector3, volume_db: float = 0.0) -> void:
-	if not SFX.has(name):
+func sfx(name: String, at: Vector3, volume_db: float = 0.0, max_distance: float = 45.0) -> void:
+	var stream := Sounds.stream(name)
+	if stream == null or Sounds.silent():
 		return
 	var sp := AudioStreamPlayer3D.new()
-	sp.stream = SFX[name]
+	sp.stream = stream
 	sp.volume_db = volume_db
 	sp.pitch_scale = _sfx_rng.randf_range(0.94, 1.06)
-	sp.max_distance = 45.0
-	sp.unit_size = 6.0
+	sp.max_distance = max_distance
+	sp.unit_size = 6.0 if max_distance <= 45.0 else 40.0
 	sp.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
 	add_child(sp)
 	sp.global_position = at

@@ -71,6 +71,7 @@ func _run() -> void:
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract", "test_item_cards",
+		"test_match_feed", "test_match_feed_alarm", "test_minimap", "test_kit_cards", "test_sound_bank",
 	]
 	for t: String in tests:
 		_make_world()
@@ -2969,3 +2970,136 @@ func test_three_lane_match() -> void:
 	check(not mc.cores[0].is_protected(), "two down: the core is open")
 	map.queue_free()
 
+
+
+# --- gate5a: feed, minimap, kit cards, sounds --------------------------------
+
+## The kill feed and its callouts: first blood once, a double kill inside the
+## window, a wipe when the third champion falls, and a tower line.
+func test_match_feed() -> void:
+	var mc := _match()
+	await ticks(2)
+	var feed := MatchFeed.new(mc)
+	var calls: Array = []
+	feed.callout.connect(func(text: String, team: int, kind: String) -> void: calls.append([text, team, kind]))
+	var me: Unit = mc.champions[0]
+	var basic := me.def.basic_attack
+	authority.apply_damage(me, mc.champions[3], 99999.0, basic)
+	check(feed.entries.size() == 1 and feed.entries[0].killer == me.def.display_name and feed.entries[0].victim_team == 1,
+		"a kill adds a feed row with killer and victim (%s)" % [feed.entries])
+	check(calls.size() == 1 and calls[0][2] == "first_blood" and calls[0][1] == 0, "the first champion kill is first blood for the killer's team (%s)" % [calls])
+	authority.apply_damage(me, mc.champions[4], 99999.0, basic)
+	check(calls.size() == 2 and calls[1][2] == "multi" and String(calls[1][0]).begins_with("Double kill"), "a second kill inside %d s is a double kill (%s)" % [roundi(MatchFeed.MULTI_WINDOW), calls])
+	authority.apply_damage(mc.champions[1], mc.champions[5], 99999.0, basic)
+	check(calls.size() == 3 and calls[2][2] == "wipe" and calls[2][0] == "Ruin is wiped out", "the third champion down is a wipe (%s)" % [calls])
+	check(feed.visible_entries().size() == 3, "three rows show")
+	# A death to a tower: a row, no callout, named by what killed.
+	authority.apply_damage(mc.towers[1], mc.champions[2], 99999.0, mc.towers[1].def.basic_attack)
+	check(feed.entries[-1].killer == "Ruin tower" and calls.size() == 3, "a tower kill is named and is no callout (%s)" % feed.entries[-1].killer)
+	authority.apply_damage(me, mc.towers[1], 99999.0, basic)
+	check(calls[-1][2] == "tower" and calls[-1][0] == "Ruin tower has fallen" and calls[-1][1] == 0, "a tower falling is called for the other team (%s)" % [calls[-1]])
+	check(not mc.stats.has("feed") and mc.stats.kills == [3, 1], "the feed leaves the match stats alone (%s)" % [mc.stats.kills])
+
+
+## The alarm: once per structure per ALARM_EVERY, then again.
+func test_match_feed_alarm() -> void:
+	var mc := _match()
+	await ticks(2)
+	var feed := MatchFeed.new(mc)
+	var alarms: Array = []
+	feed.callout.connect(func(text: String, team: int, kind: String) -> void:
+		if kind == "alarm":
+			alarms.append([text, team]))
+	var foe: Unit = mc.champions[3]
+	authority.apply_damage(foe, mc.towers[0], 10.0, foe.def.basic_attack)
+	authority.apply_damage(foe, mc.towers[0], 10.0, foe.def.basic_attack)
+	check(alarms.size() == 1 and alarms[0][0] == "Oath tower is under attack" and alarms[0][1] == 1, "one alarm for many hits (%s)" % [alarms])
+	check(feed.alarm_at.distance_to(mc.towers[0].global_position) < 0.1, "the alarm says where")
+	await secs(MatchFeed.ALARM_EVERY + 0.5)
+	authority.apply_damage(foe, mc.towers[0], 10.0, foe.def.basic_attack)
+	check(alarms.size() == 2, "the alarm sounds again after %d s" % roundi(MatchFeed.ALARM_EVERY))
+
+
+## The minimap reads walls from the map's collision, keeps the whole map
+## inside its frame and hides enemy champions the team cannot see.
+func test_minimap() -> void:
+	for three in [false, true]:
+		var map: Node3D = ThreeLaneBuilder.new() if three else LaneMapBuilder.new()
+		world.add_child(map)
+		var mc := MatchController.new()
+		mc.human_slot = false
+		mc.three_lane = three
+		world.add_child(mc)
+		mc.setup(authority, world)
+		mc.start()
+		for c in mc.champions:
+			c.controller = ScriptedController.new()
+		await ticks(2)
+		var rects := Minimap.wall_rects(map)
+		check(rects.size() > 30, "%s: walls found from collision (%d)" % ["three lane" if three else "one lane", rects.size()])
+		var mm := Minimap.new()
+		world.add_child(mm)
+		mm.setup(mc, null, map)
+		var sz := mm.map_size()
+		check(sz.x <= Minimap.MAX_SIZE.x + 0.5 and sz.y <= Minimap.MAX_SIZE.y + 0.5 and sz.y > 300.0, "the map fits its frame (%s)" % sz)
+		var inside := true
+		for u in mc.structures + mc.champions:
+			var p := mm.to_map(u.global_position)
+			inside = inside and Rect2(Vector2.ZERO, sz).has_point(p)
+		inside = inside and Rect2(Vector2.ZERO, sz).has_point(mm.to_map(mc.objective_position()))
+		check(inside, "every structure, champion and the camp lands inside the frame")
+		check(mm.to_map(mc.cores[0].global_position).y > mm.to_map(mc.cores[1].global_position).y, "Oath's base is at the bottom")
+		var foe: Unit = mc.champions[3]
+		check(mm.seen_by(0, mc.champions[1]), "allies are always shown")
+		foe.global_position = Vector3(0, 0, -60)  # in its own base, far from every Oath unit
+		check(not mm.seen_by(0, foe), "an enemy champion far from every allied unit is hidden")
+		foe.global_position = mc.champions[0].global_position + Vector3(Minimap.SIGHT - 2.0, 0, 0)
+		check(mm.seen_by(0, foe), "an enemy champion within sight of an ally is shown")
+		foe.global_position = mc.towers[0].global_position + Vector3(0, 0, -(Minimap.SIGHT - 2.0))
+		check(mm.seen_by(0, foe), "an allied tower sees it too")
+		mm.queue_free()
+		mc.queue_free()
+		map.queue_free()
+		for u in authority.units.duplicate():
+			authority.units.erase(u)
+			u.queue_free()
+		await ticks(2)
+
+
+## Menu and Alt panel kit cards: every champion has a text for the passive
+## and each of its five abilities, and "Counterplay:" is split off.
+func test_kit_cards() -> void:
+	var n := 0
+	for d: ChampionDef in MatchController.ROSTER + MatchController.PROTOTYPES:
+		for k: Array in MainMenu.KIT_KEYS:
+			var e := MainMenu.kit_entry(d, k[1])
+			check(not e.is_empty() and not String(e.name).is_empty() and String(e.text).length() > 20,
+				"%s %s has a card" % [d.id, k[0]])
+			check(not String(e.text).contains("Counterplay:"), "%s %s: counterplay is its own line" % [d.id, k[0]])
+			n += 1
+	check(n == 14 * 6, "fourteen champions, six cards each (%d)" % n)
+	var slam := MainMenu.kit_entry(WARDEN, 2)
+	check(slam.name == "Shield Slam" and String(slam.counter).begins_with("How to beat it: the 0.4 s windup"), "Shield Slam's counter line (%s)" % slam.counter)
+
+
+## Every clip the code asks for exists, and casts pick a clip by kind.
+func test_sound_bank() -> void:
+	for clip in ["cast_bolt", "cast_arrow", "cast_heavy", "swing", "swing_heavy", "hit_bolt", "hit_melee", "hit_heavy", "dash", "grapple",
+			"shield", "heal", "buff", "summon", "stun", "tower_fall", "core_fall", "tower_shot", "area_land", "ward_rise",
+			"ui_click", "ui_hover", "ui_back", "shop_open", "gold", "buy", "sell", "deny", "level_up", "upgrade", "recall",
+			"recall_done", "respawn", "horn_ally", "horn_enemy", "horn_start", "objective", "kill_ally", "kill_enemy",
+			"flourish", "flourish_big", "victory", "defeat", "amb_wind", "death_champion", "death_minion"]:
+		check(Sounds.stream(clip) != null, "clip %s exists" % clip)
+	check(Sounds.stream("no_such_clip") == null, "a missing clip is null, not an error")
+	var p := CombatAuthority.SimProjectile.new()
+	p.source = spawn(THORN, 0, Vector3.ZERO)
+	p.ability = THORN.basic_attack
+	check(Sounds.cast_clip(p) == "cast_arrow", "a weapon champion's shot is an arrow (%s)" % Sounds.cast_clip(p))
+	p.source = spawn(SCRIBE, 0, Vector3(3, 0, 0))
+	p.ability = SCRIBE.basic_attack
+	check(Sounds.cast_clip(p) == "cast_bolt", "a spell champion's shot is a bolt")
+	p.source = spawn(TOWER, 0, Vector3(6, 0, 0))
+	p.ability = TOWER.basic_attack
+	check(Sounds.cast_clip(p) == "tower_shot", "a tower's shot is its own")
+	check(Sounds.swing_clip(spawn(WARDEN, 0, Vector3(9, 0, 0)), WARDEN.get_slot(2)) == "swing_heavy", "Shield Slam swings heavy")
+	check(Sounds.swing_clip(spawn(RUNNER, 0, Vector3(12, 0, 0)), RUNNER.basic_attack) == "swing", "Twin Cut swings light")

@@ -26,7 +26,8 @@ func _ready() -> void:
 	vol.value_changed.connect(func(v: float) -> void:
 		Settings.volume = v
 		Settings.apply()
-		vol_value.text = "%d%%" % roundi(v * 100.0))
+		vol_value.text = "%d%%" % roundi(v * 100.0)
+		Sounds.ui("level_up", -4.0, 0.5))  # hear the new level
 	vol_value.text = "%d%%" % roundi(Settings.volume * 100.0)
 	box.add_child(vol)
 	var sens_value := _label("", 24, TEXT)
@@ -40,7 +41,7 @@ func _ready() -> void:
 	# A plain button that says its state: the default switch was too faint to read.
 	var full := Button.new()
 	full.custom_minimum_size = Vector2(0, 60)
-	full.add_theme_font_size_override("font_size", 26)
+	UiStyle.button(full, 26)
 	full.text = "Fullscreen: %s" % ("On" if Settings.fullscreen else "Off")
 	full.pressed.connect(func() -> void:
 		Settings.fullscreen = not Settings.fullscreen
@@ -50,7 +51,7 @@ func _ready() -> void:
 	var back := Button.new()
 	back.text = "Back"
 	back.custom_minimum_size = Vector2(0, 64)
-	back.add_theme_font_size_override("font_size", 28)
+	UiStyle.button(back, 28)
 	back.pressed.connect(close)
 	box.add_child(back)
 	back.grab_focus.call_deferred()
