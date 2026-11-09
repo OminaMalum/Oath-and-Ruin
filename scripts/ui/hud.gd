@@ -236,12 +236,13 @@ func _draw() -> void:
 			var font := get_theme_default_font()
 			draw_multiline_string(font, card.position + Vector2(16, 72), desc, HORIZONTAL_ALIGNMENT_LEFT, card.size.x - 32, 20, 3, Color(0.92, 0.90, 0.84))
 
-	# Ability slots.
-	var q := player.get_slot(1)
-	var keys := ["LMB", "Q hold / RMB" if q and q.delivery == AbilityDef.Delivery.GROUND_AREA else "Q / RMB", "E", "R", "F"]
+	# Ability slots: a drawn sign and the key (or the time left) on top, the
+	# name under them.
+	var keys := ["LMB", "Q / RMB", "E", "R", "F"]
 	var slot_w := 150.0
 	var n := player.def.slot_count()
 	var x0 := c.x - (slot_w * n + 12 * (n - 1)) * 0.5
+	var weapon := player.def.power == ChampionDef.Power.WEAPON
 	# Drawn in keyboard order, so the ultimate (slot 3, R) sits last after F.
 	var order := [0, 1, 2, 4, 3] if n == 5 else range(n)
 	for pos in n:
@@ -252,27 +253,31 @@ func _draw() -> void:
 		var casting := player.cast_slot == i and player.is_casting()
 		var locked := a.is_ultimate and not player.ultimate_ready_level()
 		var unavailable := not player.alive or player.is_stunned()
+		var ready := cd <= 0.0 and not locked and not unavailable
 		# Four states, each with its own look: ready (teal key, bright edge),
 		# cooling (dark fill rising, time in big digits), locked (dark, a lock
 		# mark and the level), unavailable (grey, dead or stunned).
-		var edge := Palette.BRASS if casting else (Palette.TEAL if cd <= 0.0 and not locked and not unavailable else Color(0.08, 0.07, 0.06, 0.9))
+		var edge := Palette.BRASS if casting else (Palette.TEAL if ready else Color(0.08, 0.07, 0.06, 0.9))
 		draw_rect(r.grow(2), edge)
 		draw_rect(r, Color(0.16, 0.14, 0.12, 0.96) if not locked else Color(0.09, 0.08, 0.07, 0.96))
+		# The sign, on its own dark plate at the left of the top band.
+		var ir := Rect2(r.position + Vector2(6, 5), Vector2(38, 38))
+		draw_rect(ir, Color(0.07, 0.06, 0.05, 0.95))
+		var use_weapon := a.scaling == AbilityDef.Scaling.WEAPON or (a.scaling == AbilityDef.Scaling.CHAMPION and weapon)
+		var icol := player.def.accent_color.lightened(0.25) if ready or casting else Color(0.5, 0.48, 0.45)
+		if not locked:
+			AbilityIcon.draw(self, ir.grow(-4), a, icol, use_weapon)
 		if cd > 0.0 and not locked:
 			var f := player.cooldown_fraction(i)
 			draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * f)), Color(0, 0, 0, 0.6))
 		if unavailable:
 			draw_rect(r, Color(0.3, 0.3, 0.3, 0.5))
-		# Long names shrink to fit the slot instead of being cut off.
-		var name_size := SMALL
-		while name_size > 14 and _font.get_string_size(a.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > r.size.x - 10:
-			name_size -= 1
-		_text(r.position + Vector2(0, 24), a.display_name, name_size, Color(0.95, 0.92, 0.85) if not locked else Color(0.6, 0.58, 0.55), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 		var label: String = keys[i] if i < keys.size() else ""
 		var lcol := Palette.TEAL
+		var counting := false
 		if locked:
 			# A small padlock drawn in vector: a body and a shackle.
-			var lp := r.position + Vector2(r.size.x * 0.5 - 38, 40)
+			var lp := ir.position + Vector2(12, 8)
 			draw_rect(Rect2(lp + Vector2(0, 8), Vector2(14, 11)), Color(0.75, 0.72, 0.68))
 			draw_arc(lp + Vector2(7, 8), 5, PI, TAU, 10, Color(0.75, 0.72, 0.68), 2.5)
 			label = "Lv %d" % Unit.ULT_LEVEL
@@ -280,16 +285,22 @@ func _draw() -> void:
 		elif cd > 0.0 and a.cooldown >= 1.5 and not (player.is_charged(i) and player.charges[i] > 0):
 			label = "%.1f" % cd
 			lcol = Color(0.95, 0.9, 0.8)
+			counting = true
 		elif unavailable:
 			lcol = Color(0.6, 0.6, 0.6)
-		_text(r.position + Vector2(0, 58), label, 26 if cd > 0.0 and not locked else FONT_SIZE, lcol, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		_text(r.position + Vector2(48, 34), label, 26 if counting else FONT_SIZE, lcol, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 52)
+		# Long names shrink to fit the slot instead of being cut off.
+		var name_size := SMALL
+		while name_size > 13 and _font.get_string_size(a.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_size).x > r.size.x - 8:
+			name_size -= 1
+		_text(r.position + Vector2(0, 63), a.display_name, name_size, Color(0.95, 0.92, 0.85) if not locked else Color(0.6, 0.58, 0.55), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 		if player.is_charged(i):
-			# Charges: one big pip per use, filled while it is ready.
+			# Charges: one big pip per use above the slot's corner, filled while ready.
 			for k in a.max_charges:
-				var pc := r.position + Vector2(r.size.x - 16 - k * 20, 50)
-				draw_circle(pc, 7, Color(0.05, 0.05, 0.05, 0.9))
+				var pc := r.position + Vector2(r.size.x - 12 - k * 20, -8)
+				draw_circle(pc, 8, Color(0.05, 0.05, 0.05, 0.9))
 				if k < player.charges[i]:
-					draw_circle(pc, 5.5, Palette.TEAL)
+					draw_circle(pc, 6, Palette.TEAL)
 
 	var pr := passive_readout(player)
 	if not pr.is_empty() and not player.upgrade_pending:

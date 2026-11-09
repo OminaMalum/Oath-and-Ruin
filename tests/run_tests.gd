@@ -71,7 +71,7 @@ func _run() -> void:
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract", "test_item_cards",
-		"test_match_feed", "test_match_feed_alarm", "test_minimap", "test_kit_cards", "test_sound_bank",
+		"test_match_feed", "test_match_feed_alarm", "test_minimap", "test_kit_cards", "test_sound_bank", "test_ability_icons",
 	]
 	for t: String in tests:
 		_make_world()
@@ -3080,6 +3080,27 @@ func test_kit_cards() -> void:
 	check(n == 14 * 6, "fourteen champions, six cards each (%d)" % n)
 	var slam := MainMenu.kit_entry(WARDEN, 2)
 	check(slam.name == "Shield Slam" and String(slam.counter).begins_with("How to beat it: the 0.4 s windup"), "Shield Slam's counter line (%s)" % slam.counter)
+
+
+## Every ability on every champion gets a known sign, and one champion's
+## five slots are not all the same sign.
+func test_ability_icons() -> void:
+	var known := ["bolt", "arrow", "burst", "beam", "swing", "dash", "ward", "wall", "hook", "summon", "shield", "claws", "rise"]
+	for d: ChampionDef in MatchController.ROSTER + MatchController.PROTOTYPES:
+		var weapon := d.power == ChampionDef.Power.WEAPON
+		var seen := {}
+		for k: Array in MainMenu.KIT_KEYS:
+			if int(k[1]) < 0:
+				continue
+			var a := d.get_slot(int(k[1]))
+			if a == null:
+				continue
+			var kd := AbilityIcon.kind(a, weapon)
+			check(kd in known, "%s %s has a sign (%s)" % [d.id, k[0], kd])
+			seen[kd] = true
+		check(seen.size() >= 2, "%s has at least two different signs (%d)" % [d.id, seen.size()])
+	check(AbilityIcon.kind(THORN.basic_attack, true) == "arrow", "a bow shot is an arrow")
+	check(AbilityIcon.kind(SCRIBE.basic_attack, false) == "bolt", "a spell shot is a bolt")
 
 
 ## Every clip the code asks for exists, and casts pick a clip by kind.
