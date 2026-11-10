@@ -17,6 +17,8 @@ const CHAINS := {
 	"skirt_b": [2.2, 0.3, 0.8, 0.05, 0.51],
 	"sash": [0.9, 0.4, 0.8, 0.03, 0.45],
 	"braid": [1.0, 0.4, 0.9, 0.04, 0.37],
+	# A plait that lies on the chest: thin, so the chest capsule leaves it resting there.
+	"plait": [1.6, 0.45, 0.9, 0.008, 0.19],
 	"tail": [0.8, 0.38, 0.6, 0.04, 0.6],
 	"scarf": [0.7, 0.36, 0.6, 0.03, 0.5],
 }

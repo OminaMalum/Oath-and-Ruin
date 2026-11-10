@@ -65,7 +65,7 @@ Thornwright is the pilot for a better figure, still built from code and still wi
 - `ChampionModel.dress()` multiplies those colours into the same tiling CC0 materials as before, only for a
   model that carries them. Nothing changes for the other champions until each is rebuilt.
 - The rig, the clip names and the timings are unchanged, so the sim and the tests do not see the difference.
-  New bones: `braid` (her tail of hair, swung by `ClothSim`) and the bow now lies along the fist at rest.
+  New bones: `plait` (the plait that falls out of her hood onto her chest, swung by `ClothSim` with its own thin setting) and the bow now lies along the fist at rest. She wears her hood up (`build_hood`): Anthony preferred that to the hood down.
 - Look at a model with `tools/model_shots.gd` (`--only=front,portrait` for a quick pass).
 
 Next in line: Oathwarden and Ruinscribe, with the same kit.

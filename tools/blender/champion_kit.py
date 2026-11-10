@@ -67,7 +67,7 @@ def humanoid_bones(s=1.0, w=1.0, extra=None):
 ## Cloth bones split into links so the game's cloth springs (ClothSim) can
 ## bend them: cape -> cape_1 -> cape_2. Clips still key only the first link
 ## (same pivot, so every clip plays as before); the rest follow and swing.
-SPLIT = {"cape": 3, "skirt_f": 2, "skirt_b": 2, "braid": 2, "sash": 2}
+SPLIT = {"cape": 3, "skirt_f": 2, "skirt_b": 2, "braid": 2, "plait": 2, "sash": 2}
 
 
 def split_cloth(bones):

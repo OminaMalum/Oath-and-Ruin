@@ -3166,7 +3166,8 @@ func test_baked_champion() -> void:
 	check(lit >= 8, "the Thornwright's materials take her baked shading (%d of %d)" % [lit, a.size()])
 	check(b.all(func(m: StandardMaterial3D) -> bool: return not m.vertex_color_use_as_albedo), "a model without baked colours is left alone")
 	var sk := saela.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
-	check(sk.find_bone("braid") >= 0 and sk.find_bone("braid_1") >= 0 and sk.find_bone("bow") >= 0, "her hair and bow have their bones")
+	check(sk.find_bone("plait") >= 0 and sk.find_bone("plait_1") >= 0 and sk.find_bone("bow") >= 0, "her plait and bow have their bones")
+	check(saela.find_children("Hood*", "MeshInstance3D", true, false).size() == 1, "she wears her hood up")
 	check(saela.find_children("Head*", "MeshInstance3D", true, false).size() == 1 and saela.find_children("Eyes*", "MeshInstance3D", true, false).size() == 1,
 			"she has a face")
 	saela.free()

@@ -4,10 +4,10 @@
 
   /opt/bvenv/bin/python tools/blender/build_thornwright.py OUT.blend
 
-Saela Briar, a wood elf ranger: copper hair tied back from long ears, a laced
-leather jerkin over linen sleeves and a green split tunic, a cowl with its
-hood down, a team cape, a quiver of fletched arrows and a recurve bow wound
-with living vine. Her head, arms and hands are the CC0 Blender Studio body
+Saela Briar, a wood elf ranger: her hood up over copper hair, with a plait
+falling out of it over her left shoulder, a laced leather jerkin over linen
+sleeves and a green split tunic, a team cape, a quiver of fletched arrows and
+a recurve bow wound with living vine. Her head, arms and hands are the CC0 Blender Studio body
 (figure_kit.py); everything else is geometry written here, and every surface
 carries baked shading and wear in its vertex colours.
 """
@@ -26,7 +26,10 @@ S = 0.95
 W = 1.0
 HEAD = 0.82  # the base mesh's head is a cartoon's; hers is nearer an adult's
 
-NAMES = ck.BODY + ["bow", "braid"]
+NAMES = ck.BODY + ["bow", "plait"]
+# The braid's path: from behind the hood's edge, over the collar and down the cowl.
+BRAID = [(-0.097, 0.026, 1.5), (-0.09, 0.058, 1.462), (-0.07, 0.08, 1.427), (-0.08, 0.108, 1.39), (-0.083, 0.128, 1.345),
+         (-0.08, 0.137, 1.3), (-0.076, 0.141, 1.255), (-0.073, 0.14, 1.215)]
 PARTS = set(filter(None, os.environ.get("TW_PARTS", "").split(",")))  # build only these (for quick looks)
 
 
@@ -40,8 +43,8 @@ def bones():
     palm = h + (t - h).normalized() * 0.07
     # Re-seated in the fist once the fingers are curled (build_model).
     b["bow"] = (tuple(palm), tuple(palm + Vector((0, 0.27, 0.13))), "hand_l")
-    # The tail of hair, from its tie at the back of the crown.
-    b["braid"] = ((0, -0.095, 1.635), (0, -0.16, 1.33), "head")
+    # The braid that falls out of the hood over her left shoulder.
+    b["plait"] = (BRAID[3], BRAID[-1], "chest")
     return b
 
 
@@ -80,7 +83,7 @@ def build_head(rig, M, fig, painters):
     tie = (180.0, 40.0)
     seed = 0
     for sx in (-1, 1):
-        for a in range(3 if sx > 0 else 10, 176, 7):
+        for a in range(3 if sx > 0 else 10, 84, 7):  # further back it is all under the hood
             seed += 1
             el = hairline(a) - 1.0
             if a < 40:
@@ -91,36 +94,55 @@ def build_head(rig, M, fig, painters):
                 via = None
             fig.lock(k, "HairCopper", (sx * a, el), tie, via=via, width=0.04, n=11, seed=seed, thick=0.36, lift=0.007,
                      body=0.007 if via is None else 0.011)
-        for a in (20, 62, 104, 146):  # an upper layer, for depth
+        for a in (20, 62):  # an upper layer, for depth
             seed += 1
             fig.lock(k, "HairCopper", (sx * a, 48.0), tie, via=(sx * (a + (180 - a) * 0.6), 66.0), width=0.034, lift=0.014,
                      body=0.007, n=8, seed=seed, thick=0.4)
         # A loose strand in front of each ear, curling in at the jaw.
         pts = [fig.on_head(fig.direction(sx * (51.0 - 1.2 * i), 9.0 - 8.5 * i), 0.004 + 0.0012 * i) for i in range(6)]
         fk.strand(k, pts, [0.003, 0.006, 0.006, 0.005, 0.0035, 0.001], "HairCopper", seed=seed + 40, thick=0.6, seg=6)
-    root = fig.on_head(fig.direction(*tie), 0.012 * fig.hs)
-    out = fig.direction(180.0, 30.0)
-    # The tie: a leather band round the gathered hair.
-    ring = [root + out * 0.012 + (Vector((1, 0, 0)) * math.cos(i / 12 * TAU) + out.cross(Vector((1, 0, 0))) * math.sin(i / 12 * TAU)) * 0.024
-            for i in range(13)]
-    fk.sweep(k, ring, 0.0065, 0.0065, "Leather", seg=6, cap=False)
     k.finish(rig, "head")
 
-    # The tail: thick strands from the tie, out and down between the shoulders.
-    k = Kit("Ponytail", M)
-    path = [(0, 0, 0), (0, -0.04, 0.012), (0, -0.072, -0.02), (0, -0.088, -0.085), (0, -0.092, -0.16), (0, -0.086, -0.235),
-            (0, -0.07, -0.3)]
-    for j in range(7):
-        a = j / 7 * TAU
-        off = Vector((math.cos(a), 0, math.sin(a) * 0.6)) * (0.0 if j == 0 else 0.016)
+    # The braid: three strands crossing over each other, tied near the end.
+    k = Kit("Braid", M)
+    path = [Vector(p) for p in BRAID]
+    fine = []
+    for i in range(len(path) - 1):
+        p0, p1, p2, p3 = path[max(i - 1, 0)], path[i], path[i + 1], path[min(i + 2, len(path) - 1)]
+        for j in range(6):
+            t = j / 6.0
+            fine.append(0.5 * ((2 * p1) + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t ** 3))
+    fine.append(path[-1])
+    n = len(fine)
+    for j in range(3):
         pts, rad = [], []
-        for i, d in enumerate(path):
-            f = i / (len(path) - 1)
-            sway = Vector((0.012 * math.sin(f * 4.0 + a), 0.0, 0.0))
-            pts.append(root + Vector(d) + off * (0.5 + 1.1 * math.sin(math.pi * min(1.0, f * 1.6)) * (1.0 - 0.75 * f)) + sway * f)
-            rad.append((0.019 if j else 0.022) * (0.55 + 0.75 * math.sin(math.pi * min(1.0, f * 1.4 + 0.12))) * (1.0 - 0.8 * f * f))
-        fk.strand(k, pts, rad, "HairCopper", seed=60 + j, thick=0.7, seg=8, normals=[Vector((0, -1, 0.2))] * len(pts))
-    k.finish(rig, ["braid"])
+        for i, p in enumerate(fine):
+            f = i / (n - 1.0)
+            tan = (fine[min(i + 1, n - 1)] - fine[max(i - 1, 0)]).normalized()
+            side = Vector((1, 0, 0))
+            side = (side - tan * side.dot(tan)).normalized()
+            out = side.cross(tan)
+            if out.y < 0:
+                out = -out
+            ph = f * 27.0 + j * TAU / 3.0
+            amp = 0.0105 * (1.0 - 0.45 * fk.smooth(0.8, 1.0, f))
+            pts.append(p + side * math.sin(ph) * amp + out * math.sin(2.0 * ph) * amp * 0.5)
+            rad.append(0.0098 * (1.0 - 0.5 * fk.smooth(0.82, 1.0, f)))
+        fk.sweep(k, pts, rad, rad, "HairCopper", seg=7)
+    # The tie, and the loose end below it.
+    ti = n - 5
+    tan = (fine[ti + 1] - fine[ti - 1]).normalized()
+    side = (Vector((1, 0, 0)) - tan * tan.x).normalized()
+    out = side.cross(tan)
+    ring = [fine[ti] + (side * math.cos(i / 10 * TAU) + out * math.sin(i / 10 * TAU)) * 0.0155 for i in range(11)]
+    fk.sweep(k, ring, 0.0045, 0.0045, "Leather", seg=6, cap=False)
+    for j in range(5):
+        a = j / 5 * TAU
+        d = (side * math.cos(a) + out * math.sin(a)) * 0.006
+        pts = [fine[-1] - tan * 0.012 + d, fine[-1] + tan * 0.02 + d * 1.9, fine[-1] + tan * 0.05 + d * 2.3 + Vector((0, 0.004, 0)),
+               fine[-1] + tan * 0.075 + d * 1.6 + Vector((0, 0.006, 0))]
+        fk.strand(k, pts, [0.007, 0.0075, 0.005, 0.001], "HairCopper", seed=70 + j, thick=0.7, seg=6)
+    k.finish(rig, ["plait"])
 
 
 def build_body(rig, M, fig):
@@ -332,7 +354,7 @@ def build_cloth(rig, M, fig):
     owners = fk.TORSO + bf.ARMS
 
     # Cowl: dark green wool draped over the shoulders with a thick rolled
-    # collar, hanging to a point on the chest, its hood down the back.
+    # collar, hanging to a point on the chest. Its hood is build_hood.
     k = Kit("Cowl", M)
     c0 = Vector((0, -0.01, 1.235))
     seg = 44
@@ -354,7 +376,7 @@ def build_cloth(rig, M, fig):
         row = []
         for th in ths:
             d = Vector((math.sin(th) * math.cos(math.radians(el)), math.cos(th) * math.cos(math.radians(el)), math.sin(math.radians(el))))
-            hit = fig.onto(c0 + d * 0.7, c0, 0.042, owners)
+            hit = fig.onto(c0 + d * 0.7, c0, 0.042 + 0.022 * max(0.0, -math.cos(th)) ** 2, owners)
             row.append(hit if hit is not None else c0 + d * 0.16)
         raw = [math.hypot(p.x - c0.x, p.y - c0.y) for p in row]
         rr = [max(a, b) for a, b in zip(ring_smooth(raw, 1), raw)]
@@ -367,7 +389,7 @@ def build_cloth(rig, M, fig):
                           for i, th in enumerate(ths)], 1)
         nr, floor = [], []
         for i, th in enumerate(ths):
-            body = fig.around(nz[i], th, 0.034, centre=(c0.x, c0.y), owners=owners)
+            body = fig.around(nz[i], th, 0.034 + 0.03 * max(0.0, -math.cos(th)) ** 2, centre=(c0.x, c0.y), owners=owners)
             floor.append(math.hypot(body.x - c0.x, body.y - c0.y))
             nr.append(max(rr[i] + 0.003, floor[i]) + t * (0.006 * math.sin(th * 7.0 + j * 0.9) + 0.003 * math.sin(th * 15.0 + j)))
         rr = [max(a, b) for a, b in zip(ring_smooth(nr), floor)]
@@ -377,10 +399,6 @@ def build_cloth(rig, M, fig):
     fk.tint(vs[-1:], -0.3, k)
     # A linen shirt collar inside it, round the base of the neck.
     fig.strap(k, "Cloth", (0, 0.0, 1.378), (0, 1, 0.22), (1, 0, 0), width=0.06, lift=0.011, owners=("neck", "chest"), n=28, tint_by=0.25)
-    # The hood, flat against the back.
-    hood = [(0, -0.098, 1.452, 0.07, 0.03), (0, -0.128, 1.405, 0.09, 0.034), (0, -0.142, 1.34, 0.08, 0.03),
-            (0, -0.148, 1.275, 0.052, 0.024), (0, -0.15, 1.22, 0.018, 0.012), (0, -0.15, 1.2, 0.003, 0.003)]
-    fk.sweep(k, [h[:3] for h in hood], [h[3] for h in hood], [h[4] for h in hood], "RobeDark", seg=14, side=Vector((1, 0, 0)))
     k.finish(rig, ["chest", "neck", "shoulder_l", "shoulder_r", "spine"], subsurf=1, solidify=0.006)
 
     # Team cape, from under the cowl to mid thigh, heavier folds toward a
@@ -409,6 +427,57 @@ def build_cloth(rig, M, fig):
     fk.tint(vs[-2:-1], 0.3, k)
     fk.tint(vs[-1:], -0.3, k)
     k.finish(rig, ["chest", "cape", "spine"], subsurf=1, solidify=0.008)
+
+
+def build_hood(rig, M, fig):
+    """The cowl's hood, worn up: deep enough to shade her brow, open round the
+    face and throat, gathered into the collar, with a soft point at the back."""
+    k = Kit("Hood", M)
+    c0 = Vector((0.0, -0.004, 1.556))
+    ax, up, down, back = 0.138, 0.15, 0.186, 0.142
+    seg = 40
+    phis = [i / seg * TAU for i in range(seg)]  # 0 over the crown, pi under the chin
+    head = fig.bvh(("head", "neck"))
+
+    def point(phi, y, sc, shift=Vector((0, 0, 0))):
+        c, sn = math.cos(phi), math.sin(phi)
+        z = (up if c > 0 else down) * c * sc
+        if c < 0:  # it falls from the widest part of the head rather than tucking under the jaw
+            sn = math.copysign(abs(sn) ** 0.8, sn)
+        # Folds where the cloth gathers toward the collar.
+        fold = 1.0 + 0.035 * math.sin(phi * 9.0 + y * 30.0) * fk.smooth(-0.25, -0.8, c)
+        return c0 + shift + Vector((ax * sn * sc * fold, y, z))
+
+    def rim_y(phi):
+        c = math.cos(phi)
+        return 0.06 + 0.06 * max(0.0, c) ** 1.4 + 0.03 * max(0.0, -c) ** 3
+
+    rows = []
+    # The edge is turned back on itself, then the cloth runs back over the head.
+    for fy, dy, sc in ((1.0, -0.012, 1.0), (1.0, 0.002, 1.005), (1.0, 0.006, 0.975), (0.93, 0.0, 0.955), (0.62, 0.0, 0.985), (0.22, 0.0, 1.0)):
+        rows.append([point(phi, rim_y(phi) * fy + dy, sc) for phi in phis])
+    for psi in (10.0, 24.0, 38.0, 52.0, 64.0, 74.0, 82.0, 87.0):
+        r = math.radians(psi)
+        tip = fk.smooth(35.0, 90.0, psi)
+        rows.append([point(phi, -back * math.sin(r), math.cos(r), Vector((0, -0.035 * tip, -0.065 * tip))) for phi in phis])
+    # Never closer to her head, ears and hair than a finger's width.
+    for row in rows:
+        grow = []
+        for p in row:
+            d = p - c0
+            g = 1.0
+            if p.z > 1.475:
+                hit = head.ray_cast(c0 + d.normalized() * 0.6, -d.normalized())
+                if hit[0] is not None and (hit[0] - c0).dot(d) > 0:
+                    g = max(1.0, ((hit[0] - c0).length + 0.038) / d.length)
+            grow.append(g)
+        for _ in range(2):
+            grow = [max(grow[i], (grow[i - 1] + 2 * grow[i] + grow[(i + 1) % seg]) / 4.0) for i in range(seg)]
+        for i, p in enumerate(row):
+            row[i] = c0 + (p - c0) * grow[i]
+    vs = k.ring_grid(rows, "RobeDark", cap_top=True, u_scale=2.0)
+    fk.tint(vs[1:3], 0.12, k)
+    k.finish(rig, ["head", "neck"], subsurf=1, solidify=0.007)
 
 
 def build_quiver(rig, M):
@@ -529,6 +598,7 @@ def build_model(rig, M):
         build_arms(rig, M, fig)
     if want("cloth"):
         build_cloth(rig, M, fig)
+        build_hood(rig, M, fig)
     if want("quiver"):
         build_quiver(rig, M)
     if want("bow"):
@@ -545,7 +615,7 @@ def animate(rig, spec):
     # The bow lies along the fist at rest (a low ready carry), so `bow` only
     # trims it; the wrist does the rest.
     rest = dict(upper_arm_r=(6, 0, 4), forearm_r=(-8, 0, 0), upper_arm_l=(8, 0, -4), forearm_l=(0, 0, 0), hand_l=(18, 0, 0),
-                bow=(10, 0, 0), braid=(0, 0, 0))
+                bow=(10, 0, 0), plait=(0, 0, 0))
 
     def b(**over):
         d = dict(rest)
@@ -560,14 +630,14 @@ def animate(rig, spec):
 
     ck.idle_clip(rig, 2.4, lambda t, s: (b(spine=(2 * s, 0, 0), chest=(-1 * s, 0, 2 * s), head=(2 * s, 0, 6 * math.sin(t / 2.4 * TAU)),
                                             upper_arm_r=(6 + 2 * s, 0, 4), bow=(10 + 2 * s, 0, 0), cape=(1.5 * s, 0, 0),
-                                            braid=(3 * s, 0, 2 * math.sin(t / 2.4 * TAU))),
+                                            plait=(1.5 + 1.5 * s, 0, 1.5 * math.sin(t / 2.4 * TAU))),
                                           {"hips": (0, 0, -0.015 - 0.008 * s)}))
 
     def upper(t, s, c2):
         rots = b(hips=(0, 0, 9 * s), spine=(-12, 0, -5 * s), chest=(-4, 0, -6 * s), head=(12, 0, 3 * s),
                  upper_arm_r=(-35 * s + 8, 0, 8), forearm_r=(-40 - 15 * s, 0, 0),
                  upper_arm_l=(30 * s + 6, 0, -6), forearm_l=(-20 + 10 * s, 0, 0), hand_l=(10, 0, 0), bow=(8, 0, 0),
-                 skirt_f=(-14 - 8 * c2, 0, 0), skirt_b=(26 + 6 * c2, 0, 0), cape=(30 + 6 * c2, 0, 0), braid=(26 + 6 * c2, 0, 6 * s))
+                 skirt_f=(-14 - 8 * c2, 0, 0), skirt_b=(26 + 6 * c2, 0, 0), cape=(30 + 6 * c2, 0, 0), plait=(7 + 6 * c2, 0, 4 * s))
         return rots, {}
     ck.run_clip(rig, spec["move_speed_mps"], upper, cycle=0.6, stance=0.2, hips_drop=0.09, lift=0.25, kick=0.2)
 
@@ -608,7 +678,7 @@ def animate(rig, spec):
     c = slots["ability_3"]
     shot("ability_3", c["release_s"], c["recovery_s"], up=45.0)
 
-    ck.death_clip(rig, NAMES, lambda t: {"bow": (10 - 25 * min(1.0, t / 0.6), 0, 0), "hand_l": (18, 0, 0), "braid": (0, 0, 0)})
+    ck.death_clip(rig, NAMES, lambda t: {"bow": (10 - 25 * min(1.0, t / 0.6), 0, 0), "hand_l": (18, 0, 0), "plait": (0, 0, 0)})
 
 
 AIM_BOW = 0.0  # set in main(): the trim that stands the bow upright in the shooting pose
