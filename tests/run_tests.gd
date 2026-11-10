@@ -71,7 +71,7 @@ func _run() -> void:
 		"test_surrender", "test_difficulty", "test_settings_saved",
 		"test_prediction_matches_authority", "test_snapshot_codec_roundtrip", "test_snapshot_fits_packet",
 		"test_net_command_queue", "test_asset_contract", "test_item_cards",
-		"test_match_feed", "test_match_feed_alarm", "test_minimap", "test_kit_cards", "test_sound_bank", "test_ability_icons", "test_graphics_quality", "test_team_banner",
+		"test_match_feed", "test_match_feed_alarm", "test_minimap", "test_kit_cards", "test_sound_bank", "test_ability_icons", "test_graphics_quality", "test_team_banner", "test_baked_champion",
 	]
 	for t: String in tests:
 		_make_world()
@@ -3150,6 +3150,27 @@ func test_team_banner() -> void:
 	check(int(ma.get_shader_parameter("sigil")) == 0 and int(mr.get_shader_parameter("sigil")) == 1, "Oath and Ruin fly different signs")
 	for n: MeshInstance3D in [a, b, r, own]:
 		n.free()
+
+
+## A model with baked vertex colours (tools/blender/figure_kit.py) gets them
+## multiplied into its materials; a model without them is dressed as before.
+func test_baked_champion() -> void:
+	var saela := (load("res://assets/champions/thornwright.glb") as PackedScene).instantiate()
+	var plain := (load("res://assets/champions/ruinscribe.glb") as PackedScene).instantiate()
+	var a: Array = ChampionModel.dress(saela, 0, THORN.accent_color, THORN.primary_color)["materials"]
+	var b: Array = ChampionModel.dress(plain, 0, Color.WHITE)["materials"]
+	var lit := 0
+	for m: StandardMaterial3D in a:
+		if m.vertex_color_use_as_albedo:
+			lit += 1
+	check(lit >= 8, "the Thornwright's materials take her baked shading (%d of %d)" % [lit, a.size()])
+	check(b.all(func(m: StandardMaterial3D) -> bool: return not m.vertex_color_use_as_albedo), "a model without baked colours is left alone")
+	var sk := saela.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	check(sk.find_bone("braid") >= 0 and sk.find_bone("braid_1") >= 0 and sk.find_bone("bow") >= 0, "her hair and bow have their bones")
+	check(saela.find_children("Head*", "MeshInstance3D", true, false).size() == 1 and saela.find_children("Eyes*", "MeshInstance3D", true, false).size() == 1,
+			"she has a face")
+	saela.free()
+	plain.free()
 
 
 ## Every clip the code asks for exists, and casts pick a clip by kind.

@@ -50,6 +50,7 @@ def release_times():
 
 def export(out_path):
     out_path = os.path.abspath(out_path)
+    has_col = any(o.type == "MESH" and "Col" in o.data.color_attributes for o in bpy.data.objects)
     bpy.ops.export_scene.gltf(
         filepath=out_path,
         export_format="GLB",
@@ -61,6 +62,10 @@ def export(out_path):
         export_frame_range=False,
         export_def_bones=False,
         export_extras=True,
+        # Baked shading and wear (figure_kit.bake) ride in the "Col" attribute.
+        export_vertex_color="NAME" if has_col else "NONE",
+        export_vertex_color_name="Col",
+        export_all_vertex_colors=False,
     )
     timing = {"release": release_times(),
               "fps": bpy.context.scene.render.fps / bpy.context.scene.render.fps_base,

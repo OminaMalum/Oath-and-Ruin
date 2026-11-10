@@ -41,7 +41,14 @@ const LOOKS := {
 	"Moss": ["poly_wool_herringbone", Color(0.34, 0.33, 0.15), 1.0, 0.0, 3.0],
 	"Horn": ["", Color(0.17, 0.14, 0.13), 0.45, 0.0, 1.0],
 	"Stone": ["castle_wall_slates", Color(0.7, 0.68, 0.66), 0.9, 0.0, 4.0],
+	# The white of an eye; the iris and pupil are painted in the vertex colours.
+	"EyeWhite": ["", Color(0.8, 0.8, 0.8), 0.22, 0.0, 1.0],
 }
+## Models built with tools/blender/figure_kit.py carry baked shading and wear
+## in their vertex colours (ambient occlusion, worn edges, grime, painted
+## detail). This is the colour of an untouched surface there, so worn edges
+## can come out lighter than the material.
+const BAKED_NEUTRAL := 0.8
 const SETS := {
 	"poly_wool_herringbone": "poly_wool_herringbone", "brown_leather": "brown_leather", "hessian_230": "hessian_230",
 	"bark_willow_02": "bark_willow_02", "castle_wall_slates": "castle_wall_slates", "forged_steel": "forged_steel",
@@ -64,7 +71,14 @@ static func dress(root: Node, team: int, accent: Color, primary := Color(0.4, 0.
 	var eyes := Palette.glow(accent.lightened(0.35), 3.0)
 	var team_col := Palette.team_color(team).darkened(0.25) if team < 2 else Color(0.45, 0.4, 0.32)
 	var made := {}
-	for n in root.find_children("*", "MeshInstance3D", true, false):
+	var meshes := root.find_children("*", "MeshInstance3D", true, false)
+	var baked := false
+	for n in meshes:
+		var mesh := (n as MeshInstance3D).mesh
+		if mesh and mesh.get_surface_count() > 0 and mesh is ArrayMesh and (mesh as ArrayMesh).surface_get_format(0) & Mesh.ARRAY_FORMAT_COLOR:
+			baked = true
+			break
+	for n in meshes:
 		var mi := n as MeshInstance3D
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		for i in mi.mesh.get_surface_count():
@@ -83,6 +97,11 @@ static func dress(root: Node, team: int, accent: Color, primary := Color(0.4, 0.
 				m = Palette.glow(accent.lightened(0.45), 0.8)
 			elif LOOKS.has(nm):
 				m = _make(LOOKS[nm], team_col if nm == "Team" else (primary if nm.begins_with("Robe") and nm != "RobeInner" else Color.WHITE))
+				if baked:
+					m.vertex_color_use_as_albedo = true
+					m.albedo_color = Color(m.albedo_color.r / BAKED_NEUTRAL, m.albedo_color.g / BAKED_NEUTRAL, m.albedo_color.b / BAKED_NEUTRAL)
+					if nm == "EyeWhite":
+						m.rim_enabled = false
 			else:
 				m = Palette.mat(Color(0.5, 0.5, 0.5))
 			made[nm] = m

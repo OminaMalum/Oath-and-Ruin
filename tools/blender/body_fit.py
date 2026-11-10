@@ -75,9 +75,14 @@ def _nearest(p, names):
     return best
 
 
-def fit(rig, girth=None, body="male", points=()):
+ARMS = tuple(n + s for n in ("upper_arm_", "forearm_", "hand_") for s in ("l", "r"))
+
+
+def fit(rig, girth=None, body="male", points=(), keep=KEEP):
     """Returns (verts, uvs, faces, owner) for the kept torso and legs, moved onto
-    the rig. girth: bone -> (x, y) scale across the bone (default 1)."""
+    the rig. girth: bone -> (x, y) scale across the bone (default 1).
+    keep=KEEP + ARMS also fits the arms and hands (hands move rigidly with
+    their bone, so fingers keep their shape)."""
     girth = girth or {}
     vs, ts, fs = load(body)
     n_body = len(vs)
@@ -87,7 +92,7 @@ def fit(rig, girth=None, body="male", points=()):
     bones = rig.data.bones
     owner = []
     xf = {}
-    for n in KEEP:
+    for n in keep:
         sa, sb = (Vector(x) for x in SRC[n])
         ta, tb = bones[n].head_local.copy(), bones[n].tail_local.copy()
         sd, td = (sb - sa), (tb - ta)
@@ -102,7 +107,9 @@ def fit(rig, girth=None, body="male", points=()):
         if own.startswith("upper_arm") and abs(p.x) < 0.165:
             own = "chest"
         owner.append(own)
-        kept = [(d, n) for d, n in near if n in KEEP][:3]
+        kept = [(d, n) for d, n in near if n in keep][:3]
+        if own.startswith("hand_") and own in keep:
+            kept = [(0.0, own)]
         acc = Vector((0, 0, 0))
         tot = 0.0
         for d, n in kept:
@@ -130,9 +137,10 @@ def region(fitted, test):
     return keep
 
 
-def add_faces(kit, fitted, faces, mname, offset=0.0, uv_scale=1.0):
+def add_faces(kit, fitted, faces, mname, offset=0.0, uv_scale=1.0, tint=0.0):
     """Adds faces to a champion_kit.Kit, each vertex pushed out along its normal
-    by offset. Returns the new BMVerts on the boundary, as ordered loops."""
+    by offset (a distance, or fn(index, position) -> distance). Returns the
+    new BMVerts on the boundary, as ordered loops."""
     vs, ts, fs, owner = fitted[:4]
     used = sorted({vi for f in faces for vi, _ in f})
     # Vertex normals from the kept faces.
@@ -144,7 +152,11 @@ def add_faces(kit, fitted, faces, mname, offset=0.0, uv_scale=1.0):
             nrm[vi] += n
     bm = kit.bm
     mi = kit._mi(mname)
-    made = {vi: bm.verts.new(vs[vi] + nrm[vi].normalized() * offset) for vi in used}
+    off = offset if callable(offset) else (lambda i, p: offset)
+    made = {vi: bm.verts.new(vs[vi] + nrm[vi].normalized() * off(vi, vs[vi])) for vi in used}
+    if tint:  # lighter or darker than the material (figure_kit.bake)
+        for v in made.values():
+            v[kit.tint] = tint
     for f in faces:
         try:
             face = bm.faces.new([made[vi] for vi, _ in f])
@@ -214,9 +226,10 @@ def surface_y(fitted, x, zz, owners, front=True, reach=0.03):
     return max(ys) if front else min(ys)
 
 
-def legs(rig, M, fitted, mname, boots, boot_scale=1.0, cuff=None, offset=0.006):
+def legs(rig, M, fitted, mname, boots, boot_scale=1.0, cuff=None, offset=0.006, boot=None):
     """The body's legs as trousers (mname), with a wrapped cuff from mid shin to
-    the ankle and champion_kit boots. Stands in for champion_kit.limbs legs."""
+    the ankle and champion_kit boots (or boot(rig, M, side, boots)). Stands in
+    for champion_kit.limbs legs."""
     bn = rig.data.bones
     for side in ("l", "r"):
         knee = bn["shin_" + side].head_local
@@ -231,4 +244,7 @@ def legs(rig, M, fitted, mname, boots, boot_scale=1.0, cuff=None, offset=0.006):
             for loop in add_faces(k, fitted, wrap, cuff, offset=offset + 0.012, uv_scale=3.0):
                 rim(k, loop, 0.008, cuff)
         k.finish(rig, ["thigh_" + side, "shin_" + side])
-        ck.boot(rig, M, side, boots, boot_scale)
+        if boot:
+            boot(rig, M, side, boots)
+        else:
+            ck.boot(rig, M, side, boots, boot_scale)

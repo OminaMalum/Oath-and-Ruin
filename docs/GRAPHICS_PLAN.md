@@ -48,3 +48,24 @@ commercial game and is written into the manifest before it enters the repo.
   quality only show on a real PC).
 - The cloud has no GPU, so frame rate is only measured on Anthony's PC.
 - Tests and the soak must stay green: art is view only and never changes the sim.
+
+## Champion figures (2026-11-10, Thornwright first)
+
+The first champions were lathes and tubes: a hood with two lights for a face, mittens, a stick for a bow. The
+Thornwright is the pilot for a better figure, still built from code and still with no generated or bought art.
+
+- `tools/blender/figure_kit.py` fits the CC0 Blender Studio body to the rig and keeps its head, arms and hands.
+  It reshapes the base mesh's cartoon head toward an adult's (smaller eyes, longer jaw, lower crown, smaller
+  overall), points the ears, curls the fingers round a grip, and adds eyeballs, lids, a lash line, brows, a hair
+  cap and locks. Clothes are the body's own faces pushed out (`Figure.add`), so they fit; straps and belts are
+  wrapped on by ray casts (`Figure.strap`).
+- `figure_kit.bake()` paints every vertex with what a texture artist would bake: ambient occlusion from the
+  whole figure, wear on raised edges, grime in creases and near the ground, and painted detail (lips, a blush,
+  the iris, streaks in hair, a dark hem). It rides in the glTF colour attribute `Col`.
+- `ChampionModel.dress()` multiplies those colours into the same tiling CC0 materials as before, only for a
+  model that carries them. Nothing changes for the other champions until each is rebuilt.
+- The rig, the clip names and the timings are unchanged, so the sim and the tests do not see the difference.
+  New bones: `braid` (her tail of hair, swung by `ClothSim`) and the bow now lies along the fist at rest.
+- Look at a model with `tools/model_shots.gd` (`--only=front,portrait` for a quick pass).
+
+Next in line: Oathwarden and Ruinscribe, with the same kit.

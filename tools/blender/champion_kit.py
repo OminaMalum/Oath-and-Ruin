@@ -143,6 +143,9 @@ class Kit:
         self.name = name
         self.bm = bmesh.new()
         self.uv = self.bm.loops.layers.uv.new("UVMap")
+        # Lighter or darker than the material (0 = as it is): figure_kit.bake()
+        # folds it into the vertex colours. Streaks in hair, a dark hem.
+        self.tint = self.bm.verts.layers.float.new("Tint")
         self.mats = []
         self.mat_lookup = mats
 

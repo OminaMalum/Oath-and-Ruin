@@ -1,7 +1,7 @@
 extends SceneTree
 ## Close-up review shots of a champion model in its clips, lit like the map.
 ## xvfb-run -a -s "-screen 0 1280x960x24" godot --rendering-driver opengl3 --path . -s tools/model_shots.gd -- \
-##   --model=res://assets/champions/ruinscribe.glb --out=/tmp/model [--team=0]
+##   --model=res://assets/champions/ruinscribe.glb --out=/tmp/model [--team=0] [--only=front,portrait]
 ## Each shot: [file, clip, time in s (-1 = release), camera yaw degrees, distance]
 ## --strip=CLIP[:N[:YAW]] instead shoots N frames spread over one clip (strip_00.png ...).
 
@@ -18,6 +18,8 @@ const SHOTS := [
 	["ability_3", "ability_3", -1.0, 30.0, 4.0],
 	["death", "death", 1.2, 60.0, 4.0],
 	["face", "idle", 0.6, 15.0, 1.3],
+	["portrait", "idle", 0.6, 22.0, 0.66],
+	["bust_back", "idle", 0.6, 155.0, 1.2],
 	["game_back", "run", 0.1, 180.0, 7.5],
 ]
 
@@ -40,6 +42,9 @@ func _initialize() -> void:
 			_out = a.get_slice("=", 1)
 		elif a.begins_with("--model="):
 			_model = a.get_slice("=", 1)
+		elif a.begins_with("--only="):
+			var keep := a.get_slice("=", 1).split(",")
+			_shots = SHOTS.filter(func(s: Array) -> bool: return keep.has(s[0]))
 		elif a.begins_with("--team="):
 			_team = int(a.get_slice("=", 1))
 		elif a.begins_with("--strip="):
