@@ -137,10 +137,14 @@ def region(fitted, test):
     return keep
 
 
-def add_faces(kit, fitted, faces, mname, offset=0.0, uv_scale=1.0, tint=0.0):
+def add_faces(kit, fitted, faces, mname, offset=0.0, uv_scale=1.0, tint=0.0, relax=None):
     """Adds faces to a champion_kit.Kit, each vertex pushed out along its normal
     by offset (a distance, or fn(index, position) -> distance). Returns the
-    new BMVerts on the boundary, as ordered loops."""
+    new BMVerts on the boundary, as ordered loops.
+    relax: (rounds, body BVH, clearance, slack) smooths the shell so it spans
+    the body's small hollows like a worn garment instead of following every
+    muscle. It stays at least `clearance` off the body and no more than
+    `slack` further out than it started, so it still follows the figure."""
     vs, ts, fs, owner = fitted[:4]
     used = sorted({vi for f in faces for vi, _ in f})
     # Vertex normals from the kept faces.
@@ -153,7 +157,8 @@ def add_faces(kit, fitted, faces, mname, offset=0.0, uv_scale=1.0, tint=0.0):
     bm = kit.bm
     mi = kit._mi(mname)
     off = offset if callable(offset) else (lambda i, p: offset)
-    made = {vi: bm.verts.new(vs[vi] + nrm[vi].normalized() * off(vi, vs[vi])) for vi in used}
+    lift = {vi: off(vi, vs[vi]) for vi in used}
+    made = {vi: bm.verts.new(vs[vi] + nrm[vi].normalized() * lift[vi]) for vi in used}
     if tint:  # lighter or darker than the material (figure_kit.bake)
         for v in made.values():
             v[kit.tint] = tint
@@ -168,6 +173,27 @@ def add_faces(kit, fitted, faces, mname, offset=0.0, uv_scale=1.0, tint=0.0):
             u, v = ts[ti]
             loop[kit.uv].uv = (u * uv_scale, v * uv_scale)
     bm.edges.ensure_lookup_table()
+    if relax:
+        rounds, body, clear, slack = relax
+        vl = list(made.values())
+        most = {v: lift[vi] + slack for vi, v in made.items()}
+        for _ in range(rounds):
+            moved = {}
+            for v in vl:
+                edge = v.is_boundary
+                nb = [e.other_vert(v).co for e in v.link_edges if not edge or e.is_boundary]
+                if nb:
+                    moved[v] = v.co.lerp(sum(nb, Vector((0, 0, 0))) / len(nb), 0.5)
+            for v, co in moved.items():
+                v.co = co
+            for v in vl:
+                hit = body.find_nearest(v.co)
+                if hit[0] is not None:
+                    d = (v.co - hit[0]).dot(hit[1])
+                    if d < clear:
+                        v.co += hit[1] * (clear - d)
+                    elif d > most[v]:
+                        v.co -= hit[1] * (d - most[v])
     return boundary_loops([made[vi] for vi in used])
 
 

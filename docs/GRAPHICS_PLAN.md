@@ -86,8 +86,21 @@ polished the view the player never has. What changed because of it:
   belt and legs show, fletching in the accent colour (material `Accent`, dyed in `ChampionModel.dress`), bow
   carried low and out to the side, thicker bow, lighter legs, one green for hood and cowl.
 
-Still open from that review: clothes are skin tight shells with no thickness, seams or texture of their own; the
-thigh comes through the skirt in action poses; idle and run are basic; the face (waiting on a direction from
-Anthony: shadowed hoods or real faces); mesh cost (72k triangles, 50 surfaces).
+Second round (gate5e):
+
+- `figure_kit.drape` weights a skirt to the thighs below the hip joint, each side to its own leg, so the cloth rides
+  over a lifted leg instead of letting it through. A share stays on `skirt_f` and `skirt_b` for sway.
+- `Figure.add(..., relax=N)` smooths a shell made from body faces so stiff clothes span the body's small hollows
+  instead of showing every muscle, kept between `clear` and its starting lift plus `slack`. `figure_kit.shell(kit)`
+  gives a ray cast onto the garment, so seams, laces and trims sit on it. The jerkin uses both.
+- Idle, run and the bramble toss are solved with `Reach` like the shot: weight on one leg at rest; a leaning run with
+  the free arm pumping and the bow held low.
+- Keyed cloth signs: a hanging bone swings FORWARD with a positive X turn. The older builders key `cape` and
+  `skirt_b` positive in the run, which pulls them into the body (the cloth sim hides it in play, stills show it).
+  Thornwright's are negative now. Worth fixing on the others when each is rebuilt.
+
+Still open from that review: no texture set of her own (stitching, trim, wear are still tiling textures times
+vertex colour); sleeves and skirt have few folds; the face (waiting on a direction from Anthony: shadowed hoods or
+real faces); hair; mesh cost (72k triangles, 50 surfaces).
 
 Oathwarden and Ruinscribe wait until Thornwright is right.

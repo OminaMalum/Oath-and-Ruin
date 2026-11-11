@@ -321,11 +321,14 @@ class Figure:
     def faces(self, test):
         return bf.region(self.fitted, test)
 
-    def add(self, kit, mname, test, offset=0.0, uv_scale=3.0, tint=0.0):
+    def add(self, kit, mname, test, offset=0.0, uv_scale=3.0, tint=0.0, relax=0, clear=0.01, slack=0.006, owners=TORSO):
         """Adds the body faces passing test(index, owner, position) to a Kit,
         pushed out by offset (a distance or fn(index, position)). Returns the
-        open edges as ordered loops."""
-        return bf.add_faces(kit, self.fitted, self.faces(test), mname, offset=offset, uv_scale=uv_scale, tint=tint)
+        open edges as ordered loops. relax: rounds of smoothing, so a stiff
+        garment spans the body's hollows instead of showing every muscle; it
+        stays `clear` off the body parts in `owners` and at most `slack` further out than it began."""
+        return bf.add_faces(kit, self.fitted, self.faces(test), mname, offset=offset, uv_scale=uv_scale, tint=tint,
+                            relax=(relax, self.bvh(owners), clear, slack) if relax else None)
 
     def bvh(self, owners, ears=True):
         """BVH of the body faces owned by `owners`."""
@@ -618,6 +621,55 @@ class Figure:
         if tint_by:
             tint(vs, tint_by, kit)
         return rows[1]
+
+
+def drape(obj, rig, front="skirt_f", back="skirt_b", centre_y=0.0, follow=0.8, sway=0.3, seam=0.045):
+    """Weights a skirt so it lies on the legs: below the hip joint each side
+    follows its own thigh (the cloth rides up over a lifted leg and never lets
+    it through), with a share left to the front and back skirt bones for sway
+    and the rest on the hips."""
+    bones = rig.data.bones
+    hip_z = bones["thigh_l"].head_local.z
+    chains = {}
+    for root in (front, back):
+        names = [root] + [n for n in ("%s_%d" % (root, i) for i in range(1, 6)) if n in bones]
+        chains[root] = [(n, bones[n].head_local.copy(), bones[n].tail_local.copy()) for n in names]
+    for g in list(obj.vertex_groups):
+        obj.vertex_groups.remove(g)
+    groups = {}
+
+    def put(name, i, w):
+        if w > 0.01:
+            if name not in groups:
+                groups[name] = obj.vertex_groups.new(name=name)
+            groups[name].add([i], w, "REPLACE")
+    for v in obj.data.vertices:
+        p = v.co
+        d = hip_z - p.z
+        leg = follow * smooth(-0.02, 0.13, d)
+        swing = sway * smooth(0.03, 0.22, d) * (1.0 - leg)
+        right = smooth(-seam, seam, p.x)
+        put("thigh_r", v.index, leg * right)
+        put("thigh_l", v.index, leg * (1.0 - right))
+        ws = [(1.0 / (ck.seg_dist(p, a, b) + 0.03) ** 4, n) for n, a, b in chains[front if p.y > centre_y else back]]
+        tot = sum(w for w, _ in ws)
+        for w, n in ws:
+            put(n, v.index, swing * w / tot)
+        put("hips", v.index, 1.0 - leg - swing)
+
+
+def shell(kit):
+    """onto(origin, toward, lift) -> the point where a ray from origin toward
+    `toward` first meets what the Kit holds so far, lifted off it. For seams,
+    laces and trims that have to sit on a garment, not on the body under it."""
+    tree = BVHTree.FromBMesh(kit.bm)
+
+    def onto(origin, toward, lift=0.0):
+        o = Vector(origin)
+        d = (Vector(toward) - o).normalized()
+        hit = tree.ray_cast(o, d)
+        return hit[0] - d * lift if hit[0] is not None else None
+    return onto
 
 
 def sweep(kit, pts, rx, ry, mname, seg=8, side=None, cap=True):

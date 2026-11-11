@@ -163,29 +163,41 @@ def build_body(rig, M, fig):
         return not (p.y > 0 and p.z > 1.31 + abs(p.x) * 1.25)
 
     def flare(i, p):
-        return 0.013 + 0.014 * (1.0 - fk.smooth(0.975, 1.07, p.z)) + 0.0025 * noise.noise(p * 14.0)
-    for loop in fig.add(k, "Leather", jerkin, offset=flare):
-        bf.rim(k, loop, 0.007, "Leather")
-    for sx in (-1, 1):  # the welts the laces run through
-        pts = [fig.onto((sx * 0.021, 0.5, z), (sx * 0.021, 0.0, z), 0.017, fk.TORSO) for z in (1.262, 1.22, 1.18, 1.14, 1.1)]
-        fk.tint(fk.sweep(k, pts, 0.0065, 0.004, "Leather", seg=6, side=Vector((1, 0, 0))), -0.25, k)
+        return 0.013 + 0.009 * (1.0 - fk.smooth(0.975, 1.05, p.z)) + 0.0025 * noise.noise(p * 14.0)
+    loops = fig.add(k, "Leather", jerkin, offset=flare, relax=7, clear=0.012)
+    on = fk.shell(k)
+    for loop in loops:
+        bf.rim(k, loop, 0.008, "Leather")
+
+    def welt(pts, r=0.0045, tint=-0.28):
+        pts = [p for p in pts if p is not None]
+        if len(pts) > 2:
+            fk.tint(fk.sweep(k, pts, r, r * 0.7, "Leather", seg=6), tint, k)
+    zs = [1.38 - i * 0.033 for i in range(13)]
+    for sx in (-1, 1):
+        # Panel seams: one over each breast down to the hem, one down each side.
+        welt([on((sx * (0.078 + 0.018 * fk.smooth(1.3, 1.05, z)), 0.5, z), (sx * 0.07, 0.0, z), 0.002) for z in zs if z < 1.37])
+        welt([on((sx * 0.5, -0.012, z), (0.0, -0.012, z), 0.002) for z in zs if z < 1.2])
+        # The welts the laces run through.
+        welt([on((sx * 0.021, 0.5, z), (sx * 0.021, 0.0, z), 0.003) for z in (1.262, 1.22, 1.18, 1.14, 1.1)], 0.0065, -0.25)
+    welt([on((0.0, -0.5, z), (0.0, 0.0, z), 0.002) for z in zs])  # centre back
     for i in range(5):
         z0 = 1.25 - i * 0.036
         for sx in (-1, 1):
-            a = fig.onto((sx * 0.021, 0.5, z0), (sx * 0.021, 0.0, z0), 0.023, fk.TORSO)
-            b = fig.onto((-sx * 0.021, 0.5, z0 - 0.03), (-sx * 0.021, 0.0, z0 - 0.03), 0.023, fk.TORSO)
+            a = on((sx * 0.021, 0.5, z0), (sx * 0.021, 0.0, z0), 0.009)
+            b = on((-sx * 0.021, 0.5, z0 - 0.03), (-sx * 0.021, 0.0, z0 - 0.03), 0.009)
             fk.sweep(k, [a, a.lerp(b, 0.5) + Vector((0, 0.003, 0)), b], 0.003, 0.003, "Cloth", seg=5)
     k.finish(rig, ["chest", "spine", "hips"])
 
     # Belt at the waist with a brass buckle and a hanging tail, and the
     # baldric that carries the quiver, from the right shoulder to the left hip.
     k = Kit("Straps", M)
-    fig.strap(k, "Leather", (0, -0.01, 1.085), (0, 1, 0), (1, 0, 0), width=0.042, lift=0.02, n=40, tint_by=-0.12)
-    sling = fig.strap(k, "Leather", (-0.005, -0.01, 1.21), (0.105, 0, 0.19), (0, 1, 0), width=0.04, lift=0.018, n=44, tint_by=-0.35,
+    fig.strap(k, "Leather", (0, -0.01, 1.085), (0, 1, 0), (1, 0, 0), width=0.042, lift=0.025, n=40, tint_by=-0.12)
+    sling = fig.strap(k, "Leather", (-0.005, -0.01, 1.21), (0.105, 0, 0.19), (0, 1, 0), width=0.04, lift=0.023, n=44, tint_by=-0.35,
                       owners=fk.TORSO + ("thigh_l", "thigh_r"))
     k.finish(rig, ["chest", "spine", "hips"], solidify=0.005)
     k = Kit("Gear", M)
-    bk = fig.around(1.085, 0.0, 0.026, centre=(0, -0.01))
+    bk = fig.around(1.085, 0.0, 0.031, centre=(0, -0.01))
     for dx, dz, sx_, sz_ in ((0, 0.024, 0.056, 0.008), (0, -0.024, 0.056, 0.008), (-0.024, 0, 0.008, 0.056), (0.024, 0, 0.008, 0.056)):
         k.box(bk + Vector((dx, 0.002, dz)), (sx_, 0.009, sz_), "Brass")
     k.box(bk + Vector((0.004, 0.004, 0)), (0.04, 0.005, 0.006), "Brass")
@@ -213,7 +225,7 @@ def build_body(rig, M, fig):
     seg = 48
     cen = (0, -0.01)
     cv = Vector((cen[0], cen[1], 0))
-    levels = (1.0, 0.95, 0.885, 0.81, 0.735, 0.675, 0.648, 0.628)
+    levels = (1.05, 1.0, 0.95, 0.885, 0.81, 0.735, 0.675, 0.648, 0.628)  # the top is tucked under the jerkin
     rows = []
 
     def body_r(th, z):
@@ -227,20 +239,21 @@ def build_body(rig, M, fig):
         for i in range(seg):
             th = i / seg * TAU
             # It never tucks in: each row clears the body beside it and the row above.
-            r = max(body_r(th, zz), body_r(th, zz + 0.03), body_r(th, zz - 0.03), last[i] - 0.014) + 0.014
+            r = max(body_r(th, zz), body_r(th, zz + 0.03), body_r(th, zz - 0.03), last[i] - 0.014) + (0.005 if j == 0 else 0.014)
             last[i] = r
+            t = max(0.0, (j - 1.0) / (len(levels) - 2.0))
             r += 0.05 * t + 0.02 * t * max(0.0, math.cos(th)) + t * (0.013 * math.sin(th * 9.0 + 0.4) + 0.008 * math.sin(th * 14.0 + 1.3))
             z = zz - (0.03 * abs(math.sin(th * 6.0)) if j == len(levels) - 1 else 0.0)
             row.append(cv + Vector((math.sin(th) * r, math.cos(th) * r, z)))
         rows.append(row)
-    fk.tint(k.ring_grid(rows[:3], "Robe", u_scale=2.0), 0.0, k)
+    fk.tint(k.ring_grid(rows[:4], "Robe", u_scale=2.0), 0.0, k)
     q = seg // 4
     for i0, i1 in ((-q + 2, q - 2), (q + 2, 3 * q - 2)):
         idx = [i % seg for i in range(i0, i1 + 1)]
-        vs = k.ring_grid([[r[i] for i in idx] for r in rows[2:]], "Robe", closed=False, u_scale=2.0)
+        vs = k.ring_grid([[r[i] for i in idx] for r in rows[3:]], "Robe", closed=False, u_scale=2.0)
         fk.tint([vs[-3]], 0.4, k)
         fk.tint(vs[-2:], -0.38, k)
-    k.finish(rig, ["hips", "thigh_l", "thigh_r", "skirt_f", "skirt_b"], subsurf=1, solidify=0.008)
+    fk.drape(k.finish(rig, ["hips", "thigh_l", "thigh_r", "skirt_f", "skirt_b"], subsurf=1, solidify=0.008), rig, centre_y=cen[1])
 
     # Breeches and tall boots.
     k = Kit("Breeches", M)
@@ -453,6 +466,9 @@ def build_hood(rig, M, fig):
             sn = math.copysign(abs(sn) ** 0.8, sn)
         # Folds where the cloth gathers toward the collar.
         fold = 1.0 + 0.035 * math.sin(phi * 9.0 + y * 30.0) * fk.smooth(-0.25, -0.8, c)
+        # Soft folds down the back and sides, where the wool hangs from the crown.
+        fold += (0.02 + 0.045 * fk.smooth(0.5, -0.5, c)) * fk.smooth(0.0, -0.06, y) * (
+            math.sin(phi * 6.0 + 0.8) + 0.7 * noise.noise(Vector((phi * 1.9, y * 14.0, 0.3))))
         return c0 + shift + Vector((ax * sn * sc * fold, y, z))
 
     def rim_y(phi):
@@ -486,6 +502,8 @@ def build_hood(rig, M, fig):
     k.ring_grid(rows[:2], "Robe", u_scale=2.0)
     k.ring_grid(rows[1:4], "Accent", u_scale=2.0)
     fk.tint(k.ring_grid(rows[3:], "Robe", cap_top=True, u_scale=2.0), -0.12, k)
+    # The seam over the crown, from behind the band to the point.
+    fk.tint(fk.sweep(k, [c0 + (r[0] - c0) * 1.035 for r in rows[4:]], 0.006, 0.004, "Robe", seg=6, cap=False), -0.3, k)
     # The point of the hood falls in a short tail, so her head is not a ball from behind.
     tip = sum(rows[-1], Vector((0, 0, 0))) / seg
     tail = [tip + Vector(d) for d in ((0, 0.05, 0.035), (0, 0.0, 0.0), (0, -0.04, -0.04), (0, -0.058, -0.1), (0, -0.055, -0.165),
@@ -676,10 +694,10 @@ def animate(rig, spec):
     # past the shoulder (it breaks her outline from behind) and its lower limb
     # ahead of her legs; the free hand hangs by the hip. Solved, like the shot.
     carry = {}
-    reach.arm(carry, "l", bn["upper_arm_l"].head_local + Vector((-0.11, 0.1, -0.4)), (-0.6, -0.8, 0.0),
-              hand=fk.frame_rot(up0, fwd0, Vector((-0.3, -0.25, 0.92)), Vector((-0.55, 0.8, 0.0))), twist=0.5)
-    reach.arm(carry, "r", bn["upper_arm_r"].head_local + Vector((0.09, 0.06, -0.43)), (0.5, -1.0, 0.0),
-              hand=fk.frame_rot(ur, tr, Vector((0.05, 0.2, -1.0)), Vector((0.2, 1.0, 0.1))), twist=0.5)
+    bow_carry = fk.frame_rot(up0, fwd0, Vector((-0.3, -0.25, 0.92)), Vector((-0.55, 0.8, 0.0)))
+    hand_hang = fk.frame_rot(ur, tr, Vector((0.05, 0.2, -1.0)), Vector((0.2, 1.0, 0.1)))
+    reach.arm(carry, "l", bn["upper_arm_l"].head_local + Vector((-0.11, 0.1, -0.4)), (-0.6, -0.8, 0.0), hand=bow_carry, twist=0.5)
+    reach.arm(carry, "r", bn["upper_arm_r"].head_local + Vector((0.09, 0.06, -0.43)), (0.5, -1.0, 0.0), hand=hand_hang, twist=0.5)
     rest = dict(carry, bow=(0, 0, 0), plait=(0, 0, 0))
 
     def b(**over):
@@ -687,14 +705,32 @@ def animate(rig, spec):
         d.update(over)
         return base(NAMES, **d)
 
-    def swung(name, rot):
-        """The carried pose of an arm bone, turned further by rot."""
-        return fk.euler_deg(ck.q_arm(rot) @ ck.q_arm(carry[name]))
-
     # The arrow is scaled away in every clip that does not put it on the string.
     arrow = rig.pose.bones["arrow"]
     arrow.scale = (HIDE, HIDE, HIDE)
     stance = {"l": (feet["l"][0] + 0.03, feet["l"][1] + 0.17, feet["l"][2]), "r": (feet["r"][0] - 0.01, feet["r"][1] - 0.13, feet["r"][2])}
+
+    def settle(rots, hips, right=None, pole=(0.5, -1.0, 0.0), hand=None, bob=0.0):
+        """Solves the arms once the body is set: the bow hangs at her left
+        side whatever the torso does, and the free hand goes to `right` (an
+        offset from its shoulder) or hangs loose."""
+        st = reach.fk(rots, hips)
+        reach.arm(rots, "l", st["upper_arm_l"][1] + Vector((-0.11, 0.1, -0.4 + bob)), (-0.6, -0.8, 0.0), hips, hand=bow_carry, twist=0.5)
+        off = Vector(right) if right is not None else Vector((0.07, 0.035, -0.465 + bob))
+        reach.arm(rots, "r", st["upper_arm_r"][1] + off, pole, hips, hand=hand if hand is not None else hand_hang, twist=0.5)
+        return rots
+
+    # Standing: her weight on the right leg, the left knee easy and that foot
+    # turned out ahead of her, hips and shoulders tipped against each other.
+    idle_feet = {"l": (feet["l"][0] - 0.02, feet["l"][1] + 0.075, feet["l"][2]), "r": (feet["r"][0], feet["r"][1] - 0.01, feet["r"][2])}
+
+    def stand(t=0.0, s=0.0):
+        hips = (0.034, 0.0, -0.022 - 0.006 * s)
+        rots = b(hips=(0, -5, 5), spine=(1.5 * s, 3, -2), chest=(-1.0 * s, 4, -5), neck=(0, -2, 0),
+                 head=(2 + 1.5 * s, -3, 4 + 6 * math.sin(t / 2.4 * TAU)), cape=(-1.5 + 1.5 * s, 0, 0),
+                 plait=(1.5 + 1.5 * s, 0, 1.5 * math.sin(t / 2.4 * TAU)))
+        rots["foot_l"], rots["foot_r"] = (0, 0, 16), (0, 0, -6)
+        return settle(rots, hips, bob=0.004 * s), {"hips": hips}
 
     def aim(draw, up=0.0, loosed=0.0, hand=None):
         """The shooting stance: side on, the bow arm straight at the target, the
@@ -704,7 +740,7 @@ def animate(rig, spec):
         up: degrees the shot is raised. loosed: 0..1 of the follow through.
         hand: where the string hand is, when it is no longer on the string."""
         hips = (0.0, 0.02, -0.03)
-        rots = b(spine=(0, 0, -30), chest=(0, 0, -25), neck=(0, 0, 33), head=(up * 0.45, 0, 38), cape=(8, 0, 0))
+        rots = b(spine=(0, 0, -30), chest=(0, 0, -25), neck=(0, 0, 33), head=(up * 0.45, 0, 38), cape=(-3, 0, 0))
         rots["hips"] = fk.euler_deg(Quaternion((1, 0, 0), math.radians(up * 0.22)) @ Quaternion((0, 0, 1), math.radians(-20)))
         rots["foot_l"], rots["foot_r"] = (0, 0, -12), (0, 0, -62)
         st = reach.fk(rots, hips)
@@ -734,7 +770,8 @@ def animate(rig, spec):
     def shot(name, rel, rec, hold=False, up=0.0):
         act, _ = ck.clip(rig, name, rel + rec, rel)
         fr, fe = round(rel * ck.FPS), round((rel + rec) * ck.FPS)
-        idle = (b(foot_l=(0, 0, 0), foot_r=(0, 0, 0)), {"hips": (0, 0, -0.015), "string": (0, 0, 0)}, feet, False)
+        r0, l0 = stand()
+        idle = (r0, dict(l0, string=(0, 0, 0)), idle_feet, False)
         f1, f2 = (max(2, round(fr * 0.22)), round(fr * 0.5)) if hold else (max(2, round(fr * 0.5)), fr - 1)
         keys = [(0, *idle), (f1, *aim(0.12, up * 0.6), stance, True), (f2, *aim(1.0, up), stance, True)]
         if hold:  # the charged shot strains a little further while it is held
@@ -761,18 +798,37 @@ def animate(rig, spec):
         ck.close_clip(rig, act, name)
         arrow.scale = (HIDE, HIDE, HIDE)
 
-    ck.idle_clip(rig, 2.4, lambda t, s: (b(spine=(2 * s, 0, 0), chest=(-1 * s, 0, 2 * s), head=(2 * s, 0, 6 * math.sin(t / 2.4 * TAU)),
-                                            upper_arm_r=swung("upper_arm_r", (2 * s, 0, 0)), bow=(2 * s, 0, 0), cape=(1.5 * s, 0, 0),
-                                            plait=(1.5 + 1.5 * s, 0, 1.5 * math.sin(t / 2.4 * TAU))),
-                                          {"hips": (0, 0, -0.015 - 0.008 * s)}))
+    act, end = ck.clip(rig, "idle", 2.4)
+    for f in range(0, end + 1, 6):
+        t = f / ck.FPS
+        ck.pose(rig, f, *stand(t, math.sin(t / 2.4 * TAU)), idle_feet)
+    fk.steady_quats(act)
+    ck.close_clip(rig, act, "idle-loop")
+
+    # Run: leaning into it, hips and shoulders turning against each other, the
+    # free arm pumping opposite the legs and the bow held low and steady.
+    arm_r = ((bn["forearm_r"].head_local - bn["upper_arm_r"].head_local).length, (bn["hand_r"].head_local - bn["forearm_r"].head_local).length)
 
     def upper(t, s, c2):
-        rots = b(hips=(0, 0, 9 * s), spine=(-12, 0, -5 * s), chest=(-4, 0, -6 * s), head=(12, 0, 3 * s),
-                 upper_arm_r=swung("upper_arm_r", (-32 * s - 4, 0, 6)), forearm_r=swung("forearm_r", (58 - 14 * s, 0, 0)),
-                 upper_arm_l=swung("upper_arm_l", (14 * s + 4, 0, 0)), forearm_l=swung("forearm_l", (14 + 6 * s, 0, 0)),
-                 skirt_f=(-14 - 8 * c2, 0, 0), skirt_b=(26 + 6 * c2, 0, 0), cape=(30 + 6 * c2, 0, 0), plait=(7 + 6 * c2, 0, 4 * s))
-        return rots, {}
-    ck.run_clip(rig, spec["move_speed_mps"], upper, cycle=0.6, stance=0.2, hips_drop=0.055, lift=0.25, kick=0.2)
+        c = math.cos((t - 0.03) * TAU)  # +1 as the left foot reaches forward
+        hips = (0.0, 0.13, -0.05 - 0.026 * math.cos((t - 0.1) * 2 * TAU))  # lowest over the planted foot
+        rots = b(hips=(-7, 0, -7 * c), spine=(-9, 0, 5 * c), chest=(-6, 0, 9 * c), neck=(7, 0, -3 * c), head=(11, 0, -4 * c),
+                 skirt_b=(-10 - 4 * c2, 0, 0), cape=(-22 - 5 * c2, 0, 0), plait=(7 + 6 * c2, 0, 4 * s))
+        st = reach.fk(rots, hips)
+        reach.arm(rots, "l", st["upper_arm_l"][1] + Vector((-0.1, 0.1 - 0.08 * c, -0.37 + 0.02 * c)), (-0.6, -0.8, 0.0), hips,
+                  hand=bow_carry, twist=0.5)
+        # The free arm pumps from the shoulder with the elbow held near a right angle.
+        sr = st["upper_arm_r"][1]
+        phi = math.radians(-8 + 40 * c)
+        psi = phi + math.radians(92 - 8 * c)
+        el = sr + Vector((0.035, math.sin(phi), -math.cos(phi))) * arm_r[0]
+        wr = el + Vector((-0.1 - 0.12 * c, math.sin(psi), -math.cos(psi))).normalized() * arm_r[1]
+        st = reach.arm(rots, "r", wr, el - sr, hips)
+        along = st["hand_r"][1] - st["forearm_r"][1]
+        reach.arm(rots, "r", wr, el - sr, hips, hand=fk.frame_rot(ur, tr, along, Vector((-0.35, 0.25, 1.0))), twist=0.6)
+        return rots, {"hips": hips}
+    ck.run_clip(rig, spec["move_speed_mps"], upper, cycle=0.5, stance=0.2, hips_drop=0.055, lift=0.22, kick=0.2)
+    fk.steady_quats(bpy.data.actions["run"])
 
     c = slots["attack"]
     shot("attack", c["release_s"], c["recovery_s"])
@@ -782,12 +838,21 @@ def animate(rig, spec):
     # Bramble: an underhand toss of a seed with the right hand.
     c = slots["ability_2"]
     rel, rec = c["release_s"], c["recovery_s"]
-    ck.cast_clip(rig, "ability_2", rel, rec, [
-        (0, b(), (0, 0, -0.015)),
-        (rel * 0.6, b(spine=(10, 0, -10), chest=(4, 0, -14), upper_arm_r=(-40, 0, 10), forearm_r=(-20, 0, 0), hand_r=(0, 0, 0)), (0, -0.04, -0.06)),
-        (rel, b(spine=(-6, 0, 10), chest=(-4, 0, 12), upper_arm_r=(95, 0, -4), forearm_r=(-10, 0, 0), hand_r=(-20, 0, 0)), (0, 0.06, -0.04)),
-        (rel + rec * 0.5, b(spine=(-4, 0, 8), upper_arm_r=(85, 0, -4), forearm_r=(-12, 0, 0), hand_r=(-10, 0, 0)), (0, 0.05, -0.04)),
-        (rel + rec, b(), (0, 0, -0.015))], feet)
+    palm_up = Vector((1.0, 0.0, 0.2))  # where the thumb points with the palm turned up and forward
+
+    def toss(spine, chest, right, along):
+        rots = b(hips=(0, -3, 3), spine=spine, chest=chest, neck=(0, 0, -(spine[2] + chest[2]) * 0.5), cape=(-2, 0, 0))
+        return settle(rots, (0, 0, 0), right=right, pole=(0.3, -0.3, -1.0), hand=fk.frame_rot(ur, tr, Vector(along), palm_up))
+    act, _ = ck.clip(rig, "ability_2", rel + rec, rel)
+    for t, rots, hp in (
+            (0, stand()[0], (0.034, 0, -0.022)),
+            (rel * 0.6, toss((8, 0, -10), (4, 0, -14), (0.07, -0.27, -0.36), (0.0, -0.5, -1.0)), (0.02, -0.03, -0.07)),
+            (rel, toss((-5, 0, 8), (-4, 0, 12), (-0.02, 0.43, -0.22), (0.0, 1.0, -0.3)), (0.0, 0.07, -0.05)),
+            (rel + min(0.1, rec * 0.3), toss((-6, 0, 10), (-5, 0, 14), (-0.03, 0.46, -0.06), (0.0, 1.0, 0.15)), (0.0, 0.08, -0.05)),
+            (rel + rec, stand()[0], (0.034, 0, -0.022))):
+        ck.pose(rig, round(t * ck.FPS), rots, {"hips": hp}, idle_feet)
+    fk.steady_quats(act)
+    ck.close_clip(rig, act, "ability_2")
 
     # Thornstorm: a shot loosed high into the sky.
     c = slots["ability_3"]
