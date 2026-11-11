@@ -226,7 +226,7 @@ def surface_y(fitted, x, zz, owners, front=True, reach=0.03):
     return max(ys) if front else min(ys)
 
 
-def legs(rig, M, fitted, mname, boots, boot_scale=1.0, cuff=None, offset=0.006, boot=None):
+def legs(rig, M, fitted, mname, boots, boot_scale=1.0, cuff=None, offset=0.006, boot=None, tint=0.0):
     """The body's legs as trousers (mname), with a wrapped cuff from mid shin to
     the ankle and champion_kit boots (or boot(rig, M, side, boots)). Stands in
     for champion_kit.limbs legs."""
@@ -236,7 +236,7 @@ def legs(rig, M, fitted, mname, boots, boot_scale=1.0, cuff=None, offset=0.006, 
         ankle = bn["foot_" + side].head_local
         names = ("thigh_" + side, "shin_" + side)
         k = ck.Kit("Leg_" + side, M)
-        add_faces(k, fitted, region(fitted, lambda i, o, p: o in names and p.z > ankle.z - 0.02), mname, offset=offset, uv_scale=3.0)
+        add_faces(k, fitted, region(fitted, lambda i, o, p: o in names and p.z > ankle.z - 0.02), mname, offset=offset, uv_scale=3.0, tint=tint)
         if cuff:
             # Wrapped from mid shin down, following the calf.
             top = knee.lerp(ankle, 0.45).z

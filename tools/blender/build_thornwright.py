@@ -15,7 +15,7 @@ import math
 import os
 
 import bpy  # noqa: F401,I001  (bpy first: it makes mathutils importable)
-from mathutils import Vector, noise
+from mathutils import Quaternion, Vector, noise
 
 import body_fit as bf
 import champion_kit as ck
@@ -26,7 +26,9 @@ S = 0.95
 W = 1.0
 HEAD = 0.82  # the base mesh's head is a cartoon's; hers is nearer an adult's
 
-NAMES = ck.BODY + ["bow", "plait"]
+NAMES = ck.BODY + ["bow", "plait", "string", "arrow"]
+BOW = {}  # where the bow sits in the hand at rest: g (grip), up, fwd, wide, nock, brace (bow_frame)
+HIDE = 0.001  # the arrow's scale while it is not on the string
 # The braid's path: from behind the hood's edge, over the collar and down the cowl.
 BRAID = [(-0.097, 0.026, 1.5), (-0.09, 0.058, 1.462), (-0.07, 0.08, 1.427), (-0.08, 0.108, 1.39), (-0.083, 0.128, 1.345),
          (-0.08, 0.137, 1.3), (-0.076, 0.141, 1.255), (-0.073, 0.14, 1.215)]
@@ -43,6 +45,9 @@ def bones():
     palm = h + (t - h).normalized() * 0.07
     # Re-seated in the fist once the fingers are curled (build_model).
     b["bow"] = (tuple(palm), tuple(palm + Vector((0, 0.27, 0.13))), "hand_l")
+    # The string's nocking point and the arrow on it, both re-seated with the bow.
+    b["string"] = (tuple(palm + Vector((0, 0, 0.05))), tuple(palm + Vector((0, 0.1, 0.05))), "bow")
+    b["arrow"] = (tuple(palm + Vector((0, 0, 0.05))), tuple(palm + Vector((0, 0.3, 0.05))), "string")
     # The braid that falls out of the hood over her left shoulder.
     b["plait"] = (BRAID[3], BRAID[-1], "chest")
     return b
@@ -239,9 +244,9 @@ def build_body(rig, M, fig):
 
     # Breeches and tall boots.
     k = Kit("Breeches", M)
-    fig.add(k, "ClothDark", lambda i, o, p: o == "hips" and p.z < 1.0, offset=0.005)
+    fig.add(k, "Cloth", lambda i, o, p: o == "hips" and p.z < 1.0, offset=0.005, tint=-0.3)
     k.finish(rig, ["hips", "thigh_l", "thigh_r", "spine"])
-    bf.legs(rig, M, fig.fitted, "ClothDark", "Leather", 1.0, cuff="Leather", boot=boot)
+    bf.legs(rig, M, fig.fitted, "Cloth", "Leather", 1.0, cuff="Leather", boot=boot, tint=-0.3)
     k = Kit("BootStraps", M)
     for side in ("l", "r"):
         knee, ankle = bn["shin_" + side].head_local, bn["foot_" + side].head_local
@@ -395,32 +400,34 @@ def build_cloth(rig, M, fig):
         rr = [max(a, b) for a, b in zip(ring_smooth(nr), floor)]
         zz = nz
         rows.append([Vector((c0.x + math.sin(th) * rr[i], c0.y + math.cos(th) * rr[i], zz[i])) for i, th in enumerate(ths)])
-    vs = k.ring_grid(rows, "RobeDark", u_scale=2.0)
+    vs = k.ring_grid(rows, "Robe", u_scale=2.0)
+    fk.tint(vs, -0.12, k)
     fk.tint(vs[-1:], -0.3, k)
     # A linen shirt collar inside it, round the base of the neck.
     fig.strap(k, "Cloth", (0, 0.0, 1.378), (0, 1, 0.22), (1, 0, 0), width=0.06, lift=0.011, owners=("neck", "chest"), n=28, tint_by=0.25)
     k.finish(rig, ["chest", "neck", "shoulder_l", "shoulder_r", "spine"], subsurf=1, solidify=0.006)
 
-    # Team cape, from under the cowl to mid thigh, heavier folds toward a
-    # leaf cut hem.
+    # Team cloak: worn off the left shoulder and cut on a slant, so the quiver,
+    # belt and tunic show beside it from behind. Heavier folds toward the hem.
     k = Kit("Cape", M)
     rows = []
-    nj, ni = 9, 15
+    nj, ni = 9, 13
     for j in range(nj):
         t = j / (nj - 1.0)
-        zz = 1.385 - t * 0.7
-        w = 0.14 + 0.12 * t
+        xl, xr = -(0.155 + 0.12 * t), 0.075 - 0.2 * t
         row = []
         for i in range(ni):
-            u = (i / (ni - 1.0)) * 2.0 - 1.0
-            x = u * w
+            v = i / (ni - 1.0)
+            u = v * 2.0 - 1.0
+            x = xl + (xr - xl) * v
+            zz = 1.385 - t * (0.78 - 0.26 * v)
             if j < 2:
                 hit = fig.onto((x, -0.6, zz), (x, 0.0, zz), 0.02, owners)
                 y = hit.y if hit is not None else -0.13
             else:
                 y = -0.142 - 0.02 * (1 - u * u) - (t - 0.14) * 0.085
-            y += t * (0.038 * math.sin(u * 8.5 + 0.6) + 0.012 * math.sin(u * 17.0 + j * 0.7))
-            hz = zz - (0.045 * abs(math.sin(u * 5.5)) if j == nj - 1 else 0.0)
+            y += t * (0.038 * math.sin(u * 6.5 + 0.6) + 0.012 * math.sin(u * 13.0 + j * 0.7))
+            hz = zz - (0.04 * abs(math.sin(u * 4.5)) if j == nj - 1 else 0.0)
             row.append(Vector((x, y, hz)))
         rows.append(row)
     vs = k.ring_grid(rows, "Team", closed=False)
@@ -458,8 +465,8 @@ def build_hood(rig, M, fig):
         rows.append([point(phi, rim_y(phi) * fy + dy, sc) for phi in phis])
     for psi in (10.0, 24.0, 38.0, 52.0, 64.0, 74.0, 82.0, 87.0):
         r = math.radians(psi)
-        tip = fk.smooth(35.0, 90.0, psi)
-        rows.append([point(phi, -back * math.sin(r), math.cos(r), Vector((0, -0.035 * tip, -0.065 * tip))) for phi in phis])
+        tip = fk.smooth(30.0, 90.0, psi)
+        rows.append([point(phi, -back * math.sin(r), math.cos(r), Vector((0, -0.06 * tip, -0.05 * tip))) for phi in phis])
     # Never closer to her head, ears and hair than a finger's width.
     for row in rows:
         grow = []
@@ -475,8 +482,16 @@ def build_hood(rig, M, fig):
             grow = [max(grow[i], (grow[i - 1] + 2 * grow[i] + grow[(i + 1) % seg]) / 4.0) for i in range(seg)]
         for i, p in enumerate(row):
             row[i] = c0 + (p - c0) * grow[i]
-    vs = k.ring_grid(rows, "RobeDark", cap_top=True, u_scale=2.0)
-    fk.tint(vs[1:3], 0.12, k)
+    # A band of her own colour round the edge, then the green of the cowl.
+    k.ring_grid(rows[:2], "Robe", u_scale=2.0)
+    k.ring_grid(rows[1:4], "Accent", u_scale=2.0)
+    fk.tint(k.ring_grid(rows[3:], "Robe", cap_top=True, u_scale=2.0), -0.12, k)
+    # The point of the hood falls in a short tail, so her head is not a ball from behind.
+    tip = sum(rows[-1], Vector((0, 0, 0))) / seg
+    tail = [tip + Vector(d) for d in ((0, 0.05, 0.035), (0, 0.0, 0.0), (0, -0.04, -0.04), (0, -0.058, -0.1), (0, -0.055, -0.165),
+                                      (0, -0.045, -0.215))]
+    fk.tint(fk.sweep(k, tail, [0.05, 0.046, 0.036, 0.026, 0.015, 0.003], [0.045, 0.04, 0.03, 0.021, 0.012, 0.003], "Robe", seg=10,
+                     side=Vector((1, 0, 0))), -0.12, k)
     k.finish(rig, ["head", "neck"], subsurf=1, solidify=0.007)
 
 
@@ -484,12 +499,12 @@ def build_quiver(rig, M):
     # Quiver over the cape, angled up to the right shoulder, full of arrows.
     k = Kit("Quiver", M)
     q0 = Vector((-0.085, -0.225, 0.95))
-    q1 = Vector((0.165, -0.2, 1.475))
+    q1 = Vector((0.205, -0.205, 1.42))
     d = (q1 - q0).normalized()
     side = d.cross(Vector((0, 1, 0))).normalized()
-    fk.sweep(k, [q0 - d * 0.012, q0, q0.lerp(q1, 0.5), q1], [0.026, 0.04, 0.045, 0.05], [0.022, 0.034, 0.038, 0.043], "Leather", seg=14,
+    fk.sweep(k, [q0 - d * 0.012, q0, q0.lerp(q1, 0.5), q1], [0.022, 0.033, 0.037, 0.041], [0.019, 0.028, 0.032, 0.036], "Leather", seg=14,
              side=side)
-    for f, r, mname in ((1.0, 0.053, "Brass"), (0.62, 0.049, "Leather"), (0.2, 0.045, "Leather")):
+    for f, r, mname in ((1.0, 0.044, "Brass"), (0.62, 0.04, "Leather"), (0.2, 0.037, "Leather")):
         c = q0.lerp(q1, f)
         vs = fk.sweep(k, [c - d * 0.014, c + d * 0.004], r, r * 0.865, mname, seg=14, side=side, cap=False)
         if mname == "Leather":
@@ -499,26 +514,24 @@ def build_quiver(rig, M):
     back = Vector((0, 1, 0))
     for i in range(8):
         a = i / 8 * TAU + 0.3
-        off = (side * math.cos(a) + back * math.sin(a) * 0.85) * (0.027 if i else 0.0)
+        off = (side * math.cos(a) + back * math.sin(a) * 0.85) * (0.022 if i else 0.0)
         base_p = q1 + off - d * 0.05
         lean = (d + off * 1.6).normalized()
-        nock = base_p + lean * (0.21 + 0.022 * (i % 3))
-        fk.sweep(k, [base_p, nock], 0.0048, 0.0048, "Wood", seg=5)
-        k.sphere(nock, 0.0062, "Bone", u=6, v=4)
+        nock = base_p + lean * (0.19 + 0.02 * (i % 3))
+        fk.sweep(k, [base_p, nock], 0.0036, 0.0036, "Wood", seg=5)
+        k.sphere(nock, 0.005, "Bone", u=6, v=4)
         r0 = lean.cross(Vector((0.3, 0.2, 1))).normalized()
         for v in range(3):
             rr = (r0 * math.cos(v * TAU / 3) + lean.cross(r0) * math.sin(v * TAU / 3))
             # A vane: low at the front, full toward the nock, cut square behind.
-            hw = [0.001, 0.006, 0.0085, 0.0095, 0.008, 0.004]
-            pts = [nock - lean * (0.088 - 0.014 * j) + rr * (0.004 + hw[j]) for j in range(6)]
-            fk.tint(fk.sweep(k, pts, hw, 0.0011, "Feather", seg=4, side=rr), (0.5 if i % 3 == 0 else -0.1), k)
+            hw = [0.001, 0.008, 0.011, 0.012, 0.01, 0.005]
+            pts = [nock - lean * (0.094 - 0.016 * j) + rr * (0.0035 + hw[j]) for j in range(6)]
+            fk.tint(fk.sweep(k, pts, hw, 0.0012, "Accent", seg=4, side=rr), (0.1 if i % 3 == 0 else -0.15), k)
     k.finish(rig, ["chest", "spine"])
 
 
-def build_bow(rig, M, fig):
-    # A recurve of dark wood: a leather grip bound with cord, limbs that
-    # sweep back and curl forward at bone tips, a taut string, and a living
-    # vine wound up each limb with leaves and glowing buds.
+def bow_frame(rig, fig):
+    """Where the bow sits in the closed left fist, and seats its bones there."""
     g, up, hollow = fig.grip["l"]
     hb = rig.data.bones["hand_l"]
     u = (hb.tail_local - hb.head_local).normalized()
@@ -530,6 +543,19 @@ def build_bow(rig, M, fig):
     fwd = (u * math.cos(math.radians(24)) - n * math.sin(math.radians(24)))
     fwd = (fwd - up * fwd.dot(up)).normalized()
     wide = up.cross(fwd).normalized()
+    brace = 0.122  # how far behind the grip the string stands
+    nock = g - fwd * brace + up * 0.036
+    BOW.update(g=g.copy(), up=up.copy(), fwd=fwd, wide=wide, hollow=hollow, brace=brace, nock=nock)
+    fk.move_bone(rig, "bow", g, g + up * 0.3)
+    fk.move_bone(rig, "string", nock, nock + fwd * 0.1)
+    fk.move_bone(rig, "arrow", nock, nock + fwd * 0.3)
+
+
+def build_bow(rig, M, fig):
+    # A recurve of dark wood: a leather grip bound with cord, limbs that
+    # sweep back and curl forward at bone tips, a string that bends to the
+    # draw, and a living vine wound up each limb with leaves and glowing buds.
+    g, up, fwd, wide, hollow = (BOW[x] for x in ("g", "up", "fwd", "wide", "hollow"))
     k = Kit("Bow", M)
 
     def limb(sd, steps=13):
@@ -546,8 +572,8 @@ def build_bow(rig, M, fig):
     widths, thicks = [], []
     for i in range(m):
         f = abs(i - (m - 1) / 2.0) / ((m - 1) / 2.0)
-        widths.append(0.02 - 0.009 * f ** 1.5)
-        thicks.append(0.015 - 0.0098 * f ** 0.7)
+        widths.append(0.026 - 0.012 * f ** 1.5)
+        thicks.append(0.019 - 0.012 * f ** 0.7)
     fk.sweep(k, path, widths, thicks, "Wood", seg=8, side=wide)
     r = max(hollow, 0.012)
     vs = fk.sweep(k, [g + up * s for s in (-0.058, -0.03, 0.0, 0.03, 0.058)], [r * 1.25, r * 1.18, r * 1.1, r * 1.18, r * 1.25],
@@ -575,20 +601,49 @@ def build_bow(rig, M, fig):
             if i in (5, 14, 23, 31):
                 out = (wide * math.cos(ang) + nn * math.sin(ang)).normalized()
                 leaf(k, vine[-1], (t * sd * 0.55 + out).normalized(), t.cross(out), 0.05 - 0.012 * f)
-            if i in (10, 27):
+            if i in (9, 19, 28):
                 out = (wide * math.cos(ang) + nn * math.sin(ang)).normalized()
-                k.sphere(vine[-1] + out * 0.006, 0.0105, "Glow", u=8, v=6)
+                k.sphere(vine[-1] + out * 0.008, 0.017 - 0.004 * f, "Glow", u=8, v=6)
         fk.sweep(k, vine, [0.0042 - 0.002 * i / 36.0 for i in range(37)], [0.0042 - 0.002 * i / 36.0 for i in range(37)], "Wood", seg=5)
-    a, b = up_l[-1] - fwd * 0.004, dn_l[-1] - fwd * 0.004
-    fk.sweep(k, [a, a.lerp(b, 0.5), b], 0.0022, 0.0022, "Cloth", seg=4)
     k.finish(rig, "bow")
+
+    # The string: fixed at the limb tips, and following the `string` bone at
+    # the nocking point, so drawing it pulls a clean V.
+    k = Kit("String", M)
+    a, b, nk = up_l[-1] - fwd * 0.004, dn_l[-1] - fwd * 0.004, BOW["nock"]
+    pts = [a.lerp(nk, i / 6.0) for i in range(6)] + [nk] + [nk.lerp(b, i / 6.0) for i in range(1, 7)]
+    fk.sweep(k, pts, 0.0024, 0.0024, "Cloth", seg=4)
+    obj = k.finish(rig, "bow")
+    vg = obj.vertex_groups.new(name="string")
+    for v in obj.data.vertices:
+        s = (v.co - nk).dot(up)
+        w = max(0.0, 1.0 - abs(s) / ((a - nk).dot(up) if s > 0 else (nk - b).dot(up)))
+        vg.add([v.index], w, "REPLACE")
+        obj.vertex_groups["bow"].add([v.index], 1.0 - w, "REPLACE")
+
+    # The arrow on the string. It is scaled away except while she shoots.
+    k = Kit("Arrow", M)
+    d = (g + up * 0.036 + wide * 0.017 - nk).normalized()
+    side = d.cross(up).normalized()
+    length = 0.66
+    fk.sweep(k, [nk - d * 0.006, nk + d * (length - 0.05)], 0.0036, 0.0036, "Wood", seg=6)
+    head = nk + d * (length - 0.05)
+    fk.sweep(k, [head - d * 0.004, head + d * 0.012, head + d * 0.05], [0.0095, 0.008, 0.0005], [0.0032, 0.003, 0.0005], "Bone", seg=6,
+             side=up)
+    k.sphere(nk - d * 0.006, 0.0048, "Bone", u=6, v=4)
+    r0 = up
+    for v in range(3):
+        rr = (r0 * math.cos(v * TAU / 3) + d.cross(r0) * math.sin(v * TAU / 3))
+        hw = [0.001, 0.008, 0.011, 0.012, 0.01, 0.005]
+        pts = [nk + d * (0.018 + 0.016 * j) + rr * (0.0035 + hw[j]) for j in range(6)]
+        fk.sweep(k, pts, hw, 0.0012, "Accent", seg=4, side=rr)
+    k.finish(rig, "arrow")
 
 
 def build_model(rig, M):
     slim = {"hips": (0.93, 0.95), "thigh_l": (0.86, 0.9), "thigh_r": (0.86, 0.9), "shin_l": (0.9, 0.92), "shin_r": (0.9, 0.92)}
     fig = fk.Figure(rig, body="female", girth=slim, ears=1.0, fists={"l": 2.2, "r": 0.55}, head=HEAD, mature=1.0)
-    g, up, _ = fig.grip["l"]
-    fk.move_bone(rig, "bow", g, g + up * 0.3)
+    bow_frame(rig, fig)
     painters = []
     if want("head"):
         build_head(rig, M, fig, painters)
@@ -612,66 +667,126 @@ def build_model(rig, M):
 def animate(rig, spec):
     slots = spec["slot_clips"]
     feet = ck.rest_feet(rig)
-    # The bow lies along the fist at rest (a low ready carry), so `bow` only
-    # trims it; the wrist does the rest.
-    rest = dict(upper_arm_r=(6, 0, 4), forearm_r=(-8, 0, 0), upper_arm_l=(8, 0, -4), forearm_l=(0, 0, 0), hand_l=(18, 0, 0),
-                bow=(10, 0, 0), plait=(0, 0, 0))
+    reach = fk.Reach(rig)
+    bn = rig.data.bones
+    g, up0, fwd0, wide0, brace = (BOW[x] for x in ("g", "up", "fwd", "wide", "brace"))
+    hl = bn["hand_l"].head_local
+    ur, _, tr = fk.hand_frame(bn["hand_r"].head_local, bn["hand_r"].tail_local, "r")
+    # At rest the bow hangs low at her left side, its upper limb leaning out
+    # past the shoulder (it breaks her outline from behind) and its lower limb
+    # ahead of her legs; the free hand hangs by the hip. Solved, like the shot.
+    carry = {}
+    reach.arm(carry, "l", bn["upper_arm_l"].head_local + Vector((-0.11, 0.1, -0.4)), (-0.6, -0.8, 0.0),
+              hand=fk.frame_rot(up0, fwd0, Vector((-0.3, -0.25, 0.92)), Vector((-0.55, 0.8, 0.0))), twist=0.5)
+    reach.arm(carry, "r", bn["upper_arm_r"].head_local + Vector((0.09, 0.06, -0.43)), (0.5, -1.0, 0.0),
+              hand=fk.frame_rot(ur, tr, Vector((0.05, 0.2, -1.0)), Vector((0.2, 1.0, 0.1))), twist=0.5)
+    rest = dict(carry, bow=(0, 0, 0), plait=(0, 0, 0))
 
     def b(**over):
         d = dict(rest)
         d.update(over)
         return base(NAMES, **d)
 
-    # The shooting pose: the bow arm straight out ahead, the draw hand at the
-    # cheek, the body turned side-on, the bow upright.
-    aim = dict(spine=(0, 0, 30), chest=(0, 0, 20), head=(0, 0, -40), upper_arm_l=(88, 0, -40), forearm_l=(-30, 0, 0), hand_l=(0, 0, 0),
-               bow=(AIM_BOW, 0, 0), upper_arm_r=(85, -25, -30), forearm_r=(-20, 0, 110), hand_r=(0, 0, 0))
-    drawn = {"l": (feet["l"][0] - 0.04, feet["l"][1] + 0.12, feet["l"][2]), "r": (feet["r"][0] + 0.04, feet["r"][1] - 0.12, feet["r"][2])}
+    def swung(name, rot):
+        """The carried pose of an arm bone, turned further by rot."""
+        return fk.euler_deg(ck.q_arm(rot) @ ck.q_arm(carry[name]))
+
+    # The arrow is scaled away in every clip that does not put it on the string.
+    arrow = rig.pose.bones["arrow"]
+    arrow.scale = (HIDE, HIDE, HIDE)
+    stance = {"l": (feet["l"][0] + 0.03, feet["l"][1] + 0.17, feet["l"][2]), "r": (feet["r"][0] - 0.01, feet["r"][1] - 0.13, feet["r"][2])}
+
+    def aim(draw, up=0.0, loosed=0.0, hand=None):
+        """The shooting stance: side on, the bow arm straight at the target, the
+        string hand `draw` of the way back to its anchor ahead of the chin
+        (0 the string at rest, 1 full draw). The hands are solved onto the bow
+        and the string, so the arrow, string and fingers always meet.
+        up: degrees the shot is raised. loosed: 0..1 of the follow through.
+        hand: where the string hand is, when it is no longer on the string."""
+        hips = (0.0, 0.02, -0.03)
+        rots = b(spine=(0, 0, -30), chest=(0, 0, -25), neck=(0, 0, 33), head=(up * 0.45, 0, 38), cape=(8, 0, 0))
+        rots["hips"] = fk.euler_deg(Quaternion((1, 0, 0), math.radians(up * 0.22)) @ Quaternion((0, 0, 1), math.radians(-20)))
+        rots["foot_l"], rots["foot_r"] = (0, 0, -12), (0, 0, -62)
+        st = reach.fk(rots, hips)
+        a = Vector((0.0, math.cos(math.radians(up)), math.sin(math.radians(up))))
+        u = Vector((0.4, 0.0, 1.0))  # canted, so the limbs show past her body from behind
+        u = (u - a * u.dot(a)).normalized()
+        dh, ph = st["head"]
+        anchor = ph + dh @ Vector((0.045, 0.145, -0.1))  # under the chin, so the forearm does not hide her face
+        d_bow = fk.frame_rot(up0, fwd0, u, a)
+        # The grip goes as far down the line as a nearly straight arm allows.
+        off = d_bow @ (g - hl)
+        base_p = anchor - u * 0.036 + a * brace - off - st["upper_arm_l"][1]
+        far = reach.length("l") * 0.965
+        bq = base_p.dot(a)
+        pull = max(0.2, min(0.62, -bq + math.sqrt(max(bq * bq - base_p.length_squared + far * far, 0.0))))
+        grip = anchor - u * 0.036 + a * (brace + pull + 0.025 * loosed)
+        reach.arm(rots, "l", grip - off, (-0.5, 0.0, -0.85), hips, hand=d_bow, twist=0.5)
+        rots["bow"] = fk.euler_deg(Quaternion(wide0, math.radians(16.0 * loosed)))  # the bow tips forward as it is loosed
+        nock = grip + u * 0.036 - a * (brace + (draw if hand is None else hand) * pull)
+        # The forearm comes in from outside the hood; after the release the
+        # hand carries on back along the line.
+        hand_dir = (a * 0.82 + Vector((-0.57, 0, 0))).normalized()
+        wr = nock - hand_dir * 0.082 - a * (0.12 * loosed) + Vector((0.03, 0, 0.015)) * loosed
+        reach.arm(rots, "r", wr, (0.7, -1.0, 0.08), hips, hand=fk.frame_rot(ur, tr, hand_dir, u), twist=0.6)
+        return rots, {"hips": hips, "string": tuple(-fwd0 * (draw * pull))}
+
+    def shot(name, rel, rec, hold=False, up=0.0):
+        act, _ = ck.clip(rig, name, rel + rec, rel)
+        fr, fe = round(rel * ck.FPS), round((rel + rec) * ck.FPS)
+        idle = (b(foot_l=(0, 0, 0), foot_r=(0, 0, 0)), {"hips": (0, 0, -0.015), "string": (0, 0, 0)}, feet, False)
+        f1, f2 = (max(2, round(fr * 0.22)), round(fr * 0.5)) if hold else (max(2, round(fr * 0.5)), fr - 1)
+        keys = [(0, *idle), (f1, *aim(0.12, up * 0.6), stance, True), (f2, *aim(1.0, up), stance, True)]
+        if hold:  # the charged shot strains a little further while it is held
+            keys.append((round(fr * 0.78), *aim(1.03, up), stance, True))
+        keys += [(fr, *aim(1.05 if hold else 1.0, up), stance, True),
+                 (fr + 1, *aim(-0.07, up, loosed=0.5, hand=1.0), stance, False),
+                 (fr + 3, *aim(0.02, up, loosed=1.0, hand=1.0), stance, False),
+                 (fe, *idle)]
+        on = False
+        for f, rots, locs, ft, nocked in keys:
+            ck.pose(rig, f, rots, locs, ft)
+            if nocked and not on:  # it appears on the string, it does not grow there
+                arrow.scale = (HIDE, HIDE, HIDE)
+                arrow.keyframe_insert("scale", frame=f - 1)
+            on = nocked
+            sc = 1.0 if nocked else HIDE
+            arrow.scale = (sc, sc, sc)
+            arrow.keyframe_insert("scale", frame=f)
+        for fc in ck.fcurves(act):
+            if fc.data_path.endswith("scale"):
+                for kp in fc.keyframe_points:
+                    kp.interpolation = "CONSTANT"
+        fk.steady_quats(act)
+        ck.close_clip(rig, act, name)
+        arrow.scale = (HIDE, HIDE, HIDE)
 
     ck.idle_clip(rig, 2.4, lambda t, s: (b(spine=(2 * s, 0, 0), chest=(-1 * s, 0, 2 * s), head=(2 * s, 0, 6 * math.sin(t / 2.4 * TAU)),
-                                            upper_arm_r=(6 + 2 * s, 0, 4), bow=(10 + 2 * s, 0, 0), cape=(1.5 * s, 0, 0),
+                                            upper_arm_r=swung("upper_arm_r", (2 * s, 0, 0)), bow=(2 * s, 0, 0), cape=(1.5 * s, 0, 0),
                                             plait=(1.5 + 1.5 * s, 0, 1.5 * math.sin(t / 2.4 * TAU))),
                                           {"hips": (0, 0, -0.015 - 0.008 * s)}))
 
     def upper(t, s, c2):
         rots = b(hips=(0, 0, 9 * s), spine=(-12, 0, -5 * s), chest=(-4, 0, -6 * s), head=(12, 0, 3 * s),
-                 upper_arm_r=(-35 * s + 8, 0, 8), forearm_r=(-40 - 15 * s, 0, 0),
-                 upper_arm_l=(30 * s + 6, 0, -6), forearm_l=(-20 + 10 * s, 0, 0), hand_l=(10, 0, 0), bow=(8, 0, 0),
+                 upper_arm_r=swung("upper_arm_r", (-32 * s - 4, 0, 6)), forearm_r=swung("forearm_r", (58 - 14 * s, 0, 0)),
+                 upper_arm_l=swung("upper_arm_l", (14 * s + 4, 0, 0)), forearm_l=swung("forearm_l", (14 + 6 * s, 0, 0)),
                  skirt_f=(-14 - 8 * c2, 0, 0), skirt_b=(26 + 6 * c2, 0, 0), cape=(30 + 6 * c2, 0, 0), plait=(7 + 6 * c2, 0, 4 * s))
         return rots, {}
-    ck.run_clip(rig, spec["move_speed_mps"], upper, cycle=0.6, stance=0.2, hips_drop=0.09, lift=0.25, kick=0.2)
-
-    def shot(name, rel, rec, hold=0.0, up=0.0):
-        a = dict(aim)
-        a["upper_arm_l"] = (88 + up, 0, -40)
-        a["upper_arm_r"] = (85 + up, -25, -30)
-        a["head"] = (-up * 0.6, 0, -40)
-        loose = dict(a, upper_arm_r=(80 + up, -30, -50), forearm_r=(-10, 0, 60))
-        keys = [(0, b(), (0, 0, -0.015)),
-                (rel * 0.35 if hold else rel * 0.55, b(**dict(a, forearm_r=(-40, 0, 60), upper_arm_r=(85 + up, -15, 10))), (0, 0, -0.03))]
-        if hold:
-            keys.append((rel * 0.6, b(**a), (0, 0, -0.035)))
-            keys.append((rel * 0.95, b(**dict(a, spine=(0, 0, 32), upper_arm_r=(86 + up, -26, -34))), (0, 0, -0.035)))
-        else:
-            keys.append((rel * 0.85, b(**a), (0, 0, -0.035)))
-        keys += [(rel, b(**loose), (0, 0, -0.035)),
-                 (rel + rec * 0.6, b(**dict(loose, upper_arm_l=(80 + up, 0, -40))), (0, 0, -0.03)),
-                 (rel + rec, b(), (0, 0, -0.015))]
-        ck.cast_clip(rig, name, rel, rec, keys, drawn)
+    ck.run_clip(rig, spec["move_speed_mps"], upper, cycle=0.6, stance=0.2, hips_drop=0.055, lift=0.25, kick=0.2)
 
     c = slots["attack"]
     shot("attack", c["release_s"], c["recovery_s"])
     c = slots["ability_1"]
-    shot("ability_1", c["release_s"], c["recovery_s"], hold=1.0)
+    shot("ability_1", c["release_s"], c["recovery_s"], hold=True)
 
     # Bramble: an underhand toss of a seed with the right hand.
     c = slots["ability_2"]
     rel, rec = c["release_s"], c["recovery_s"]
     ck.cast_clip(rig, "ability_2", rel, rec, [
         (0, b(), (0, 0, -0.015)),
-        (rel * 0.6, b(spine=(10, 0, -10), chest=(4, 0, -14), upper_arm_r=(-40, 0, 10), forearm_r=(-20, 0, 0)), (0, -0.04, -0.06)),
+        (rel * 0.6, b(spine=(10, 0, -10), chest=(4, 0, -14), upper_arm_r=(-40, 0, 10), forearm_r=(-20, 0, 0), hand_r=(0, 0, 0)), (0, -0.04, -0.06)),
         (rel, b(spine=(-6, 0, 10), chest=(-4, 0, 12), upper_arm_r=(95, 0, -4), forearm_r=(-10, 0, 0), hand_r=(-20, 0, 0)), (0, 0.06, -0.04)),
-        (rel + rec * 0.5, b(spine=(-4, 0, 8), upper_arm_r=(85, 0, -4), forearm_r=(-12, 0, 0)), (0, 0.05, -0.04)),
+        (rel + rec * 0.5, b(spine=(-4, 0, 8), upper_arm_r=(85, 0, -4), forearm_r=(-12, 0, 0), hand_r=(-10, 0, 0)), (0, 0.05, -0.04)),
         (rel + rec, b(), (0, 0, -0.015))], feet)
 
     # Thornstorm: a shot loosed high into the sky.
@@ -679,13 +794,22 @@ def animate(rig, spec):
     shot("ability_3", c["release_s"], c["recovery_s"], up=45.0)
 
     ck.death_clip(rig, NAMES, lambda t: {"bow": (10 - 25 * min(1.0, t / 0.6), 0, 0), "hand_l": (18, 0, 0), "plait": (0, 0, 0)})
+    hide_arrow()
 
 
-AIM_BOW = 0.0  # set in main(): the trim that stands the bow upright in the shooting pose
+def hide_arrow():
+    """Clips that never nock the arrow still have to say it is scaled away:
+    an unkeyed pose scale does not reach the export."""
+    path = 'pose.bones["arrow"].scale'
+    for act in bpy.data.actions:
+        bags = [bag for layer in act.layers for strip in layer.strips for bag in strip.channelbags]
+        if not bags or any(fc.data_path == path for fc in bags[0].fcurves):
+            continue
+        for i in range(3):
+            bags[0].fcurves.new(path, index=i).keyframe_points.insert(0, HIDE)
 
 
 def main():
-    global AIM_BOW
     import sys
     out = ck.out_path(sys.argv, "/tmp/thornwright.blend")
     spec = ck.load_spec("thornwright")
@@ -693,11 +817,6 @@ def main():
     rig = ck.make_rig(bones())
     M = ck.Mats()
     build_model(rig, M)
-    # The old bow stood upright in the hand and the shooting pose tipped it
-    # back 58 degrees; the new one lies along the fist, so trim by the rest.
-    bb = rig.data.bones["bow"]
-    d = (bb.tail_local - bb.head_local).normalized()
-    AIM_BOW = math.degrees(math.atan2(d.y, d.z)) - 58.0
     hr = rig.data.bones["hand_r"]
     ck.socket("Muzzle", rig, "hand_r", hr.head_local + (hr.tail_local - hr.head_local).normalized() * 0.11)
     ox, oy, oz = spec["sockets"]["Overhead"]

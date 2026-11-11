@@ -43,6 +43,8 @@ const LOOKS := {
 	"Stone": ["castle_wall_slates", Color(0.7, 0.68, 0.66), 0.9, 0.0, 4.0],
 	# The white of an eye; the iris and pupil are painted in the vertex colours.
 	"EyeWhite": ["", Color(0.8, 0.8, 0.8), 0.22, 0.0, 1.0],
+	# The champion's accent colour as dyed cloth or feather (not a light, unlike "Glow").
+	"Accent": ["", Color(1.0, 1.0, 1.0), 0.7, 0.0, 1.0],
 }
 ## Models built with tools/blender/figure_kit.py carry baked shading and wear
 ## in their vertex colours (ambient occlusion, worn edges, grime, painted
@@ -96,7 +98,14 @@ static func dress(root: Node, team: int, accent: Color, primary := Color(0.4, 0.
 			elif nm == "Glass":
 				m = Palette.glow(accent.lightened(0.45), 0.8)
 			elif LOOKS.has(nm):
-				m = _make(LOOKS[nm], team_col if nm == "Team" else (primary if nm.begins_with("Robe") and nm != "RobeInner" else Color.WHITE))
+				var dye := Color.WHITE
+				if nm == "Team":
+					dye = team_col
+				elif nm == "Accent":
+					dye = accent
+				elif nm.begins_with("Robe") and nm != "RobeInner":
+					dye = primary
+				m = _make(LOOKS[nm], dye)
 				if baked:
 					m.vertex_color_use_as_albedo = true
 					m.albedo_color = Color(m.albedo_color.r / BAKED_NEUTRAL, m.albedo_color.g / BAKED_NEUTRAL, m.albedo_color.b / BAKED_NEUTRAL)

@@ -66,6 +66,28 @@ Thornwright is the pilot for a better figure, still built from code and still wi
   model that carries them. Nothing changes for the other champions until each is rebuilt.
 - The rig, the clip names and the timings are unchanged, so the sim and the tests do not see the difference.
   New bones: `plait` (the plait that falls out of her hood onto her chest, swung by `ClothSim` with its own thin setting) and the bow now lies along the fist at rest. She wears her hood up (`build_hood`): Anthony preferred that to the hood down.
-- Look at a model with `tools/model_shots.gd` (`--only=front,portrait` for a quick pass).
+- Look at a model with `tools/model_shots.gd`. The first shots in the set are from the real game camera
+  (`play_idle`, `play_run`, `play_attack`, `play_ability_1`) and from an enemy 9 m away (`enemy_idle`, `enemy_attack`).
+  **Judge those first.** She is about 175 pixels tall with her back to the player; a change that only shows in a
+  close up has not improved the game.
 
-Next in line: Oathwarden and Ruinscribe, with the same kit.
+### After the critique (2026-11-11)
+
+An independent review (`/mnt/project-files/oath-and-ruin/critique-thornwright/CRITIQUE.md`) found that the pilot
+polished the view the player never has. What changed because of it:
+
+- Arm poses are solved, not typed: `figure_kit.Reach` is a two bone arm solver in the kit's own rotation
+  convention. Give it a wrist target, an elbow direction and a hand orientation.
+- The shot (`aim` and `shot` in `build_thornwright.py`): side on stance, bow arm straight down the aim line, draw
+  hand under the chin, a release and a follow through. New bones `string` (child of `bow`, the string mesh is
+  weighted so moving it makes a V) and `arrow` (child of `string`). The arrow is scaled to 0.001 in every clip
+  that does not nock it (`hide_arrow`), because an unkeyed pose scale does not reach the export.
+- Back view: hood with a band in her accent colour and a tail, half cloak off the bow shoulder so the quiver,
+  belt and legs show, fletching in the accent colour (material `Accent`, dyed in `ChampionModel.dress`), bow
+  carried low and out to the side, thicker bow, lighter legs, one green for hood and cowl.
+
+Still open from that review: clothes are skin tight shells with no thickness, seams or texture of their own; the
+thigh comes through the skirt in action poses; idle and run are basic; the face (waiting on a direction from
+Anthony: shadowed hoods or real faces); mesh cost (72k triangles, 50 surfaces).
+
+Oathwarden and Ruinscribe wait until Thornwright is right.

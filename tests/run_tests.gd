@@ -3168,6 +3168,23 @@ func test_baked_champion() -> void:
 	var sk := saela.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
 	check(sk.find_bone("plait") >= 0 and sk.find_bone("plait_1") >= 0 and sk.find_bone("bow") >= 0, "her plait and bow have their bones")
 	check(saela.find_children("Hood*", "MeshInstance3D", true, false).size() == 1, "she wears her hood up")
+	# The arrow is only there while she shoots, and the string comes back with her hand.
+	var arrow := sk.find_bone("arrow")
+	var string := sk.find_bone("string")
+	check(arrow >= 0 and string >= 0, "her bow has a string bone and an arrow bone")
+	var ap := saela.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	root.add_child(saela)
+	ap.play("idle")
+	ap.seek(0.3, true)
+	check(sk.get_bone_pose_scale(arrow).x < 0.01, "no arrow on the string while she stands")
+	ap.play("attack")
+	ap.seek(0.19, true)
+	check(sk.get_bone_pose_scale(arrow).x > 0.9, "an arrow is on the string as she draws")
+	var pulled := sk.get_bone_pose_position(string).distance_to(sk.get_bone_rest(string).origin)
+	check(pulled > 0.25, "the string is drawn back at the release (%.2f m)" % pulled)
+	ap.seek(0.3, true)
+	check(sk.get_bone_pose_scale(arrow).x < 0.01, "the arrow has gone once it is loosed")
+	root.remove_child(saela)
 	check(saela.find_children("Head*", "MeshInstance3D", true, false).size() == 1 and saela.find_children("Eyes*", "MeshInstance3D", true, false).size() == 1,
 			"she has a face")
 	saela.free()

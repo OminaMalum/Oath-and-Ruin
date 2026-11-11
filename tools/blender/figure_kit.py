@@ -23,7 +23,7 @@ import random
 
 import bpy  # noqa: I001  (bpy first: it makes bmesh importable)
 import bmesh
-from mathutils import Matrix, Vector, kdtree, noise
+from mathutils import Matrix, Quaternion, Vector, kdtree, noise
 from mathutils.bvhtree import BVHTree
 
 import body_fit as bf
@@ -62,6 +62,130 @@ def hand_frame(wrist, tail, side):
     if (rot @ Vector((0, 1, 0))).dot(t) < 0:
         t = -t
     return u, n, t
+
+
+def euler_deg(q):
+    """A rotation as the (x, y, z) degrees champion_kit.pose takes."""
+    e = q.to_euler("XYZ")
+    return (math.degrees(e.x), math.degrees(e.y), math.degrees(e.z))
+
+
+def frame_rot(a0, b0, a1, b1):
+    """The rotation that carries direction a0 onto a1 and, as nearly as it can,
+    b0 onto b1."""
+    def m(a, b):
+        a = Vector(a).normalized()
+        b = Vector(b)
+        b = (b - a * b.dot(a)).normalized()
+        return Matrix((a, b, a.cross(b))).transposed()
+    return (m(a1, b1) @ m(a0, b0).transposed()).to_quaternion()
+
+
+class Reach:
+    """Arm poses worked out from where the hands have to be, instead of typed
+    angles: a pose says "bow hand here, draw hand at the chin" and this finds
+    the shoulder, elbow and wrist rotations (in champion_kit.pose's terms)
+    that put them there. It follows the same chain rule as pose(): a bone's
+    turn is its parent's turn times its own, about the armature's axes."""
+
+    def __init__(self, rig):
+        self.rest = {b.name: (b.head_local.copy(), b.parent.name if b.parent else None) for b in rig.data.bones}
+
+    def fk(self, rots, hips=(0.0, 0.0, 0.0)):
+        """bone -> (how far it has turned from rest, where its head is)."""
+        out = {}
+
+        def get(name):
+            if name not in out:
+                head, parent = self.rest[name]
+                q = ck.q_arm(rots.get(name, (0, 0, 0)))
+                if parent is None:
+                    out[name] = (q, head.copy())
+                else:
+                    dp, pp = get(parent)
+                    pos = pp + dp @ (head - self.rest[parent][0])
+                    if name == "hips":
+                        pos = pos + Vector(hips)
+                    out[name] = (dp @ q, pos)
+            return out[name]
+        for n in self.rest:
+            get(n)
+        return out
+
+    def length(self, side):
+        ua, fa, hd = ("%s_%s" % (n, side) for n in ("upper_arm", "forearm", "hand"))
+        return (self.rest[fa][0] - self.rest[ua][0]).length + (self.rest[hd][0] - self.rest[fa][0]).length
+
+    def arm(self, rots, side, wrist, pole, hips=(0.0, 0.0, 0.0), hand=None, twist=0.6):
+        """Sets the upper arm and forearm in `rots` so the wrist lands on
+        `wrist` (armature space) with the elbow leaning toward `pole`.
+        hand: the hand's own turn from rest (see frame_rot); `twist` of its
+        roll about the forearm is given to the forearm, so the wrist does not
+        wring. Returns fk() of the result."""
+        ua, fa, hd = ("%s_%s" % (n, side) for n in ("upper_arm", "forearm", "hand"))
+        rots[ua] = rots[fa] = (0, 0, 0)
+        st = self.fk(rots, hips)
+        dp = st[self.rest[ua][1]][0]
+        s = st[ua][1]
+        a0 = self.rest[fa][0] - self.rest[ua][0]
+        b0 = self.rest[hd][0] - self.rest[fa][0]
+        l1, l2 = a0.length, b0.length
+        to = Vector(wrist) - s
+        d = max(abs(l1 - l2) * 1.02, min(to.length, (l1 + l2) * 0.995))
+        n = to.normalized()
+        x = (l1 * l1 - l2 * l2 + d * d) / (2 * d)
+        h = math.sqrt(max(l1 * l1 - x * x, 0.0))
+        p = Vector(pole)
+        p = p - n * p.dot(n)
+        p = p.normalized() if p.length > 1e-6 else n.orthogonal().normalized()
+        e = s + n * x + p * h
+        w = s + n * d
+        q_ua = a0.rotation_difference(dp.inverted() @ (e - s))
+        d_ua = dp @ q_ua
+        q_fa = b0.rotation_difference(d_ua.inverted() @ (w - e))
+        if hand is not None:
+            q_h = (d_ua @ q_fa).inverted() @ hand
+            axis = b0.normalized()
+            qi = q_h.inverted()
+            proj = axis * Vector((qi.x, qi.y, qi.z)).dot(axis)
+            tw = Quaternion((qi.w, proj.x, proj.y, proj.z))
+            if tw.magnitude > 1e-6:
+                tw.normalize()
+                if tw.w < 0:
+                    tw.negate()
+                part = Quaternion().slerp(tw.inverted(), twist)
+                q_fa = q_fa @ part
+                q_h = part.inverted() @ q_h
+            rots[hd] = euler_deg(q_h)
+        rots[ua] = euler_deg(q_ua)
+        rots[fa] = euler_deg(q_fa)
+        return self.fk(rots, hips)
+
+
+def steady_quats(act):
+    """Keeps each bone's keyed quaternions on one side of the sphere, so a
+    pose solved by Reach is blended to the short way round."""
+    by_bone = {}
+    for fc in ck.fcurves(act):
+        if fc.data_path.endswith("rotation_quaternion"):
+            by_bone.setdefault(fc.data_path, {})[fc.array_index] = fc
+    for curves in by_bone.values():
+        if len(curves) != 4:
+            continue
+        n = min(len(c.keyframe_points) for c in curves.values())
+        prev = None
+        for i in range(n):
+            q = [curves[k].keyframe_points[i].co.y for k in range(4)]
+            if prev is not None and sum(a * b for a, b in zip(prev, q)) < 0:
+                q = [-v for v in q]
+                for k in range(4):
+                    kp = curves[k].keyframe_points[i]
+                    kp.co.y = q[k]
+                    kp.handle_left.y = q[k]
+                    kp.handle_right.y = q[k]
+            prev = q
+        for c in curves.values():
+            c.update()
 
 
 def move_bone(rig, name, head, tail):

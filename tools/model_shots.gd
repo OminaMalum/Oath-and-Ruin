@@ -3,9 +3,21 @@ extends SceneTree
 ## xvfb-run -a -s "-screen 0 1280x960x24" godot --rendering-driver opengl3 --path . -s tools/model_shots.gd -- \
 ##   --model=res://assets/champions/ruinscribe.glb --out=/tmp/model [--team=0] [--only=front,portrait]
 ## Each shot: [file, clip, time in s (-1 = release), camera yaw degrees, distance]
+## A shot whose yaw is "play" or "enemy" is taken from the match camera instead
+## (CameraRig: 6.5 m behind, over the right shoulder, 70 degrees): the model
+## as its own player sees it, or as an enemy 9 m ahead sees it coming. These
+## come first because they are the views the game is actually played from.
 ## --strip=CLIP[:N[:YAW]] instead shoots N frames spread over one clip (strip_00.png ...).
 
 const SHOTS := [
+	["play_idle", "idle", 0.6, "play", 0.0],
+	["play_run", "run", 0.1, "play", 0.0],
+	["play_attack", "attack", -1.0, "play", 0.0],
+	["play_ability_1", "ability_1", -1.0, "play", 0.0],
+	["enemy_idle", "idle", 0.6, "enemy", 0.0],
+	["enemy_attack", "attack", -1.0, "enemy", 0.0],
+	["attack_side", "attack", -1.0, 90.0, 3.6],
+	["attack_back", "attack", -1.0, 200.0, 3.6],
 	["front", "idle", 0.6, 25.0, 3.4],
 	["back", "idle", 0.6, 160.0, 3.4],
 	["side", "idle", 0.6, 90.0, 3.4],
@@ -93,6 +105,19 @@ func _setup() -> void:
 	_player.play(clip)
 	_player.seek(t, true)
 	_player.pause()
+	_inst.position = Vector3.ZERO
+	if s[3] is String:
+		# CameraRig: pivot 2.3 up and 0.9 to the right, pitched 16 degrees down, 6.5 m back.
+		var pitch := deg_to_rad(-16.0)
+		var pivot := Vector3(0.9, 2.3, 0)
+		_cam.fov = 70.0
+		_cam.look_at_from_position(pivot + Vector3(0, -sin(pitch) * 6.5, cos(pitch) * 6.5), pivot + Vector3(0, sin(pitch) * 10.0, -cos(pitch) * 10.0))
+		_inst.rotation.y = 0.0 if s[3] == "play" else PI
+		if s[3] == "enemy":
+			_inst.position = Vector3(-0.6, 0, -9.0)
+		_wait = 6
+		return
+	_cam.fov = 40.0
 	# The camera stays on the sun side and the model turns, so every view is lit.
 	_inst.rotation.y = PI + deg_to_rad(float(s[3]))
 	var d: float = s[4] * _size
