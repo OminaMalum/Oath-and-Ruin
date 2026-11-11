@@ -99,8 +99,11 @@ Second round (gate5e):
   `skirt_b` positive in the run, which pulls them into the body (the cloth sim hides it in play, stills show it).
   Thornwright's are negative now. Worth fixing on the others when each is rebuilt.
 
+Faces (Anthony 2026-11-11: mix by champion). A champion with a hood or helm keeps the roster's hidden face; one
+with a bare head gets a real face. Thornwright is hooded: the `hood_shade` painter in `build_head` darkens skin,
+eyes and hair from the nose up and leaves the mouth and jaw lit, and two small `Eyes` glints sit on her irises.
+
 Still open from that review: no texture set of her own (stitching, trim, wear are still tiling textures times
-vertex colour); sleeves and skirt have few folds; the face (waiting on a direction from Anthony: shadowed hoods or
-real faces); hair; mesh cost (72k triangles, 50 surfaces).
+vertex colour); sleeves and skirt have few folds; hair; mesh cost (72k triangles, 50 surfaces).
 
 Oathwarden and Ruinscribe wait until Thornwright is right.

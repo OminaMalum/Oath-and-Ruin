@@ -79,7 +79,23 @@ def build_head(rig, M, fig, painters):
     k, eye_paint = fig.eyes(M, iris=(0.2, 0.55, 0.22))
     painters.append(eye_paint)
     fig.brows(k, "HairCopper")
+    # Under the hood her face is in shadow: two glints where her eyes catch the
+    # light, and the light reaching only her mouth and jaw (hood_shade below).
+    for sx in (-1.0, 1.0):
+        c = fig.at(sx * fk.EYE.x, fk.EYE.y, fk.EYE.z) - Vector((0, 0.0195 * fig.hs, 0))
+        k.sphere(c + Vector((0, 0.0232 * fig.hs - 0.0012, -0.0015)), 0.0068 * fig.hs, "Eyes", scale=(1.0, 0.3, 0.85), u=10, v=6)
     k.finish(rig, "head")["ao"] = 0.35  # lids sit deep in the sockets; keep them skin, not shadow
+
+    def hood_shade(p, nrm, mat, col):
+        if mat not in ("Skin", "EyeWhite", "HairCopper", "Hair") or p.z < 1.44 or p.y < -0.06:
+            return col
+        # Dark from the nose up, lit at the mouth and chin; the edge of the
+        # shadow sags toward the cheeks like the hood's rim, and it is cool.
+        line = 1.489 - 3.0 * p.x * p.x
+        lit = fk.smooth(line + 0.024, line - 0.024, p.z)
+        dark = Vector((0.08, 0.09, 0.1)) if mat == "EyeWhite" else Vector((0.22, 0.24, 0.28))
+        return Vector(tuple(c * (d + (1.0 - d) * lit) for c, d in zip(col, dark)))
+    painters.append(hood_shade)
 
     # Hair: a close cap, then locks swept back from the hairline to a tie at
     # the back of the crown, a second layer over the top, and the nape drawn up.
