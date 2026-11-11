@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_erjb2"]
+
+[resource]
+script = ExtResource("1_erjb2")
+id = &"wide_glyph"
+display_name = "Wide Glyph"
+description = "Upgrade: a bigger circle (3.4 m) that is easier to land, for a little less damage (75)."
+delivery = 1
+damage = 75.0
+cast_time = 0.3
+cooldown = 7.0
+move_mult_while_casting = 0.4
+range = 14.0
+area_radius = 3.4
+area_delay = 0.75
+slow_amount = 0.35
+slow_duration = 1.5

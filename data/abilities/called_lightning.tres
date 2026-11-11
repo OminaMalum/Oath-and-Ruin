@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/quick_lightning.tres" id="4_up"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/great_lightning.tres" id="5_up"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"called_lightning"
+display_name = "Called Lightning"
+description = "Mark a 2.2 m circle up to 18 m away. Lightning strikes it after 1.2 s: 140 damage. Counterplay: the circle shows for over a second; move."
+delivery = 1
+damage = 140.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 8.0
+move_mult_while_casting = 0.4
+range = 18.0
+area_radius = 2.2
+area_delay = 1.2
+upgrades = Array[Resource]([ExtResource("4_up"), ExtResource("5_up")])

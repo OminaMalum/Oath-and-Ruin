@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_vd65r"]
+[ext_resource type="Resource" path="res://data/abilities/binding_glyph.tres" id="2_aiors"]
+[ext_resource type="Resource" path="res://data/abilities/unmaking_lance.tres" id="3_aiors"]
+[ext_resource type="Resource" path="res://data/abilities/arcane_bolt.tres" id="3_q3762"]
+[ext_resource type="Resource" path="res://data/abilities/unmaking_word.tres" id="5_ult"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="4_ea64g"]
+[ext_resource type="Resource" path="res://data/abilities/fold_step.tres" id="9_f"]
+
+[resource]
+script = ExtResource("4_ea64g")
+id = &"ruinscribe"
+display_name = "Ruinscribe"
+role = "Ranged spellcaster"
+hero_name = "Ilyra Voss"
+title = "Keeper of the Missing Clause"
+ancestry = "Human wizard"
+lore = "She found a clause cut from the Pact in a sealed tomb. Restoring the Pact as written would repeat its cruelty, so she means to rewrite it."
+max_health = 560.0
+move_speed = 6.2
+fountain_heal = 80.0
+basic_attack = ExtResource("3_q3762")
+abilities = Array[ExtResource("1_vd65r")]([ExtResource("2_aiors"), ExtResource("3_aiors"), ExtResource("5_ult"), ExtResource("9_f")])
+passive = 10
+passive_name = "Marginalia"
+passive_description = "Binding Glyph inscribes the champions it hits for 4 s. Unmaking Lance on an inscribed champion wipes the mark and gives the Ruinscribe a 70 shield for 3 s."
+passive_value = 70.0
+primary_color = Color(0.4, 0.12, 0.11, 1)
+accent_color = Color(0.25, 0.8, 0.78, 1)
+item_build = Array[StringName]([&"ember_edge", &"ash_hourglass", &"wayfarer_greaves", &"oathbound_plate"])
+adventurer_build = Array[StringName]([&"apprentices_focus", &"runecasters_codex", &"spellwalkers_boots", &"cinder_reliquary"])
+power = 1

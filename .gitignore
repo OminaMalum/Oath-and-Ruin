@@ -2,3 +2,4 @@
 build/
 *.import~
 /android/
+__pycache__/

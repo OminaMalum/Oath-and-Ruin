@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"lure"
+display_name = "Lure"
+description = "A slow, bright note (16 m): the first enemy hit takes 30 damage and walks away from the Veilsinger for 1 s, unable to act. Counterplay: it is slow; sidestep it."
+delivery = 0
+damage = 30.0
+cast_time = 0.25
+recovery = 0.15
+cooldown = 11.0
+move_mult_while_casting = 0.5
+range = 16.0
+projectile_speed = 20.0
+projectile_radius = 0.45
+charm_duration = 1.0

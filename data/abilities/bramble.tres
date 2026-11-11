@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/bramble_field.tres" id="3_lv"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"bramble"
+display_name = "Bramble"
+description = "Throw a seed (14 m). It bursts after 0.5 s: 40 damage, then thorns grow there for 4 s and slow enemies inside by 35%. Counterplay: walk around the thorns."
+delivery = 1
+damage = 40.0
+cast_time = 0.25
+recovery = 0.15
+cooldown = 11.0
+move_mult_while_casting = 0.5
+range = 14.0
+area_radius = 2.8
+area_delay = 0.5
+leaves = ExtResource("3_lv")

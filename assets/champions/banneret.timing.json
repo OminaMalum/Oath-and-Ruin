@@ -1,0 +1,11 @@
+{
+  "fps": 60.0,
+  "release": {
+    "ability_1": 0.25,
+    "ability_2": 0.25,
+    "ability_3": 0.35,
+    "ability_4": 0.05,
+    "attack": 0.2
+  },
+  "source": "rb_banneret.blend"
+}

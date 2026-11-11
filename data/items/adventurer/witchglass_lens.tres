@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/etched_focus.tres" id="2_r"]
+[ext_resource type="Resource" path="res://data/items/adventurer/hourglass_chip.tres" id="3_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"witchglass_lens"
+display_name = "Witchglass Lens"
+short_name = "Witchglass"
+description = "+16 spell power, +12 haste. Spell ability hits cut healing on a champion by 30% for 2.5 s"
+cost = 920
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("3_r")])
+spell_power = 16.0
+haste = 12.0
+passive = 10
+passive_value = 0.3

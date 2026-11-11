@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/tempest_last.tres" id="3_lv"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"tempest_second"
+display_name = "Tempest"
+description = "The second strike of the Tempest."
+delivery = 1
+is_ultimate = true
+damage = 90.0
+cast_time = 0.0
+recovery = 0.0
+cooldown = 0.0
+range = 0.0
+area_radius = 4.0
+area_delay = 0.6
+slow_amount = 0.3
+slow_duration = 1.0
+leaves = ExtResource("3_lv")

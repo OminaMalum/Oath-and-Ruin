@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_uw"]
+
+[resource]
+script = ExtResource("1_uw")
+id = &"unmaking_word"
+display_name = "Unmaking Word"
+description = "Ultimate. A wide circle (4.5 m) up to 14 m away that bursts after 1.1 s for 170 damage and a 50% slow for 2 s. Counterplay: the circle is drawn for over a second; walk out of it."
+delivery = 1
+is_ultimate = true
+damage = 170.0
+cast_time = 0.3
+recovery = 0.3
+cooldown = 60.0
+move_mult_while_casting = 0.3
+range = 14.0
+area_radius = 4.5
+area_delay = 1.1
+slow_amount = 0.5
+slow_duration = 2.0

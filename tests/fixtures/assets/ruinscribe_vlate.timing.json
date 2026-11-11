@@ -1,0 +1,10 @@
+{
+  "fps": 30.0,
+  "release": {
+    "ability_1": 0.4667,
+    "ability_2": 0.7333,
+    "ability_3": 0.4667,
+    "attack": 0.2333
+  },
+  "source": "late.blend"
+}

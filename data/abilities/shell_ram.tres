@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_d0ndd"]
+
+[resource]
+script = ExtResource("1_d0ndd")
+id = &"shell_ram"
+display_name = "Shell Ram"
+description = "The captured Shrinebearer rams whatever blocks the lane. Four times damage to structures."
+damage = 60.0
+cast_time = 0.5
+recovery = 0.3
+cooldown = 1.8
+move_mult_while_casting = 0.0
+structure_damage_mult = 4.0
+range = 3.8
+projectile_radius = 0.6

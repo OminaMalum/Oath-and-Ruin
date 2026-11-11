@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_c2n0u"]
+
+[resource]
+script = ExtResource("1_c2n0u")
+id = &"long_stand"
+display_name = "Long Stand"
+description = "Upgrade: the ward stands for 5 s."
+delivery = 4
+cast_time = 0.35
+recovery = 0.1
+cooldown = 12.0
+move_mult_while_casting = 0.0
+range = 0.0
+area_radius = 4.0
+ward_duration = 5.0

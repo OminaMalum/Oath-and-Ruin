@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"still_water"
+display_name = "Still Water"
+description = "Brace for 2 s: the next champion hit from the front deals 60% less. Counterplay: hit her from the side or behind, or wait out the brace."
+delivery = 7
+cast_time = 0.05
+recovery = 0.1
+cooldown = 12.0
+move_mult_while_casting = 1.0
+range = 0.0
+brace_reduction = 0.6
+brace_duration = 2.0

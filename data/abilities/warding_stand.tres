@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_dp2te"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/long_stand.tres" id="2_g8u34"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/bulwark.tres" id="3_opqu5"]
+
+[resource]
+script = ExtResource("1_dp2te")
+id = &"warding_stand"
+display_name = "Warding Stand"
+description = "Plant the shield: a 4 m circle for 3.5 s where allied champions take 35% less damage. Counterplay: back off and wait it out, or fight outside the circle."
+delivery = 4
+cast_time = 0.35
+recovery = 0.1
+cooldown = 12.0
+move_mult_while_casting = 0.0
+range = 0.0
+area_radius = 4.0
+upgrades = Array[Resource]([ExtResource("2_g8u34"), ExtResource("3_opqu5")])

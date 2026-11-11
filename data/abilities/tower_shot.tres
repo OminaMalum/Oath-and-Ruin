@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ylg7n"]
+
+[resource]
+script = ExtResource("1_ylg7n")
+id = &"tower_shot"
+display_name = "Warden Shot"
+description = "Tower attack. Locks on at the start of the windup and follows its target. Minions first; a champion who hits an allied champion near the tower becomes the target."
+damage = 110.0
+cast_time = 0.4
+cooldown = 1.2
+move_mult_while_casting = 0.0
+projectile_radius = 0.35
+homing = true

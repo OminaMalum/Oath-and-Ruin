@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_fqn3i"]
+[ext_resource type="Resource" path="res://data/abilities/shell_ram.tres" id="2_2gpdn"]
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="2_enpuj"]
+
+[resource]
+script = ExtResource("2_enpuj")
+id = &"shrinebearer"
+display_name = "Shrinebearer"
+role = "Captured siege beast"
+look = 6
+kind = 1
+max_health = 1800.0
+move_speed = 3.0
+radius = 1.4
+height = 2.8
+respawn_time = -1.0
+basic_attack = ExtResource("2_2gpdn")

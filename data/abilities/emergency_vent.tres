@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"emergency_vent"
+display_name = "Emergency Vent"
+description = "Vent steam in a short cone (4 m): 20 damage and a 40% slow for 1.5 s, and you run 30% faster for 2 s. Counterplay: chase around the cone, not through it."
+delivery = 2
+damage = 20.0
+cast_time = 0.1
+recovery = 0.1
+cooldown = 12.0
+move_mult_while_casting = 1.0
+range = 4.0
+arc_degrees = 80.0
+slow_amount = 0.4
+slow_duration = 1.5
+self_quick = 0.3
+self_quick_duration = 2.0
+scaling = 1

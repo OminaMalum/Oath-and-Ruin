@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_fhph5"]
+
+[resource]
+script = ExtResource("1_fhph5")
+id = &"minion_strike"
+display_name = "Strike"
+description = "Melee minion attack (very short projectile)."
+damage = 18.0
+cast_time = 0.3
+recovery = 0.3
+cooldown = 1.1
+move_mult_while_casting = 0.0
+range = 2.2
+projectile_speed = 25.0
+structure_damage_mult = 2.0

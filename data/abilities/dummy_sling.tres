@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_5mmue"]
+
+[resource]
+script = ExtResource("1_5mmue")
+id = &"dummy_sling"
+display_name = "Sparring Shot"
+description = "Training dummy shot: long windup with a lane on the ground, slow projectile. Teaches dodging."
+damage = 55.0
+cast_time = 0.7
+recovery = 0.3
+cooldown = 2.2
+move_mult_while_casting = 0.0
+range = 16.0
+projectile_speed = 16.0
+projectile_radius = 0.4

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/wide_roar.tres" id="4_up"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/long_roar.tres" id="5_up"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"grave_roar"
+display_name = "Grave Roar"
+description = "Roar from the barrow: every enemy within 4.5 m takes 30 damage and must walk to the Barrowking and attack it for 1.25 s. Counterplay: stay out of reach when it winds up, or burst it while your team is taunted."
+delivery = 1
+damage = 30.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 13.0
+move_mult_while_casting = 0.3
+range = 0.0
+area_radius = 4.5
+area_delay = 0.15
+taunt_duration = 1.25
+upgrades = Array[Resource]([ExtResource("4_up"), ExtResource("5_up")])

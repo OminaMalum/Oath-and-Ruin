@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="1_ch"]
+[ext_resource type="Resource" path="res://data/abilities/spirit_touch.tres" id="3_b"]
+
+[resource]
+script = ExtResource("1_ch")
+id = &"willing_dead"
+display_name = "Willing Dead"
+role = "Summon"
+look = 18
+kind = 5
+max_health = 240.0
+move_speed = 5.4
+radius = 0.4
+height = 1.7
+respawn_time = -1.0
+basic_attack = ExtResource("3_b")
+passive = 0
+passive_value = 0.0
+passive_range = 0.0
+primary_color = Color(0.3, 0.26, 0.4, 1)
+accent_color = Color(0.72, 0.58, 0.92, 1)

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"storm_wall"
+display_name = "Storm Wall"
+description = "Raise a 7 m wall of storm across your aim, up to 6 m away, for 3 s. Enemy shots stop at it; anyone can walk through. Counterplay: walk around it, or wait."
+delivery = 5
+cast_time = 0.25
+recovery = 0.15
+cooldown = 14.0
+move_mult_while_casting = 0.4
+range = 6.0
+ward_duration = 3.0
+wall_length = 7.0

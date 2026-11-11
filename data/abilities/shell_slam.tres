@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_nms1a"]
+
+[resource]
+script = ExtResource("1_nms1a")
+id = &"shell_slam"
+display_name = "Shell Slam"
+description = "The wild Shrinebearer rears up (0.6 s) and marks a circle under its nearest attacker; the circle fills for 0.9 s, then the shell lands. Walk out to avoid it."
+delivery = 1
+damage = 120.0
+cast_time = 0.6
+recovery = 0.4
+cooldown = 3.0
+move_mult_while_casting = 0.0
+range = 10.0
+area_radius = 3.0
+area_delay = 0.9

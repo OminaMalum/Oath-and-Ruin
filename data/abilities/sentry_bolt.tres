@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"sentry_bolt"
+display_name = "Sentry Bolt"
+description = "The Field Sentry's shot (11 m)."
+delivery = 0
+damage = 16.0
+cast_time = 0.1
+recovery = 0.1
+cooldown = 0.8
+move_mult_while_casting = 0.0
+range = 11.0
+projectile_speed = 36.0
+projectile_radius = 0.2
+structure_damage_mult = 0.0
+scaling = 3

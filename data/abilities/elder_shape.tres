@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/elder_maul.tres" id="9_tb"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"elder_shape"
+display_name = "Elder Shape"
+description = "Ultimate. Take the guardian beast shape for 8 s: 400 more max health (your health keeps its share) and a heavy 70 damage paw instead of the staff. Q, E and F still work. Counterplay: kite it; the shape ends after 8 s."
+delivery = 7
+is_ultimate = true
+cast_time = 0.4
+recovery = 0.2
+cooldown = 70.0
+move_mult_while_casting = 0.0
+range = 0.0
+transform_duration = 8.0
+transform_health = 400.0
+transform_basic = ExtResource("9_tb")

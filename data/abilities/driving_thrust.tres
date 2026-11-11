@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/long_thrust.tres" id="4_up"]
+[ext_resource type="Resource" path="res://data/abilities/upgrades/pinning_thrust.tres" id="5_up"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"driving_thrust"
+display_name = "Driving Thrust"
+description = "A narrow thrust (5 m): 60 damage and a 35% slow for 1.2 s. Counterplay: step to the side; it only goes straight."
+delivery = 2
+damage = 60.0
+cast_time = 0.25
+recovery = 0.2
+cooldown = 8.0
+move_mult_while_casting = 0.4
+range = 5.0
+arc_degrees = 20.0
+slow_amount = 0.35
+slow_duration = 1.2
+scaling = 1
+upgrades = Array[Resource]([ExtResource("4_up"), ExtResource("5_up")])

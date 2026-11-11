@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"lute_note"
+display_name = "Lute Note"
+description = "Basic attack. A ringing note (14 m)."
+delivery = 0
+damage = 38.0
+cast_time = 0.15
+recovery = 0.25
+cooldown = 0.9
+move_mult_while_casting = 0.6
+range = 14.0
+projectile_speed = 30.0
+projectile_radius = 0.3

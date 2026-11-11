@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"oathbound_plate"
+display_name = "Oathbound Plate"
+short_name = "Plate"
+description = "+150 health"
+cost = 700
+health = 150.0

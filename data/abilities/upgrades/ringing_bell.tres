@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"ringing_bell"
+display_name = "Ringing Bell"
+description = "Upgrade: reaches 4.2 m."
+delivery = 2
+damage = 55.0
+cast_time = 0.2
+recovery = 0.2
+cooldown = 8.0
+move_mult_while_casting = 0.5
+range = 4.2
+arc_degrees = 45.0
+interrupts = true

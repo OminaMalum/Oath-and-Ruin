@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ChampionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/champion_def.gd" id="1_ch"]
+[ext_resource type="Resource" path="res://data/abilities/banner_pole.tres" id="3_b"]
+
+[resource]
+script = ExtResource("1_ch")
+id = &"rally_banner"
+display_name = "Rally Standard"
+role = "Summon"
+look = 17
+kind = 5
+max_health = 220.0
+move_speed = 0.0
+radius = 0.3
+height = 2.9
+respawn_time = -1.0
+basic_attack = ExtResource("3_b")
+passive = 8
+passive_value = 0.15
+passive_range = 6.0
+primary_color = Color(0.4, 0.3, 0.2, 1)
+accent_color = Color(0.95, 0.8, 0.45, 1)

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"discord"
+display_name = "Discord"
+description = "Strike a sour chord on the ground (14 m). After 0.6 s a 3 m circle bursts: 50 damage and a 35% slow for 1.5 s. Counterplay: leave the circle before it bursts."
+delivery = 1
+damage = 50.0
+cast_time = 0.25
+recovery = 0.15
+cooldown = 11.0
+move_mult_while_casting = 0.5
+range = 14.0
+area_radius = 3.0
+area_delay = 0.6
+slow_amount = 0.35
+slow_duration = 1.5

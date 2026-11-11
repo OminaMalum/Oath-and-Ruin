@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_cb"]
+
+[resource]
+script = ExtResource("1_cb")
+id = &"pactlash"
+display_name = "Pactlash"
+description = "A short chain-blade cut straight ahead. The arc is narrow, so the hit is honest. Counterplay: keep out of 3 m, or step to her side."
+delivery = 2
+damage = 32.0
+cast_time = 0.14
+recovery = 0.15
+cooldown = 0.7
+move_mult_while_casting = 0.8
+range = 3.2
+arc_degrees = 70.0

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"barrow_charge"
+display_name = "Barrow Charge"
+description = "Charge 7 m the way you are moving: 55 damage and a 30% slow for 1.5 s to every enemy you run through. Counterplay: step aside, it only goes straight."
+delivery = 3
+damage = 55.0
+cast_time = 0.15
+recovery = 0.2
+cooldown = 11.0
+move_mult_while_casting = 0.0
+range = 7.0
+dash_distance = 7.0
+dash_duration = 0.3
+slow_amount = 0.3
+slow_duration = 1.5

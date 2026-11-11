@@ -1,0 +1,42 @@
+{
+  "champion": "willing_dead",
+  "units": "metres, +Y up, model faces -Z in Godot (+Y in Blender), origin on the ground",
+  "height_m": 1.7,
+  "height_tolerance": 0.15,
+  "hit_radius_m": 0.4,
+  "move_speed_mps": 5.4,
+  "sockets": {
+    "Muzzle": [
+      0.0,
+      1.02,
+      -0.5
+    ],
+    "Overhead": [
+      0.0,
+      2.0,
+      0.0
+    ]
+  },
+  "muzzle_tolerance_m": 0.35,
+  "loop_clips": [
+    "idle",
+    "run"
+  ],
+  "one_shot_clips": [
+    "death"
+  ],
+  "slot_clips": {
+    "attack": {
+      "ability": "spirit_touch",
+      "release_s": 0.3,
+      "recovery_s": 0.3,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    }
+  },
+  "release_marker": "release",
+  "feet": [
+    "foot_l",
+    "foot_r"
+  ]
+}

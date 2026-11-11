@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"long_roar"
+display_name = "Long Roar"
+description = "Upgrade: the taunt holds for 1.7 s, 15 s cooldown."
+delivery = 1
+damage = 30.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 15.0
+move_mult_while_casting = 0.3
+range = 0.0
+area_radius = 4.5
+area_delay = 0.15
+taunt_duration = 1.7

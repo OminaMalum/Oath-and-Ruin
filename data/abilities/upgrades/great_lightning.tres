@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"great_lightning"
+display_name = "Great Lightning"
+description = "Upgrade: a 3 m strike, 10 s cooldown."
+delivery = 1
+damage = 140.0
+cast_time = 0.3
+recovery = 0.2
+cooldown = 10.0
+move_mult_while_casting = 0.4
+range = 18.0
+area_radius = 3.0
+area_delay = 1.2

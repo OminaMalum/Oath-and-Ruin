@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"soldiers_reach"
+display_name = "Soldier's Reach"
+description = "Basic attack. A long spear thrust (3.4 m)."
+delivery = 2
+damage = 42.0
+cast_time = 0.2
+recovery = 0.22
+cooldown = 1.0
+move_mult_while_casting = 0.6
+range = 3.4
+arc_degrees = 35.0
+scaling = 1

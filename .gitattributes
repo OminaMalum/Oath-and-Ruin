@@ -3,3 +3,8 @@
 *.ogg binary
 *.wav binary
 *.glb binary
+*.blend binary
+*.jpg binary
+*.hdr binary
+*.bin binary
+*.exr binary

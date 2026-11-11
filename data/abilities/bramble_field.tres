@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"bramble_field"
+display_name = "Bramble Field"
+description = "Thorns left by Bramble: enemies inside are slowed 35%."
+delivery = 4
+cast_time = 0.0
+recovery = 0.0
+cooldown = 0.0
+range = 0.0
+area_radius = 2.8
+ward_duration = 4.0
+ward_reduction = 0.0
+enemy_slow = 0.35

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+[ext_resource type="Resource" path="res://data/abilities/tempest_second.tres" id="3_lv"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"tempest"
+display_name = "Tempest"
+description = "Ultimate. A 4 m storm up to 20 m away strikes three times, 0.6 s apart, after 1 s: 90 damage and a 30% slow each time. Counterplay: leave after the first strike."
+delivery = 1
+is_ultimate = true
+damage = 90.0
+cast_time = 0.35
+recovery = 0.2
+cooldown = 65.0
+move_mult_while_casting = 0.0
+range = 20.0
+area_radius = 4.0
+area_delay = 1.0
+slow_amount = 0.3
+slow_duration = 1.0
+leaves = ExtResource("3_lv")

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/item_def.gd" id="1_item"]
+[ext_resource type="Resource" path="res://data/items/adventurer/tempered_edge.tres" id="2_r"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"giantfall_spear"
+display_name = "Giantfall Spear"
+short_name = "Giantfall"
+description = "+26 weapon power. Basic hits on a champion add 3% of its max health (up to 40) as weapon damage, once a second per target"
+cost = 1040
+kind = 4
+recipe = Array[Resource]([ExtResource("2_r"), ExtResource("2_r")])
+weapon_power = 26.0
+passive = 5
+passive_value = 0.03
+passive_cooldown = 1.0

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"grave_pact"
+display_name = "Grave Pact"
+description = "Ultimate. A 4.5 m circle up to 16 m away bursts after 1 s: 150 damage and every enemy inside is rooted for 1.5 s. Counterplay: the circle shows for a full second; get out."
+delivery = 1
+is_ultimate = true
+damage = 150.0
+cast_time = 0.35
+recovery = 0.2
+cooldown = 65.0
+move_mult_while_casting = 0.0
+range = 16.0
+area_radius = 4.5
+area_delay = 1.0
+root_duration = 1.5

@@ -1,0 +1,70 @@
+{
+  "champion": "brasswright",
+  "units": "metres, +Y up, model faces -Z in Godot (+Y in Blender), origin on the ground",
+  "height_m": 1.3,
+  "height_tolerance": 0.15,
+  "hit_radius_m": 0.36,
+  "move_speed_mps": 6.1,
+  "sockets": {
+    "Muzzle": [
+      0.0,
+      0.78,
+      -0.46
+    ],
+    "Overhead": [
+      0.0,
+      1.6,
+      0.0
+    ]
+  },
+  "muzzle_tolerance_m": 0.35,
+  "loop_clips": [
+    "idle",
+    "run"
+  ],
+  "one_shot_clips": [
+    "death"
+  ],
+  "slot_clips": {
+    "attack": {
+      "ability": "repeater",
+      "release_s": 0.12,
+      "recovery_s": 0.2,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_1": {
+      "ability": "breach_bolt",
+      "release_s": 0.3,
+      "recovery_s": 0.2,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_2": {
+      "ability": "field_sentry_cast",
+      "release_s": 0.35,
+      "recovery_s": 0.2,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_3": {
+      "ability": "masterwork_battery",
+      "release_s": 0.3,
+      "recovery_s": 0.2,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    },
+    "ability_4": {
+      "ability": "emergency_vent",
+      "release_s": 0.1,
+      "recovery_s": 0.1,
+      "min_speed": 0.8,
+      "max_speed": 1.25
+    }
+  },
+  "release_marker": "release",
+  "feet": [
+    "foot_l",
+    "foot_r"
+  ]
+}

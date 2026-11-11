@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_cb"]
+
+[resource]
+script = ExtResource("1_cb")
+id = &"debt_collector"
+display_name = "Debt Collector"
+description = "A chain thrust 9 m ahead: 55 damage and a 30% slow for 1 s on the first enemy hit. It pulls nobody. Counterplay: sidestep the narrow thrust."
+damage = 55.0
+cast_time = 0.2
+recovery = 0.15
+cooldown = 6.0
+move_mult_while_casting = 0.7
+range = 9.0
+projectile_speed = 38.0
+projectile_radius = 0.3
+slow_amount = 0.3
+slow_duration = 1.0

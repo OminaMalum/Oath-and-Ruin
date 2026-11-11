@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"heavy_shot"
+display_name = "Heavy Shot"
+description = "Upgrade: 150 damage, 11 s cooldown."
+delivery = 0
+damage = 150.0
+pierce = true
+cast_time = 0.85
+recovery = 0.2
+cooldown = 11.0
+move_mult_while_casting = 0.2
+range = 28.0
+projectile_speed = 55.0
+projectile_radius = 0.35
